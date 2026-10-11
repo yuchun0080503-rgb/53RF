@@ -67,6 +67,7 @@ header{height:64px;display:flex;align-items:center;gap:16px;padding:0 28px;posit
 .insp .kv{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:12px;color:var(--mute)}
 .insp label{display:inline-flex;align-items:center;gap:5px;margin:4px 12px 0 0;color:var(--fg)}.insp label input{width:auto}
 .ti{position:absolute;z-index:4;font:15px "Noto Sans TC",sans-serif;border:1px solid var(--ac);min-width:140px;width:auto;padding:3px 7px}
+textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;box-sizing:border-box;width:220px}
 .side{display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;gap:6px;padding:12px 12px 10px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--soft)}
 .tabs button{flex:none;border:1px solid transparent;border-radius:99px;padding:7px 13px;color:var(--mute);font-size:12.5px;background:var(--bg);display:flex;align-items:center;gap:5px}
@@ -814,7 +815,29 @@ function openWsUI(){aiChip();if(window.RFLLM)RFLLM.detect().then(aiChip);$("#pt"
 function resize(){const r=$("#cvw").getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);p&&draw()} // 顯示大小由 CSS 決定（填滿外框），這裡只設定畫素數量
 addEventListener("resize",resize);
 const cssv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-function bbox(o){if(o.type==="text"){ctx.font='15px "Noto Sans TC",sans-serif';return{x:o.x,y:o.y-19,w:ctx.measureText(o.text).width+14,h:28}}
+// 文字方塊版面：o.ml（證據卡）或文字裡有換行（Shift+Enter）時是多行，每行最寬 TMAXW、超過就自動換行；
+// 一般單行文字維持原本的樣子。o.url 有值時，最後一行是可以點開的來源連結（顯示 o.ul 這段短文字，完整網址不顯示）。
+const TF='15px "Noto Sans TC",sans-serif',TLH=22,TMAXW=320,LC=new Map();
+function tlay(o){const key=(o.ml?1:0)+"|"+(o.url?o.ul||"1":"")+"|"+o.text;let r=LC.get(key);if(r)return r;
+ ctx.font=TF;const mw=s=>ctx.measureText(s).width,lines=[];
+ if(!o.ml&&!o.text.includes("\n"))lines.push(o.text);
+ else for(const para of o.text.split("\n")){let ln="";
+  for(const tok of para.match(/[A-Za-z0-9][^\s　-鿿＀-￯]*\s*|\s+|[^]/g)||[]){
+   if(mw(ln+tok)<=TMAXW){ln+=tok;continue}
+   if(ln){lines.push(ln.trimEnd());ln=""}
+   if(mw(tok)<=TMAXW){ln=tok.trimStart();continue}
+   for(const ch of tok){if(ln&&mw(ln+ch)>TMAXW){lines.push(ln);ln=ch}else ln+=ch}}
+  lines.push(ln.trimEnd())}
+ const link=o.url?"↗ "+(o.ul||"開啟來源"):"";
+ r={lines,link,n:lines.length+(link?1:0),w:Math.max(...lines.map(mw),link?mw(link):0)};
+ if(LC.size>800)LC.clear();LC.set(key,r);return r}
+// 點在來源連結那一行上嗎（世界座標）
+function inLink(o,q){const L=tlay(o);if(!L.link)return false;const y=o.y+L.lines.length*TLH;ctx.font=TF;return q[0]>=o.x&&q[0]<=o.x+14+ctx.measureText(L.link).width&&q[1]>=y-17&&q[1]<=y+7}
+function paintText(c,o,fg,col,ac,lab){const b=bbox(o),L=tlay(o);c.font=TF;c.fillStyle=fg;L.lines.forEach((s,i)=>c.fillText(s,o.x+7,o.y+i*TLH));
+ if(L.link){const y=o.y+L.lines.length*TLH;c.fillStyle=ac;c.fillText(L.link,o.x+7,y);c.fillRect(o.x+7,y+3,c.measureText(L.link).width,1)}
+ c.strokeStyle=col;c.lineWidth=1.2;c.beginPath();c.roundRect(b.x,b.y,b.w,b.h,8);c.stroke();c.fillStyle=col;c.font="11px sans-serif";c.fillText(lab,b.x+2,b.y-4)}
+document.fonts&&document.fonts.ready.then(()=>{LC.clear();draw()});
+function bbox(o){if(o.type==="text"){const L=tlay(o);return{x:o.x,y:o.y-19,w:L.w+14,h:28+(L.n-1)*TLH}}
  const xs=o.pts.map(q=>q[0]),ys=o.pts.map(q=>q[1]),pd=o.w+4;return{x:Math.min(...xs)-pd,y:Math.min(...ys)-pd,w:Math.max(...xs)-Math.min(...xs)+2*pd,h:Math.max(...ys)-Math.min(...ys)+2*pd}}
 const ctr=o=>{const b=bbox(o);return[b.x+b.w/2,b.y+b.h/2]};
 function draw(){if(!p||!p.v)return;const r=$("#cvw").getBoundingClientRect(),d=devicePixelRatio||1,v=p.v,fg=cssv("--fg"),ln=cssv("--line"),ac=cssv("--ac");
@@ -824,7 +847,7 @@ function draw(){if(!p||!p.v)return;const r=$("#cvw").getBoundingClientRect(),d=d
  for(const o of p.objs.filter(o=>o.type==="link")){const a=getO(o.a),b=getO(o.b);if(!a||!b)continue;const[x1,y1]=ctr(a),[x2,y2]=ctr(b);ctx.strokeStyle=fg;ctx.fillStyle=fg;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const an=Math.atan2(y2-y1,x2-x1),mx=(x1+x2)/2,my=(y1+y2)/2;ctx.beginPath();ctx.moveTo(mx,my);ctx.lineTo(mx-9*Math.cos(an-.4),my-9*Math.sin(an-.4));ctx.lineTo(mx-9*Math.cos(an+.4),my-9*Math.sin(an+.4));ctx.fill()}
  for(const o of p.objs){if(o.type==="link")continue;const col=U[o.by]?.c||fg;
   if(o.showOrig&&o.orig){ctx.strokeStyle=col;ctx.globalAlpha=.35;ctx.lineWidth=2.5;ctx.setLineDash([4,4]);ctx.beginPath();o.orig.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1}
-  if(o.type==="text"){const b=bbox(o);ctx.font='15px "Noto Sans TC",sans-serif';ctx.fillStyle=fg;ctx.fillText(o.text,o.x+7,o.y);ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,8);ctx.stroke();ctx.fillStyle=col;ctx.font="11px sans-serif";ctx.fillText(U[o.by]?.n+(o.tag?"・"+TAGS[o.tag]:"")+(o.stage?"・"+o.stage:""),b.x+2,b.y-4);
+  if(o.type==="text"){const b=bbox(o);paintText(ctx,o,fg,col,ac,U[o.by]?.n+(o.tag?"・"+TAGS[o.tag]:"")+(o.stage?"・"+o.stage:""));
    if(editing[o.id]){ctx.fillStyle=U[editing[o.id]].c;ctx.fillText(U[editing[o.id]].n+" 正在編輯此內容",b.x+2,b.y+b.h+13)}}
   else{ctx.strokeStyle=col;ctx.lineWidth=o.w;ctx.beginPath();o.pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke()}
   if(sel.has(o.id)||linkFrom===o.id){const b=bbox(o);ctx.strokeStyle=ac;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(b.x-3,b.y-3,b.w+6,b.h+6);ctx.setLineDash([])}}
@@ -858,7 +881,7 @@ let fOv="";
 const fingerPans=()=>fOv?fOv==="pan":PEN.finger()==="pan"||(PEN.finger()==="auto"&&penSeen);
 const setTool=t=>{const b=document.querySelector('.tools [data-t="'+t+'"]');if(b&&!b.disabled)b.click()};
 let eraBack="";const penDo=act=>{if(act==="undo"){undo();setStat("觸控筆：復原上一步")}else if(act==="era"){if(tool==="era"){setTool(eraBack||"pen");setStat("觸控筆：切回"+(tool==="pen"?"手寫":"原本的工具"))}else{eraBack=tool;setTool("era");setStat("觸控筆：切換為橡皮擦（再做一次切回來）")}}};
-const tp=new Map();let pz=null,tapAt=null,holdEra=false,pd=null;
+const tp=new Map();let pz=null,tapAt=null,holdEra=false,pd=null,linkHit="";
 cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraPos=[e.clientX-r.left,e.clientY-r.top]}
  if(e.pointerType==="pen"&&!penSeen){penSeen=true;LS("rf.pen","1");hwLabel()}
  if(e.pointerType==="pen"&&fOv){fOv="";penLabel();setStat("偵測到觸控筆：手指改回只拖移畫布")}
@@ -866,6 +889,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
   if(tp.size===2){const[a,b]=[...tp.values()];cur=null;mq=null;dm="pinch";pz={d:Math.hypot(a[0]-b[0],a[1]-b[1])||1,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2,t0:e.timeStamp,s:[a,b],mv:0};draw();return}}
  try{cv.setPointerCapture(e.pointerId)}catch(err){}const q=toW(e);last=[e.clientX,e.clientY];moved=false;
  pd={t:e.timeStamp,x:e.clientX,y:e.clientY,pen:e.pointerType==="pen",mv:0};
+ linkHit="";if(tool==="sel"){const o=hit(q);if(o&&o.type==="text"&&o.url&&inLink(o,q))linkHit=o.url} // 點在證據卡的來源連結上：放開時（沒有拖動）開新分頁
  if(tool==="hand"||e.button===1||space||(e.pointerType==="touch"&&fingerPans())){dm="pan";return}
  if(!canEdit())return;
  if(e.pointerType==="pen"){ // 橡皮擦端／橡皮擦鍵：按著時當橡皮擦；側鍵：依設定
@@ -896,7 +920,8 @@ cv.onpointerup=e=>{ // 事件式同步：完成操作後才傳送
    const two=pz&&e.type==="pointerup"&&e.timeStamp-pz.t0<300&&pz.mv<12&&PEN.two()==="undo";dm=null;pz=null;
    if(two&&canEdit()){undo();setStat("兩指輕點：復原上一步")}}return}}
  // 筆尖雙擊：很短、幾乎沒有移動的一點，緊接著在同一個地方再點一下 → 執行自訂動作（手寫或橡皮擦狀態下都可以），兩個點都不留在畫布上
- const tap=e&&pd&&pd.pen&&!holdEra&&pd.mv<7&&e.timeStamp-pd.t<220&&PEN.tap()!=="none"&&(tool==="pen"||tool==="era");pd=null;
+ const tap=e&&pd&&pd.pen&&!holdEra&&pd.mv<7&&e.timeStamp-pd.t<220&&PEN.tap()!=="none"&&(tool==="pen"||tool==="era");
+ const lk=linkHit&&pd&&pd.mv<6&&(dm==="move"||dm==="pan")?linkHit:"";linkHit="";pd=null;
  if(tap&&tapAt&&e.timeStamp-tapAt.t<420&&Math.hypot(e.clientX-tapAt.x,e.clientY-tapAt.y)<26){const id=tapAt.id;tapAt=null;cur=null;
   if(dm==="era"&&erased)op(erased>1?"擦除 "+erased+" 個物件":"刪除物件");erased=0;dm=null;
   if(id&&getO(id)&&p.objs[p.objs.length-1].id===id)undo(); // 拿掉第一下留下的那個點
@@ -909,7 +934,8 @@ cv.onpointerup=e=>{ // 事件式同步：完成操作後才傳送
  else if(dm==="move"&&moved){sel.forEach(id=>{const o=getO(id);if(o){o.mod=ME;o.ver++}});op("移動物件（放開後同步最終位置）")}
  else if(dm==="mq"){const x1=Math.min(mq[0],mq[2]),x2=Math.max(mq[0],mq[2]),y1=Math.min(mq[1],mq[3]),y2=Math.max(mq[1],mq[3]);
   p.objs.forEach(o=>{if(o.type==="link")return;const b=bbox(o);if(b.x<x2&&b.x+b.w>x1&&b.y<y2&&b.y+b.h>y1)grpIds(o).forEach(i=>sel.add(i))});mq=null}
- dm=null;insp();draw()};
+ dm=null;insp();draw();
+ if(lk&&/^https:\/\//.test(lk))window.open(lk,"_blank","noopener,noreferrer")};
 cv.onpointercancel=e=>{tp.delete(e.pointerId);if(tp.size<2&&dm==="pinch"){dm=null;pz=null}else cv.onpointerup(e)};
 cv.addEventListener("wheel",e=>{e.preventDefault();if(!p)return;const v=p.v;if(e.ctrlKey||e.metaKey)zoomAt(e.deltaY<0?1.1:1/1.1,e.clientX-cv.getBoundingClientRect().left,e.clientY-cv.getBoundingClientRect().top);else{v.x-=e.deltaX;v.y-=e.deltaY}draw()},{passive:false});
 function zoomAt(f,sx,sy){const v=p.v,z=Math.max(.2,Math.min(4,v.z*f)),k=z/v.z;v.x=sx-(sx-v.x)*k;v.y=sy-(sy-v.y)*k;v.z=z}
@@ -939,12 +965,14 @@ $("#zf").onclick=()=>{const on=!$("#ws").classList.contains("full"),el=$("#ws");
 document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&$("#ws").classList.contains("full"))setFull(false)});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#ws").classList.contains("full")&&!document.fullscreenElement&&!document.querySelector("dialog[open]")&&document.activeElement.tagName!=="INPUT")setFull(false)});
 $$(".tools [data-t]").forEach(b=>b.onclick=()=>{tool=b.dataset.t;linkFrom=null;$$(".tools [data-t]").forEach(x=>x.classList.toggle("on",x===b));cv.style.cursor=tool==="sel"?"default":tool==="hand"?"grab":"crosshair";draw()});
-function openEd(o,q){const i=document.createElement("input"),z=p.v.z;i.className="ti";i.value=o?o.text:"";i.style.left=(q[0]*z+p.v.x)+"px";i.style.top=(q[1]*z+p.v.y-16)+"px";$("#cvw").appendChild(i);i.focus();
+function openEd(o,q){const i=document.createElement("textarea"),z=p.v.z;i.className="ti";i.rows=1;i.value=o?o.text:"";i.style.left=(q[0]*z+p.v.x)+"px";i.style.top=(q[1]*z+p.v.y-16)+"px";
+ if(o&&(o.ml||o.text.includes("\n")))i.style.width=Math.max(220,(tlay(o).w+14)*z)+"px";
+ const fit=()=>{i.style.height="auto";i.style.height=i.scrollHeight+2+"px"};i.oninput=fit;$("#cvw").appendChild(i);fit();i.focus(); // Enter 完成編輯，Shift+Enter 換行
  if(o){editing[o.id]=ME;setStat("編輯開始：已通知組員「"+U[ME].n+" 正在編輯此內容」");draw()}
  let done=false;const fin=()=>{if(done)return;done=true;const t=i.value.trim();i.remove();
   if(o){delete editing[o.id];if(t&&t!==o.text){o.text=t;o.mod=ME;o.ver++;op("完成編輯文字（失焦後同步）")}else{draw()}}
   else if(t){p.objs.push(mkO({type:"text",by:ME,x:q[0],y:q[1],text:t}));op("新增文字方塊（完成編輯後同步）")}};
- i.onblur=fin;i.onkeydown=e=>{if(e.key==="Enter")fin();if(e.key==="Escape"){i.value=o?o.text:"";fin()}}}
+ i.onblur=fin;i.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();fin()}if(e.key==="Escape"){i.value=o?o.text:"";fin()}}}
 cv.ondblclick=e=>{if(!canEdit())return;const q=toW(e),o=hit(q);if(o&&o.type==="text")openEd(o,[o.x,o.y])};
 addEventListener("keydown",e=>{if(!p||$("#v-ws").classList.contains("hide")||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
  if(e.key===" "){space=true;e.preventDefault()}
@@ -1170,8 +1198,7 @@ function drawMini(c,q){if(!c)return;const d=devicePixelRatio||1,w=c.clientWidth,
  x.setTransform(d*z,0,0,d*z,d*tx,d*ty);x.lineCap=x.lineJoin="round";
  for(const o of q.objs){if(o.type!=="link")continue;const a=q.objs.find(k=>k.id===o.a),b=q.objs.find(k=>k.id===o.b);if(!a||!b)continue;const[ax,ay]=ctr(a),[bx,by]=ctr(b);x.strokeStyle=fg;x.lineWidth=1.6;x.beginPath();x.moveTo(ax,ay);x.lineTo(bx,by);x.stroke()}
  for(const o of os){const col=U[o.by]?.c||fg;
-  if(o.type==="text"){const b=bbox(o);x.font='15px "Noto Sans TC",sans-serif';x.fillStyle=fg;x.fillText(o.text,o.x+7,o.y);x.strokeStyle=col;x.lineWidth=1.2;x.beginPath();x.roundRect(b.x,b.y,b.w,b.h,8);x.stroke();
-   x.fillStyle=col;x.font="11px sans-serif";x.fillText((U[o.by]?.n||"")+(o.tag?"・"+TAGS[o.tag]:""),b.x+2,b.y-4)}
+  if(o.type==="text")paintText(x,o,fg,col,cssv("--ac"),(U[o.by]?.n||"")+(o.tag?"・"+TAGS[o.tag]:""));
   else{x.strokeStyle=col;x.lineWidth=o.w;x.beginPath();o.pts.forEach((k,i)=>i?x.lineTo(k[0],k[1]):x.moveTo(k[0],k[1]));x.stroke()}}}
 function renderTeach(){const el=$("#v-teach"),all=teachList();
  $("#tbadge").classList.remove("hide");
@@ -1338,14 +1365,7 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  // 把證據加到畫布：放在它要支撐的主張右邊，並自動連線（「補充資料」就是看每個主張有沒有連到證據卡）
  if(a==="save"){const e=S.ev[+k];S.saved=S.saved||[];const j=S.saved.findIndex(x=>x.id===e.id);if(j<0){S.saved.push(JSON.parse(JSON.stringify(e)));log(w,"收藏例證："+e.t.slice(0,40))}else S.saved.splice(j,1)}
  if(a==="unsave"){(S.saved||[]).splice(+k,1)}
- if(a==="tocv"){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k],sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null;
-  const text=`〔證據〕${e.t}（${e.y}）`;
-  if(p.objs.some(o=>o.tag==="evidence"&&o.text===text&&(!claim||p.objs.some(l=>l.type==="link"&&l.a===claim.id&&l.b===o.id)))){alert("這筆證據已經在畫布上了。");return}
-  let card=p.objs.find(o=>o.tag==="evidence"&&o.text===text);
-  if(!card){const b=claim?bbox(claim):null,n=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).length:0;
-   card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?b.y+19+n*44:20+p.objs.length*6,text,tag:"evidence",stage:"證據"});p.objs.push(card)}
-  if(claim)p.objs.push(mkO({type:"link",by:ME,a:claim.id,b:card.id}));
-  op(claim?"將 Evidence Card 加入畫布並連到主張":"將 Evidence Card 加入畫布");log(w,claim?"確認並加入 Evidence Card，用來支撐主張："+objLabel(claim):"確認並加入 Evidence Card。")}
+ if(a==="tocv"){tocv(k);return}
  // 進度檢核的「依標籤自動標記」：只標還沒有研究階段的內容，之後仍可以逐一修改
  if(a==="stages"){const todo=contentObjs().filter(o=>!o.stage&&SUGGEST_STAGE[o.tag]);todo.forEach(o=>{o.stage=SUGGEST_STAGE[o.tag];o.mod=ME;o.ver++});if(todo.length){op("依標籤標記研究階段");log(w,`依標籤自動標記 ${todo.length} 項內容的研究階段。`)}}
  if(a==="gotoev"){pane="ev";log(w,"前往證據頁確認待驗證來源。");renderProj();renderPane();return}
@@ -1354,6 +1374,22 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(a==="sum"){S.sum=`目前共 ${S.ev.length} 筆資料：支持 ${S.ev.filter(e=>e.k==="s").length} 筆、限制 ${S.ev.filter(e=>e.k==="c").length} 筆；${S.ev.filter(e=>!e.v).length} 筆來源待驗證。結論請由小組自行判斷。`;log("Agent","產生證據摘要（Level 3）。","ai")}
  if(a==="reset"){const keep=S.saved||[];S=p.S=fresh();S.saved=keep} // 收藏的例證不會因為重新開始而消失
  syncObjsLive(false);saveS();renderProj();renderPane()}
+// 證據卡：標題（年份）＋中文摘要＋可以點開的來源連結。完整網址存在 url，卡片上只顯示一小段（ul）。
+// 中文摘要沒有的話，先請本機模型整理（沒有模型就用機器翻譯）；模型只能根據資料庫給的摘要整理——資料庫沒有摘要的文獻不會編造內容，會直接寫明請讀原文。
+const shortUrl=u=>{try{const x=new URL(u),t=(x.host.replace(/^www\./,"")+x.pathname).replace(/\/$/,"");return t.length>30?t.slice(0,29)+"…":t}catch(err){return"來源連結"}};
+const evSummary=e=>{const s=evZh(e)||(e.lang==="zh"||!LIVE()?e.ab||e.f:"");
+ return s?(s.length>220?s.slice(0,219)+"…":s):(e.ab||e.f)?"（無法產生中文摘要，請開啟來源閱讀原文。）":"（資料庫沒有提供這篇的摘要，請開啟來源閱讀原文。）"};
+async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
+ const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
+ const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);
+ if(p.objs.some(o=>isCard(o)&&(!claim||p.objs.some(l=>l.type==="link"&&l.a===claim.id&&l.b===o.id)))){alert("這筆證據已經在畫布上了。");return}
+ if(LIVE()&&(!e.zh||zhBad(e))&&e.lang!=="zh"&&(e.ab||e.fo||e.f)){setStat("整理中文摘要中…","y");await zhFor(e.id);if(p!==proj)return}
+ let card=p.objs.find(isCard);
+ if(!card){const b=claim?bbox(claim):null,tops=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).map(l=>getO(l.b)).filter(Boolean).map(o=>{const q=bbox(o);return q.y+q.h}):[];
+  card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?(tops.length?Math.max(...tops)+31:b.y+19):20+p.objs.length*6,text:head+"\n"+evSummary(e),ml:true,eid:e.id,...(/^https:\/\//.test(e.url||"")?{url:e.url,ul:shortUrl(e.url)}:{}),tag:"evidence",stage:"證據"});p.objs.push(card)}
+ if(claim)p.objs.push(mkO({type:"link",by:ME,a:claim.id,b:card.id}));
+ op(claim?"將 Evidence Card 加入畫布並連到主張":"將 Evidence Card 加入畫布");log(w,claim?"確認並加入 Evidence Card，用來支撐主張："+objLabel(claim):"確認並加入 Evidence Card。");
+ setStat("已加入畫布");renderProj();renderPane()}
 /* live 模式的 Agent 動作：交給資料層（src/db.mjs → agent-local.mjs：規則式判斷＋OpenAlex）。等待期間 busy 有值，側欄按鈕全部鎖住；
    失敗（含被 AI Harness 拒絕）時把後端的說明顯示給使用者，流程停在原本的步驟，不會退回內建範例假裝成功。 */
 const LIVE_ACTS=new Set(["ok1","rq","myrq","round","counter","sum","report"]);
