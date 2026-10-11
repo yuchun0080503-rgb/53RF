@@ -851,7 +851,7 @@ const grpIds=o=>o.group?p.objs.filter(x=>x.group===o.group).map(x=>x.id):[o.id];
    偵測到這台裝置用過觸控筆（會記住）→ 手指只負責拖移畫布，寫字交給筆；沒有用過筆 → 手指可以直接書寫。兩指隨時可以縮放與拖移。
    筆的橡皮擦端（或橡皮擦鍵）按著時就是橡皮擦；筆的側鍵與「筆尖在同一個地方快點兩下」可以自訂成切換橡皮擦或復原上一步。
    （Apple Pencil 筆身的雙擊手勢只有原生 App 收得到，網頁讀不到，所以用筆尖雙擊代替。）設定存在這台瀏覽器裡。 */
-const PEN={finger:()=>LS("rf.finger")||"auto",tap:()=>LS("rf.pentap")||"era",side:()=>LS("rf.penside")||"era"};
+const PEN={finger:()=>LS("rf.finger")||"auto",tap:()=>LS("rf.pentap")||"era",side:()=>LS("rf.penside")||"era",two:()=>LS("rf.two")||"undo"};
 // 網頁沒辦法知道 Apple Pencil 有沒有吸在 iPad 上（瀏覽器只在筆碰到或靠近螢幕時才知道有筆），
 // 所以筆收起來時，點工具列的「手指」按鈕就能讓手指書寫；之後只要再用筆寫，就自動切回「手指只拖移」。
 let fOv="";
@@ -863,7 +863,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
  if(e.pointerType==="pen"&&!penSeen){penSeen=true;LS("rf.pen","1");hwLabel()}
  if(e.pointerType==="pen"&&fOv){fOv="";penLabel();setStat("偵測到觸控筆：手指改回只拖移畫布")}
  if(e.pointerType==="touch"){tp.set(e.pointerId,[e.clientX,e.clientY]);
-  if(tp.size===2){const[a,b]=[...tp.values()];cur=null;mq=null;dm="pinch";pz={d:Math.hypot(a[0]-b[0],a[1]-b[1])||1,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2};draw();return}}
+  if(tp.size===2){const[a,b]=[...tp.values()];cur=null;mq=null;dm="pinch";pz={d:Math.hypot(a[0]-b[0],a[1]-b[1])||1,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2,t0:e.timeStamp,s:[a,b],mv:0};draw();return}}
  try{cv.setPointerCapture(e.pointerId)}catch(err){}const q=toW(e);last=[e.clientX,e.clientY];moved=false;
  pd={t:e.timeStamp,x:e.clientX,y:e.clientY,pen:e.pointerType==="pen",mv:0};
  if(tool==="hand"||e.button===1||space||(e.pointerType==="touch"&&fingerPans())){dm="pan";return}
@@ -882,7 +882,8 @@ cv.onpointermove=e=>{if(!p)return;const q=toW(e);
  if(pd)pd.mv=Math.max(pd.mv,Math.hypot(e.clientX-pd.x,e.clientY-pd.y));
  if(e.pointerType==="touch"&&tp.has(e.pointerId)){tp.set(e.pointerId,[e.clientX,e.clientY]);
   if(dm==="pinch"&&tp.size>=2&&pz){const[a,b]=[...tp.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1])||1,mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,r=cv.getBoundingClientRect();
-   zoomAt(d/pz.d,mx-r.left,my-r.top);p.v.x+=mx-pz.mx;p.v.y+=my-pz.my;pz={d,mx,my};draw();return}}
+   pz.mv=Math.max(pz.mv,...[a,b].map((z,i)=>Math.hypot(z[0]-pz.s[i][0],z[1]-pz.s[i][1])));
+   zoomAt(d/pz.d,mx-r.left,my-r.top);p.v.x+=mx-pz.mx;p.v.y+=my-pz.my;pz={...pz,d,mx,my};draw();return}}
  if(dm==="pan"){p.v.x+=e.clientX-last[0];p.v.y+=e.clientY-last[1];last=[e.clientX,e.clientY];draw()}
  else if(cur){for(const c of(e.getCoalescedEvents?e.getCoalescedEvents():[e])){const w=toW(c);cur.push([w[0],w[1],c.timeStamp])}rdraw()}
  else if(dm==="move"){const dx=(e.clientX-last[0])/p.v.z,dy=(e.clientY-last[1])/p.v.z;last=[e.clientX,e.clientY];moved=true;
@@ -891,7 +892,9 @@ cv.onpointermove=e=>{if(!p)return;const q=toW(e);
  else if(dm==="mq"){mq[2]=q[0];mq[3]=q[1];draw()}};
 cv.onpointerup=e=>{ // 事件式同步：完成操作後才傳送
  if(e&&e.pointerType==="touch"&&eraPos){eraPos=null;rdraw()}
- if(e&&e.pointerType==="touch"){tp.delete(e.pointerId);if(dm==="pinch"){if(tp.size<2){dm=null;pz=null}return}}
+ if(e&&e.pointerType==="touch"){tp.delete(e.pointerId);if(dm==="pinch"){if(tp.size<2){ // 兩指同時輕點一下（很短、幾乎沒移動）→ 復原上一步，跟筆尖雙擊可以並用
+   const two=pz&&e.type==="pointerup"&&e.timeStamp-pz.t0<300&&pz.mv<12&&PEN.two()==="undo";dm=null;pz=null;
+   if(two&&canEdit()){undo();setStat("兩指輕點：復原上一步")}}return}}
  // 筆尖雙擊：很短、幾乎沒有移動的一點，緊接著在同一個地方再點一下 → 執行自訂動作（手寫或橡皮擦狀態下都可以），兩個點都不留在畫布上
  const tap=e&&pd&&pd.pen&&!holdEra&&pd.mv<7&&e.timeStamp-pd.t<220&&PEN.tap()!=="none"&&(tool==="pen"||tool==="era");pd=null;
  if(tap&&tapAt&&e.timeStamp-tapAt.t<420&&Math.hypot(e.clientX-tapAt.x,e.clientY-tapAt.y)<26){const id=tapAt.id;tapAt=null;cur=null;
@@ -1437,9 +1440,10 @@ function openPS(){const d=$("#ps"),opt=(v,cur,t)=>`<option value="${v}" ${v===cu
  <label for="ps1">手指在畫布上</label><select id="ps1">${opt("auto",PEN.finger(),"自動："+(penSeen?"偵測到觸控筆，手指只拖移畫布":"沒有偵測到觸控筆，手指可以書寫"))+opt("pan",PEN.finger(),"只拖移畫布（用筆書寫）")+opt("draw",PEN.finger(),"可以書寫")}</select>
  <label for="ps2">筆尖在同一個地方快點兩下</label><select id="ps2">${opt("era",PEN.tap(),"切換橡皮擦／手寫")+opt("undo",PEN.tap(),"復原上一步")+opt("none",PEN.tap(),"不做任何事")}</select>
  <label for="ps3">按住筆的側鍵</label><select id="ps3">${opt("era",PEN.side(),"當橡皮擦（放開就恢復）")+opt("undo",PEN.side(),"復原上一步")+opt("none",PEN.side(),"不做任何事")}</select>
+ <label for="ps4">兩根手指同時輕點一下</label><select id="ps4">${opt("undo",PEN.two(),"復原上一步")+opt("none",PEN.two(),"不做任何事")}</select>
  <p class="note" style="margin-top:14px">兩指可以縮放與拖移畫布。筆的橡皮擦端（或橡皮擦鍵）按著時一律是橡皮擦。Apple Pencil 筆身的雙擊手勢只有原生 App 收得到，網頁無法讀取，所以改用「筆尖快點兩下」。這些設定只存在這台裝置。</p>
  <div class="acts" style="justify-content:flex-end;margin-top:18px"><button id="psr">重新偵測觸控筆</button><button class="pri" id="psc">完成</button></div>`;
- $("#ps1").onchange=e=>{LS("rf.finger",e.target.value==="auto"?"":e.target.value);penLabel()};$("#ps2").onchange=e=>LS("rf.pentap",e.target.value);$("#ps3").onchange=e=>LS("rf.penside",e.target.value);
+ $("#ps1").onchange=e=>{LS("rf.finger",e.target.value==="auto"?"":e.target.value);penLabel()};$("#ps2").onchange=e=>LS("rf.pentap",e.target.value);$("#ps3").onchange=e=>LS("rf.penside",e.target.value);$("#ps4").onchange=e=>LS("rf.two",e.target.value);
  $("#psr").onclick=()=>{penSeen=false;LS("rf.pen","");penLabel();openPS()};$("#psc").onclick=()=>d.close();if(!d.open)d.showModal()}
 $("#pens").onclick=openPS;
 $("#fgt").onclick=()=>{fOv=fingerPans()?"draw":"pan";penLabel();setStat(fOv==="draw"?"手指可以書寫（再用筆寫就會自動切回）":"手指只拖移畫布")};
