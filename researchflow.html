@@ -743,7 +743,10 @@ function fromRemoteObj(id,d){const o={...d,id};
  delete o.lastEditedBy;delete o.updatedAt;delete o.createdAt;delete o.createdBy;delete o.version;
  return o}
 function mergeRemoteDocs(docs){const objs=docs.map(d=>fromRemoteObj(d.id,d));objs.sort((a,b)=>(a.ts||0)-(b.ts||0)||String(a.id).localeCompare(String(b.id)));return objs}
-function canonicalObj(o){return JSON.stringify(o,Object.keys(o).sort())}
+// 比較兩個物件是不是同一份內容：先轉成存進 Firestore 的格式（座標點補上 t:0），再依鍵名排序後逐層比對，
+// 這樣本機物件跟從伺服器讀回來的同一份物件不會因為格式差異被當成不同（否則自己寫入的 echo 會被誤判成新資料，多出一筆復原紀錄，快速按兩次返回只會退一步）
+const canon=v=>Array.isArray(v)?"["+v.map(canon).join(",")+"]":v&&typeof v==="object"?"{"+Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>JSON.stringify(k)+":"+canon(v[k])).join(",")+"}":JSON.stringify(v);
+function canonicalObj(o){return canon({id:o.id,...toRemoteObj(o)})}
 // 「返回上一步」只復原使用者自己的動作（寫字、移動、刪除…）。AI 辨識手寫、學生確認讀取結果這類標記不算一步：
 // 辨識結果寫進物件時不新增復原紀錄，復原時也保留目前的辨識結果，所以按一次返回就是拿掉上一筆字，不會先跳回「辨識前」。
 const AI_FIELDS=["aiRead","hwSub","hwBusy","alts","hwBy","shape","sg","conf","read"];
