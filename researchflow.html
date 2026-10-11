@@ -480,9 +480,9 @@ function openPF(){const u=U[ME];let col=u.c;const d=$("#pf");
  <label>頭像顏色</label><div class="sw">${CO.map(c=>`<button data-c="${c}" style="background:${c}" class="${c===col?"on":""}" aria-label="頭像顏色"></button>`).join("")}</div>
  <div class="hl" style="margin-top:18px"><span>帳號</span><span>${esc(u.email)}</span></div><div class="hl"><span>ResearchFlow User ID</span><span>${u.id}</span></div><div class="hl"><span>登入方式</span><span>${LIVE()?"電子郵件與密碼":"展示帳號"}</span></div>
  <p class="note">登入只負責確認你是誰（密碼由 Firebase Authentication 保管）；研究資料由 ResearchFlow 自己的資料庫管理。</p>
- <div class="acts" style="justify-content:flex-end"><button id="pc">取消</button><button class="pri" id="ps">儲存</button></div>`;
+ <div class="acts" style="justify-content:flex-end"><button id="pc">取消</button><button class="pri" id="pfsave">儲存</button></div>`;
  d.querySelectorAll(".sw button").forEach(b=>b.onclick=()=>{col=b.dataset.c;d.querySelectorAll(".sw button").forEach(x=>x.classList.toggle("on",x===b))});
- $("#pc").onclick=()=>d.close();$("#ps").onclick=()=>{u.n=$("#pn").value.trim()||u.n;u.c=col;d.close();
+ $("#pc").onclick=()=>d.close();$("#pfsave").onclick=()=>{u.n=$("#pn").value.trim()||u.n;u.c=col;d.close();
   if(LIVE())RFDB.updateMyProfile(ME,{displayName:u.n,color:u.c},projects.map(q=>q.fid).filter(Boolean)).catch(err=>alert("儲存個人檔案失敗："+(err?.message||err)));renderAv();renderProj();p&&!$("#v-ws").classList.contains("hide")&&openWsUI()};d.showModal()}
 
 /* login & home */
