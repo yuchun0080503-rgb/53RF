@@ -85,7 +85,20 @@ test('summarizeEvidence：只報數量與標題，並提醒結論由小組判斷
   assert.match(s, /結論請由小組自行判斷/);
 });
 
-import { suggestMode, claimQuestion, evidenceLevel, claimIssues } from './agent-local.mjs';
+import { suggestMode, claimQuestion, evidenceLevel, claimIssues, fetchAbstractByDoi } from './agent-local.mjs';
+
+test('fetchAbstractByDoi：用 DOI 查 Semantic Scholar，查不到、太短、沒有 DOI、出錯都回傳空字串', async () => {
+  const calls = [];
+  const mk = (res) => async (url) => { calls.push(url); if (res instanceof Error) throw res; return res; };
+  const ab = 'We study how students use chatbots for learning and find that short-term test scores improve.';
+  assert.equal(await fetchAbstractByDoi('https://doi.org/10.1016/j.compedu.2020.103862', mk({ ok: true, json: async () => ({ abstract: `  ${ab}\n ` }) })), ab);
+  assert.match(calls[0], /paper\/DOI:10\.1016\/j\.compedu\.2020\.103862\?fields=abstract$/);
+  assert.equal(await fetchAbstractByDoi('10.1/x', mk({ ok: true, json: async () => ({ abstract: ab }) })), ''); // 不是合法 DOI
+  assert.equal(await fetchAbstractByDoi('https://openalex.org/W123', mk({ ok: true, json: async () => ({ abstract: ab }) })), ''); // 沒有 DOI
+  assert.equal(await fetchAbstractByDoi('10.1016/abc', mk({ ok: true, json: async () => ({ abstract: '太短' }) })), '');
+  assert.equal(await fetchAbstractByDoi('10.1016/abc', mk({ ok: false, status: 404 })), '');
+  assert.equal(await fetchAbstractByDoi('10.1016/abc', mk(new Error('network'))), '');
+});
 
 test('suggestMode：題目有正反／利弊／影響等字眼建議正反例證，其餘建議主張論證', () => {
   assert.equal(suggestMode('社群媒體對青少年的利弊').mode, 'procon');

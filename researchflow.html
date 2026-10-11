@@ -1378,11 +1378,16 @@ function act(a,k){const w=U[ME].n,L=p.LV;
 // 中文摘要沒有的話，先請本機模型整理（沒有模型就用機器翻譯）；模型只能根據資料庫給的摘要整理——資料庫沒有摘要的文獻不會編造內容，會直接寫明請讀原文。
 const shortUrl=u=>{try{const x=new URL(u),t=(x.host.replace(/^www\./,"")+x.pathname).replace(/\/$/,"");return t.length>30?t.slice(0,29)+"…":t}catch(err){return"來源連結"}};
 const evSummary=e=>{const s=evZh(e)||(e.lang==="zh"||!LIVE()?e.ab||e.f:"");
- return s?(s.length>220?s.slice(0,219)+"…":s):(e.ab||e.f)?"（無法產生中文摘要，請開啟來源閱讀原文。）":"（資料庫沒有提供這篇的摘要，請開啟來源閱讀原文。）"};
+ return s?(s.length>220?s.slice(0,219)+"…":s)+(e.abs?"（原文摘要取自 "+e.abs+"）":""):(e.ab||e.f)?"（無法產生中文摘要，請開啟來源閱讀原文。）":"（資料庫沒有提供這篇的摘要，請開啟來源閱讀原文。）"};
 async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
  const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
  const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);
  if(p.objs.some(o=>isCard(o)&&(!claim||p.objs.some(l=>l.type==="link"&&l.a===claim.id&&l.b===o.id)))){alert("這筆證據已經在畫布上了。");return}
+ // OpenAlex 沒收錄摘要：用 DOI 向 Semantic Scholar 補抓這一篇（只在按「加入畫布」時查，一次一篇）；查不到就照舊提示沒有摘要
+ if(LIVE()&&!e.ab&&!e.f&&e.lang!=="zh"&&window.RFAGENT&&RFAGENT.fetchAbstractByDoi&&/^https:\/\/doi\.org\//.test(e.url||"")){
+  setStat("OpenAlex 沒有這篇的摘要，向 Semantic Scholar 查詢中…","y");
+  const ab=await RFAGENT.fetchAbstractByDoi(e.url);if(p!==proj)return;
+  if(ab){[...S.ev,...(S.saved||[])].filter(x=>x.id===e.id).forEach(x=>{x.ab=ab;x.abs="Semantic Scholar"});saveS()}}
  if(LIVE()&&(!e.zh||zhBad(e))&&e.lang!=="zh"&&(e.ab||e.fo||e.f)){setStat("整理中文摘要中…","y");await zhFor(e.id);if(p!==proj)return}
  let card=p.objs.find(isCard);
  if(!card){const b=claim?bbox(claim):null,tops=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).map(l=>getO(l.b)).filter(Boolean).map(o=>{const q=bbox(o);return q.y+q.h}):[];

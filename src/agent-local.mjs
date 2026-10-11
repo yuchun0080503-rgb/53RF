@@ -239,6 +239,23 @@ export async function toZh(text, fetchImpl = fetch) {
   return hasZh(out) ? out.trim() : '';
 }
 
+// OpenAlex 沒收錄摘要的文獻：用 DOI 向 Semantic Scholar（免費、不需要金鑰、允許瀏覽器直接呼叫）補抓英文摘要。
+// 只在學生按「加入畫布」時才查一篇，不批次查，免得被限流。查不到、沒有 DOI、逾時或被限流都回傳空字串，呼叫端照舊提示「沒有摘要」。
+export async function fetchAbstractByDoi(doi, fetchImpl = fetch) {
+  const id = String(doi || '').replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim();
+  if (!/^10\.\d{4,9}\/\S+$/.test(id)) return '';
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
+  try {
+    const path = id.split('/').map(encodeURIComponent).join('/');
+    const res = await fetchImpl(`https://api.semanticscholar.org/graph/v1/paper/DOI:${path}?fields=abstract`, ctl ? { signal: ctl.signal } : undefined);
+    if (!res.ok) return '';
+    const ab = (await res.json())?.abstract;
+    const text = typeof ab === 'string' ? ab.replace(/\s+/g, ' ').trim() : '';
+    return text.length >= 40 ? text.slice(0, 1200) : '';
+  } catch { return ''; } finally { if (timer) clearTimeout(timer); }
+}
+
 export function keywordsFrom(text) {
   const out = [];
   for (const [re, en] of TERMS) if (re.test(text) && !out.includes(en)) out.push(en);
