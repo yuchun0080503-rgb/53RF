@@ -760,8 +760,9 @@ function diffForPush(localObjs,pushedMap){const nextPushed=new Map(),upserts=[];
  return{upserts,deletes,nextPushed}}
 function attachLiveObjects(proj){if(window.RF_MODE!=="live"||!proj.fid||proj._unsubObjs)return;
  proj._pushed=proj._pushed||new Map();
- proj._unsubObjs=RFDB.subscribeCanvasObjects(proj.fid,docs=>{
+ proj._unsubObjs=RFDB.subscribeCanvasObjects(proj.fid,(docs,pending)=>{
   if(p!==proj)return; // 已經切換到別的研究專案，忽略這個舊訂閱送回來的資料
+  if(pending&&proj._everLoaded)return; // 我們自己的寫入還沒被伺服器確認：這份快照是舊狀態的 echo，套用會把剛復原／擦除的結果蓋回去（連按兩次「返回上一步」筆跡會跑回來）；等全部確認後的快照再套用
   if(cur||dm)return; // 使用者正在畫線／拖曳／框選時，先不要用遠端快照打斷目前操作
   const objs=mergeRemoteDocs(docs);
   if(proj._everLoaded&&sameObjList(objs,proj.objs))return; // 這次只是我們自己剛寫入的 echo，內容沒有新資訊：不要多推一筆復原歷史，否則「返回上一個操作」會要按兩次才看到效果

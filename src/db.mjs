@@ -373,7 +373,7 @@ export async function deleteCanvasObject(projectId, objectId) {
 
 export function subscribeCanvasObjects(projectId, onChange, onError) {
   return onSnapshot(collection(db, 'projects', projectId, 'objects'), (snap) => {
-    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })), snap.metadata.hasPendingWrites);
   }, onError);
 }
 
