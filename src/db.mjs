@@ -63,14 +63,14 @@ export async function analyzeScope(projectId, items) {
 }
 
 // answers: [{key, question, answer}]；ownQuestion 有值代表學生自己寫研究問題 → {researchQuestion, keywords, strategy}
-export async function proposeQuestion(projectId, { items, answers, ownQuestion }) {
+export async function proposeQuestion(projectId, { items, answers, ownQuestion, must = [] }) {
   const uid = await guard(projectId, ownQuestion ? 'proposeKeywords' : 'proposeQuestion');
   const out = agent.proposeQuestion({ items, answers, ownQuestion });
   let by = '';
   if (!ownQuestion) {
     const st = await llm.detect();
     if (st.ok) {
-      try { out.researchQuestion = await draftQuestion({ topic: agent.topicOf(items), items: items || [], answers: answers || [] }); by = `（研究問題由 ${llm.modelLabel(st.textModel || st.model)} 撰寫）`; }
+      try { out.researchQuestion = await draftQuestion({ topic: agent.topicOf(items), items: items || [], answers: answers || [], must }); by = `（研究問題由 ${llm.modelLabel(st.textModel || st.model)} 撰寫）`; }
       catch (err) { console.warn('[ResearchFlow] 模型撰寫研究問題失敗，改用規則式句型：', err?.message || err); }
     }
   }
@@ -170,7 +170,7 @@ export function authErrorText(err) {
     'auth/missing-password': '請輸入密碼。',
     'auth/weak-password': '密碼至少需要 6 個字元。',
     'auth/email-already-in-use': '這個電子郵件已經註冊過了，請直接登入。',
-    'auth/invalid-credential': '電子郵件或密碼不正確；如果還沒有帳號，請按「註冊新帳號」。',
+    'auth/invalid-credential': '電子郵件或密碼不正確。如果這個信箱當初是按「使用 Google 帳號登入」建立的，它沒有設定密碼，請改按「使用 Google 帳號登入」；如果還沒有帳號，請按「註冊新帳號」。',
     'auth/user-not-found': '找不到這個帳號，請先註冊。',
     'auth/wrong-password': '密碼不正確。',
     'auth/too-many-requests': '嘗試次數過多，請稍後再試。',

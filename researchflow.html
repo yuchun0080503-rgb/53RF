@@ -315,7 +315,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.10.11-4";
+window.RF_VER = "2026.10.12-1";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 本機模型：使用者電腦上的 Ollama（Qwen）。有偵測到時，關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒有就用規則式。
@@ -997,7 +997,7 @@ $("#sim").onclick=()=>{const t=p.objs.filter(o=>o.type==="text")[1]||p.objs.find
 
 /* 選取檢視與物件屬性 */
 function delSel(){p.objs=p.objs.filter(o=>!sel.has(o.id)&&!sel.has(o.a)&&!sel.has(o.b));sel.clear();op("刪除選取物件")}
-function insp(){const el=$("#insp");if(!sel.size||!p){el.classList.add("hide");return}
+function insp(){anlSync();const el=$("#insp");if(!sel.size||!p){el.classList.add("hide");return}
  const os=[...sel].map(getO).filter(Boolean),ed=canEdit(),dis=ed?"":"disabled";
  let h=`<div class="ib"><b>已選取 ${os.length} 項</b>${os.some(o=>o.group)?`<button data-x="ung" ${dis}>${I("grp")}取消群組</button>`:os.length>1?`<button data-x="grp" ${dis}>${I("grp")}群組</button>`:""}<button data-x="dup" ${dis}>${I("copy")}複製</button><button data-x="del" ${dis}>${I("trash")}刪除</button>
  <select data-x="tag" ${dis} aria-label="標籤"><option value="">標籤</option>${Object.entries(TAGS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select><select data-x="stage" ${dis} aria-label="研究階段"><option value="">研究階段</option>${STG.map(s=>`<option>${s}</option>`).join("")}</select></div>`;
@@ -1016,7 +1016,15 @@ function insp(){const el=$("#insp");if(!sel.size||!p){el.classList.add("hide");r
   if(x==="orig"){os[0].showOrig=!os[0].showOrig;insp();draw()}});
  el.querySelectorAll("select[data-x]").forEach(s=>s.onchange=()=>{const k=s.dataset.x;if(!s.value)return;each(o=>o[k]=s.value);op("修改標籤／研究階段")});
  el.querySelector("[data-x=ai]")?.addEventListener("change",e=>{each(o=>{o.aiRead=e.target.value;o.conf=false});op("修正 AI 讀取結果")});
- el.querySelectorAll("[data-c]").forEach(c=>c.onchange=()=>{each(o=>o[c.dataset.c]=c.checked);op("更新物件確認狀態")})}
+ el.querySelectorAll("[data-c]").forEach(c=>c.onchange=()=>{each(o=>o[c.dataset.c]=c.checked);op("更新物件確認狀態");
+  // 勾「納入搜尋關鍵字」時，如果已經到了確認策略／搜尋步驟，馬上把這段文字加進關鍵字
+  if(c.dataset.c==="inKW"&&c.checked&&S.step>=4){markKw();saveS();renderPane()}})}
+// 物件上的三個勾選（檢查器）：
+//   納入研究問題：Agent 撰寫研究問題時一定要涵蓋這些內容，就算這次沒有選取它們
+//   納入搜尋關鍵字：這段文字直接加進搜尋關鍵字（中文會自動翻成英文）
+//   為聚焦提問的回應：當成小組對聚焦問題的回答，一起交給 Agent
+const marked=k=>p.objs.filter(o=>o[k]&&o.type!=="link").map(o=>({type:o.type,text:(o.type==="text"?o.text:o.aiRead)||"",tag:o.tag})).filter(x=>x.text.trim());
+function markKw(){marked("inKW").map(x=>x.text.trim().replace(/[。，,.!！?？]+$/,"").slice(0,30)).filter(t=>t&&!S.kw.includes(t)).forEach(t=>{S.kw.push(t);if(hasZh(t))translateKw(t,true)})}
 
 /* 側欄 */
 $$(".tabs button").forEach(b=>b.onclick=()=>{pane=b.dataset.p;LS("rf.pane",pane);$$(".tabs button").forEach(x=>x.classList.toggle("on",x===b));renderPane()});
@@ -1042,8 +1050,13 @@ function agentHTML(){const s=S.step;
 // 聚焦問題：live 模式用 Agent 針對這份畫布提出的問題（S.qs3），demo 模式用內建範例。格式統一成 [問題, 代號, 選項]
 const scv=k=>String(S.scope[k]||"").split("、").map(x=>x.trim()).filter(Boolean);
 const QS=()=>S.qs3?S.qs3.map(q=>[q.question,q.key,q.options]):Q;
+// 第一步：有選取物件時只分析選取的，按鈕和說明直接寫出來，避免以為讀了整張畫布
+const anlN=()=>p?p.objs.filter(o=>sel.has(o.id)&&o.type!=="link").length:0;
+const anlLabel=()=>anlN()?`分析選取的 ${anlN()} 項內容`:"分析整張畫布";
+const anlHint=()=>anlN()?`目前選取了 ${anlN()} 項，Agent 只會讀這些。想讀整張畫布，先點畫布空白處取消選取。確認理解結果前不會搜尋。`:"沒有選取任何內容，Agent 會讀整張畫布。也可以先框選幾項，只分析那幾項。確認理解結果前不會搜尋。";
+function anlSync(){const b=$("#anlBtn span"),h=$("#anlHint");if(b)b.textContent=anlLabel();if(h)h.textContent=anlHint()}
 function body(){const s=S.step,sc=S.scope;
- if(s===0)return `<p class="sm mute">Agent 只會讀取你選取的範圍（未選取則讀取整張畫布），並先請你們確認理解結果，確認前不會搜尋。</p><div class="acts"><button class="pri" data-a="analyze" ${canEdit()?"":"disabled"}>${I("spark")}分析目前研究方向</button></div>`;
+ if(s===0)return `<p class="sm mute" id="anlHint">${anlHint()}</p><div class="acts"><button class="pri" data-a="analyze" id="anlBtn" ${canEdit()?"":"disabled"}>${I("spark")}<span>${anlLabel()}</span></button></div>`;
  if(s===1){const rd=S.rd.map(getO).filter(Boolean),row=o=>o.type==="link"||o.hwSub?"":`<div class="box sm">${av(o.by,18)} ${o.type==="text"?esc(o.text):`${o.shape?"圖示":"手寫內容"}　<input id="rd${o.id}" value="${esc(o.aiRead)}" aria-label="AI 讀取結果">${(o.alts||[]).length?`<div class="chips" style="margin:6px 0 0"><span class="mute" style="font-size:12px;align-self:center">其他可能：</span>${o.alts.map(x=>`<button data-alt="rd${o.id}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`:""}`}</div>`;
   const g=(t,l)=>{const a=rd.filter(o=>t?o.tag===t:!["claim","counter","question"].includes(o.tag));return a.length?`<h3>${l}</h3>`+a.map(row).join(""):""};
   return `<p class="sm mute">分析範圍：${rd.length} 個物件（Canvas Version ${S.ver}）。手寫內容請確認或直接修正。</p>${g("claim","支持方向")}${g("counter","限制方向")}${g("question","待驗證問題")}${g("","其他內容")}${LIVE()?"":`<div class="box sm"><b>初步研究問題</b><br>生成式 AI 是否能幫助大學生學習？</div>`}<div class="acts"><button class="pri" data-a="ok1">${I("check")}讀取正確</button><button data-a="fix">需要修正</button></div>`}
@@ -1418,7 +1431,7 @@ async function reflectRound(r){const n=S.rounds,gap=evGap(),dir=window.RFAGENT?R
 // 擴大範圍：主題詞少用一個（最少留 2 個）、不加範圍詞（研究對象、情境），讓更多文獻符合條件
 const broadKw=o=>{if(!S.broad)return o;const n=Math.max(Math.min(2,o.coreCount),o.coreCount-S.broad);return{...o,coreCount:n,keywords:o.keywords.slice(0,n)}};
 async function actLive(a,w){
- const items=()=>rdItems().map(o=>({type:o.type,text:o.text,tag:o.tag}));
+ const items=()=>{const base=rdItems().map(o=>({type:o.type,text:o.text,tag:o.tag}));const extra=marked("inRQ").filter(x=>!base.some(b=>b.text===x.text));return[...base,...extra]};
  let label,job;
  if(a==="ok1"){
   S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});
@@ -1429,11 +1442,13 @@ async function actLive(a,w){
  if(a==="rq"||a==="myrq"){
   const own=a==="myrq"?$("#myrq").value.trim():"";
   if(a==="myrq"&&!own){alert("請先輸入你們的 Research Question。");return}
-  const answers=QS().map(q=>({key:q[1],question:q[0],answer:S.scope[q[1]]})).filter(x=>x.answer);
+  const answers=[...QS().map(q=>({key:q[1],question:q[0],answer:S.scope[q[1]]})).filter(x=>x.answer),...marked("ans").map(x=>({key:"canvas",question:"白板上標為聚焦回應的內容",answer:x.text}))];
+  const mustRQ=marked("inRQ").map(x=>x.text);
   if(own)log(w,"自行撰寫 Research Question。");
   label="整理研究問題與搜尋策略中…";
-  job=async()=>{const r=await RFDB.proposeQuestion(p.fid,{items:items(),answers,ownQuestion:own});
-   Object.assign(S,{rq:r.researchQuestion,kw:r.keywords,kwEn:r.kwEn||{},strat:r.strategy,step:4});
+  job=async()=>{const r=await RFDB.proposeQuestion(p.fid,{items:items(),answers,ownQuestion:own,must:mustRQ});
+   Object.assign(S,{rq:r.researchQuestion,kw:r.keywords,kwEn:r.kwEn||{},strat:r.strategy,step:4});markKw();
+   if(mustRQ.length)S.rqMust=mustRQ;
    addTopicKw(items().filter(x=>x.tag!=="question").map(x=>x.text).join("。"))}}
  if(a==="round"){
   // 查詢由小組確認過的關鍵字組成：第 1 輪找支持方向，第 2 輪起加上負面／限制用語找反向方向（見 agent-local.mjs 的 buildQueries）

@@ -113,10 +113,10 @@ export async function scopeFocus({ topic, items = [] }, fetchImpl) {
  * 依白板內容和小組對聚焦問題的回答，寫出一句可以拿去查文獻的研究問題。
  * @returns {Promise<string>}
  */
-export async function draftQuestion({ topic, items = [], answers = [] }, fetchImpl) {
+export async function draftQuestion({ topic, items = [], answers = [], must = [] }, fetchImpl) {
   const out = await chatJSON({
     system: '你是協助大學生做研究報告的研究助理。根據題目、白板內容與小組選定的聚焦方向，寫出一句具體、可以拿去搜尋學術文獻的研究問題（繁體中文，40 字以內）。要包含研究對象、情境與結果；用「如何」「有什麼關聯」「差異為何」這類開放的問法，不要用「會不會」「是否」「嗎」寫成是非題，也不要預設答案。',
-    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(it.text, 80)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}`,
+    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(it.text, 80)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
     schema: { type: 'object', required: ['question'], properties: { question: str } },
     maxTokens: 200,
   }, fetchImpl);
