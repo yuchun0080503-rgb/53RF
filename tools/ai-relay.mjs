@@ -30,6 +30,8 @@ export function createRelay({ ollama = OLLAMA, origins = ORIGINS, fetchImpl = fe
     const cors = allowed ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600', Vary: 'Origin' } : {};
     const send = (code, body, type = 'application/json') => { res.writeHead(code, { ...cors, 'Content-Type': type }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
     const path = (req.url || '').split('?')[0];
+    // 有人直接用瀏覽器打開這個網址：說明它是什麼、該去哪裡用
+    if (req.method === 'GET' && (path === '/' || path === '')) return send(200, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ResearchFlow AI 主機</title><body style="font:16px/1.7 -apple-system,system-ui,sans-serif;max-width:560px;margin:15vh auto;padding:0 20px;color:#1d1d1f"><h2>ResearchFlow AI 主機</h2><p>這裡是 ResearchFlow 背後的 AI（Qwen），不用直接打開。</p><p>請到 <a href="https://researchflow-3dd2c.web.app/researchflow.html">ResearchFlow 網站</a> 使用，網站會自動連到這裡。</p></body>', 'text/html; charset=utf-8');
     if (req.method === 'OPTIONS') return allowed ? send(204, '') : send(403, { error: 'origin not allowed' });
     if (!allowed) return send(403, { error: 'origin not allowed' });
     if (!ROUTES.has(`${req.method} ${path}`)) return send(404, { error: 'not available' });
