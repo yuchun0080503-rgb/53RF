@@ -22,7 +22,12 @@
       ".git/**",
       "**/.git/**",
       ".firebase/**",
-      "**/*.log"
+      "**/*.log",
+      "setup/**",
+      "**/*.bat",
+      "**/*.command",
+      "**/*.exe",
+      "**/*.sh"
     ],
     "rewrites": [
       {

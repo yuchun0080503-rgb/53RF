@@ -316,7 +316,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.10.12-3";
+window.RF_VER = "2026.10.12-4";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 本機模型：使用者電腦上的 Ollama（Qwen）。有偵測到時，關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒有就用規則式。
@@ -814,7 +814,8 @@ const setupAsk=()=>{if(!window.RFLLM||LS("rf.aisetup.no")==="1")return "";const 
 const aiSetup={wait:false,timer:0};
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-aisetup]");if(!b)return;
  if(b.dataset.aisetup==="no"){LS("rf.aisetup.no","1");renderPane();return}
- const fn=isWin()?"ResearchFlow-AI-setup.bat":"ResearchFlow-AI-setup.zip",a=document.createElement("a");a.href="setup/"+fn;a.download=fn;document.body.appendChild(a);a.click();a.remove();
+ // 設定檔由瀏覽器當場產生（src/setup-files.mjs）：Firebase 免費方案不准網站主機放 .bat／.command 這類可執行檔
+ import("./src/setup-files.mjs").then(({setupFile})=>{const f=setupFile(isWin()),u=URL.createObjectURL(f.blob),a=document.createElement("a");a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000)}).catch(err=>alert("設定檔產生失敗："+(err?.message||err)));
  aiSetup.wait=true;renderPane();clearInterval(aiSetup.timer);let n=0;
  aiSetup.timer=setInterval(async()=>{const st=await RFLLM.detect(true);if((st.ok&&st.where==="本機")||++n>120){clearInterval(aiSetup.timer);aiSetup.wait=false;aiChip();renderPane();if(st.ok&&st.where==="本機")setStat("已連上這台電腦的 Qwen")}},5000)});
 const aiNote=()=>{if(!p||p.LV<1||!window.RFLLM)return "";if(AI())return setupAsk();const st=RFLLM.status();if(!st.checked)return "";
