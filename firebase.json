@@ -19,8 +19,6 @@
       "src/permissions.mjs",
       "src/sync.mjs",
       "tools/**",
-      "**/*.command",
-      "**/*.bat",
       ".git/**",
       "**/.git/**",
       ".firebase/**",

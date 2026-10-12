@@ -42,7 +42,7 @@ const timed = async (url, opts = {}, ms = 2000, fetchImpl = fetch) => {
  */
 export async function detect(force = false, fetchImpl = fetch) {
   if (!force && Date.now() - state.checked < 60000) return state;
-  let noModel = false;
+  let noModel = false, localWhy = '';
   for (const h of hosts()) {
     try {
       const res = await timed(`${h.base}/api/tags`, {}, h.local ? 2000 : 6000, fetchImpl);
@@ -51,7 +51,7 @@ export async function detect(force = false, fetchImpl = fetch) {
       const model = PREFERRED.find((n) => names.includes(n)) || names.find((n) => /^qwen/i.test(n)) || '';
       if (!model) { noModel = true; continue; }
       const textModel = TEXT_PREFERRED.find((n) => names.includes(n)) || model;
-      state = { ok: true, model, textModel, vision: /^qwen3\.5|^qwen3-vl|^qwen2\.5vl/i.test(model), checked: Date.now(), reason: '', why: '', base: h.base, where: h.label };
+      state = { ok: true, model, textModel, vision: /^qwen3\.5|^qwen3-vl|^qwen2\.5vl/i.test(model), checked: Date.now(), reason: '', why: '', base: h.base, where: h.label, localWhy: h.local ? '' : localWhy || await diagnose(fetchImpl) };
       return state;
     } catch { /* 換下一個 */ }
   }
