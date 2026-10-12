@@ -139,3 +139,21 @@ test('summarizeZh：韓文或英文的摘要不採用', async () => {
   await detect(true, ko);
   await assert.rejects(summarizeZh('t', ab, ko), /中文/);
 });
+
+test('detect：本機連不上時改用團隊 AI 主機；都連不上時說明原因', async () => {
+  const { detect: det, modelLabel: ml } = await import('./llm.mjs');
+  globalThis.RF_AI_HOSTS = [{ base: 'https://team.example.ts.net/', label: '團隊 AI 主機' }];
+  const calls = [];
+  const remoteOnly = async (url, opts) => { calls.push(url);
+    if (String(url).startsWith('http://localhost')) throw new TypeError('Failed to fetch');
+    return { ok: true, json: async () => ({ models: [{ name: 'qwen3:4b-instruct-2507-q4_K_M' }, { name: 'qwen3.5:9b' }] }) } };
+  const st = await det(true, remoteOnly);
+  assert.equal(st.ok, true); assert.equal(st.base, 'https://team.example.ts.net'); assert.equal(ml(), 'Qwen 3（4B，團隊 AI 主機）');
+  // Ollama 有開但擋掉網站：一般請求失敗、no-cors 請求成功
+  const blocked = async (url, opts) => { if (opts && opts.mode === 'no-cors') return { ok: false, type: 'opaque' }; throw new TypeError('Failed to fetch') };
+  const b = await det(true, blocked);
+  assert.equal(b.ok, false); assert.equal(b.why, 'blocked'); assert.match(b.reason, /start-ollama/);
+  const off = await det(true, async () => { throw new TypeError('Failed to fetch') });
+  assert.equal(off.why, 'off');
+  delete globalThis.RF_AI_HOSTS;
+});

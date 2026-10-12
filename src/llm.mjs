@@ -9,6 +9,10 @@
 // 讓網站連得到本機的 Ollama：啟動 Ollama 前要設定環境變數 OLLAMA_ORIGINS，把網站的網址加進去（見 README）。
 
 const BASE = 'http://localhost:11434';
+// 去哪裡找 Qwen：先找「正在用的這台裝置自己」（本機），找不到再找團隊的 AI 主機（網站在 window.RF_AI_HOSTS 設定，
+// 例如某位組員的 Mac 透過加密網址分享出來的 Qwen）。iPad、Safari、沒裝 Qwen 的電腦就是靠後者用到 AI。
+const hosts = () => [{ base: BASE, label: '本機', local: true },
+  ...((globalThis.RF_AI_HOSTS || []).filter((h) => h && /^https:\/\//.test(h.base)).map((h) => ({ base: h.base.replace(/\/$/, ''), label: h.label || '團隊 AI 主機', local: false })))];
 // 依序挑第一個有安裝的。都是看得懂圖片的 Qwen（手寫辨識要用）；數字越大越準、越吃記憶體。
 export const PREFERRED = ['qwen3.5:9b', 'qwen3-vl:8b', 'qwen3.5:4b', 'qwen3-vl:4b', 'qwen3.5:2b', 'qwen3-vl:2b'];
 // 文字的步驟（規劃關鍵字、判讀文獻、反思…）優先用不會「先思考」的 instruct 版：實測在 16GB 筆電上一次約 3–9 秒，
@@ -18,7 +22,7 @@ export const TEXT_PREFERRED = ['qwen3:4b-instruct-2507-q4_K_M', 'qwen3:4b-instru
 // 所以這類模型改用 format:'json'，Schema 寫進提示裡；不思考的 instruct 模型直接用 Schema 限制。
 const THINKING = /^qwen3\.5|^qwen3-vl/i;
 
-let state = { ok: false, model: '', textModel: '', vision: false, checked: 0, reason: '尚未偵測' };
+let state = { ok: false, model: '', textModel: '', vision: false, checked: 0, reason: '尚未偵測', why: '', base: BASE, where: '本機' };
 export const status = () => state;
 
 const timed = async (url, opts = {}, ms = 2000, fetchImpl = fetch) => {
@@ -27,30 +31,56 @@ const timed = async (url, opts = {}, ms = 2000, fetchImpl = fetch) => {
 };
 
 /**
- * 偵測本機的 Ollama 與可用的 Qwen 模型。結果會記住 60 秒（force 可以強制重查）。
- * @returns {Promise<{ok:boolean, model:string, vision:boolean, reason:string}>}
+ * 偵測可以用的 Qwen：依序試本機與團隊 AI 主機，用第一個有 Qwen 的。結果會記住 60 秒（force 可以強制重查）。
+ * 都找不到時 why 說明卡在哪裡：
+ *   blocked  這台電腦有開 Ollama，但沒有允許網站連線（直接從選單列打開 Ollama 就會這樣）
+ *   safari   Safari 不會連到這台電腦上的模型
+ *   tablet   iPad／手機上用不到電腦上的模型
+ *   nomodel  有 Ollama，但沒有下載 Qwen
+ *   off      這台電腦沒有開 Ollama，也連不到團隊 AI 主機
+ * @returns {Promise<{ok:boolean, model:string, textModel:string, vision:boolean, reason:string, why:string, base:string, where:string}>}
  */
 export async function detect(force = false, fetchImpl = fetch) {
   if (!force && Date.now() - state.checked < 60000) return state;
-  try {
-    const res = await timed(`${BASE}/api/tags`, {}, 2000, fetchImpl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const names = ((await res.json()).models || []).map((m) => m.name);
-    const model = PREFERRED.find((n) => names.includes(n)) || names.find((n) => /^qwen/i.test(n)) || '';
-    const textModel = TEXT_PREFERRED.find((n) => names.includes(n)) || model;
-    state = model
-      ? { ok: true, model, textModel, vision: /^qwen3\.5|^qwen3-vl|^qwen2\.5vl/i.test(model), checked: Date.now(), reason: '' }
-      : { ok: false, model: '', textModel: '', vision: false, checked: Date.now(), reason: 'Ollama 已啟動，但還沒有下載 Qwen 模型' };
-  } catch (err) {
-    state = { ok: false, model: '', textModel: '', vision: false, checked: Date.now(), reason: '這台電腦沒有啟動 Ollama（或沒有允許這個網站連線）' };
+  let noModel = false;
+  for (const h of hosts()) {
+    try {
+      const res = await timed(`${h.base}/api/tags`, {}, h.local ? 2000 : 6000, fetchImpl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const names = ((await res.json()).models || []).map((m) => m.name);
+      const model = PREFERRED.find((n) => names.includes(n)) || names.find((n) => /^qwen/i.test(n)) || '';
+      if (!model) { noModel = true; continue; }
+      const textModel = TEXT_PREFERRED.find((n) => names.includes(n)) || model;
+      state = { ok: true, model, textModel, vision: /^qwen3\.5|^qwen3-vl|^qwen2\.5vl/i.test(model), checked: Date.now(), reason: '', why: '', base: h.base, where: h.label };
+      return state;
+    } catch { /* 換下一個 */ }
   }
+  const why = noModel ? 'nomodel' : await diagnose(fetchImpl);
+  state = { ok: false, model: '', textModel: '', vision: false, checked: Date.now(), reason: WHY[why], why, base: BASE, where: '本機' };
   return state;
 }
 
-// 給畫面顯示的名稱：qwen3.5:9b → 「Qwen 3.5（9B，本機）」
+export const WHY = {
+  blocked: '這台電腦有開 Ollama，但它沒有允許網站連線（直接從選單列打開 Ollama 就會這樣）。請先結束選單列上的 Ollama，再用專案裡的 tools/start-ollama 啟動',
+  safari: 'Safari 不會連到這台電腦上的模型，請改用 Chrome 開網站',
+  tablet: 'iPad 和手機上用不到電腦裡的模型，而且目前也連不到團隊 AI 主機',
+  nomodel: 'Ollama 已啟動，但還沒有下載 Qwen 模型',
+  off: '這台電腦沒有開 Ollama，也連不到團隊 AI 主機',
+};
+
+// 本機連不上時，判斷是哪一種情況。no-cors 的請求不受「是否允許網站連線」限制：它成功代表 Ollama 有開、只是擋掉了網站。
+async function diagnose(fetchImpl = fetch) {
+  const ua = String(globalThis.navigator?.userAgent || ''), touchMac = /Macintosh/.test(ua) && (globalThis.navigator?.maxTouchPoints || 0) > 1;
+  if (/iPad|iPhone|Android/.test(ua) || touchMac) return 'tablet';
+  try { await timed(`${BASE}/api/version`, { mode: 'no-cors' }, 2000, fetchImpl); return 'blocked'; } catch { /* 沒開，或瀏覽器不讓連 */ }
+  if (/Safari/.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua)) return 'safari';
+  return 'off';
+}
+
+// 給畫面顯示的名稱：qwen3.5:9b → 「Qwen 3.5（9B，本機）」；用團隊 AI 主機時括號裡寫主機名稱
 export const modelLabel = (name = state.textModel || state.model) => {
   const m = String(name).match(/^qwen([\d.]*)(-vl|vl)?:(\w+)/i);
-  return m ? `Qwen ${m[1]}${m[2] ? ' VL' : ''}（${m[3].toUpperCase()}，本機）` : name || '';
+  return m ? `Qwen ${m[1]}${m[2] ? ' VL' : ''}（${m[3].toUpperCase()}，${state.where || '本機'}）` : name || '';
 };
 
 /**
@@ -70,7 +100,7 @@ export async function chatJSON({ system, user, images, schema, maxTokens = 900, 
   // 有圖片才用看得懂圖片的模型；文字步驟用 instruct 版（快、格式穩定）
   const model = images && images.length ? st.model : (st.textModel || st.model);
   const thinking = THINKING.test(model);
-  const res = await timed(`${BASE}/api/chat`, {
+  const res = await timed(`${st.base || BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
