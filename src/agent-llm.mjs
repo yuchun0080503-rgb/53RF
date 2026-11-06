@@ -172,19 +172,42 @@ export async function translate(term, context = '', fetchImpl) {
 }
 
 /**
- * 逐篇判讀搜尋到的文獻。
+ * 判讀搜尋到的文獻，一次只問模型一篇。
+ * 為什麼不一次把十幾篇交給模型：4B 的小模型一次讀多篇時，會漏掉其中幾篇、把編號寫錯，
+ * 或把相鄰兩篇的內容混在一起；同一篇只因為排的位置不同，立場就會變。
+ * 用 24 篇合成摘要實測，一次一篇比較準（79% 對 63–67%），耗時只多約 20%（每篇約 1.7 秒）。
  * @param {object} o
  * @param {string} o.claim 要查證的主張（或研究問題）
- * @param {{title:string, abstract:string}[]} o.works
+ * @param {{title:string, abstract:string}[]} o.works 最多判讀 12 篇
  * @returns {Promise<{rel:number, stance:'support'|'counter'|'mixed'|'unclear'|'unrelated', finding:string}[]>} 順序與 works 相同
- *   rel：0 無關、1 只沾到邊、2 相關、3 直接在研究這個主張
+ *   rel：0 無關、1 只沾到邊、2 相關、3 直接在研究這個主張；-1 是這一篇判讀失敗，呼叫端沿用規則式的結果。
+ *   連續兩篇失敗（Ollama 沒開、模型壞掉），或一篇都沒成功時丟出錯誤，呼叫端會整批退回規則式。
+ *   逾時：第一篇 180 秒（可能要先載入模型），其餘每篇 90 秒。
  */
 export async function judgeWorks({ claim, works }, fetchImpl) {
   const list = (Array.isArray(works) ? works : []).slice(0, 12);
   if (!list.length) return [];
+  const results = [];
+  let streak = 0, ok = 0, lastErr;
+  for (const [n, w] of list.entries()) {
+    try {
+      // 第一篇可能要先把模型載入顯存（實測可能超過一分鐘），逾時放寬；之後模型已經在記憶體裡，一篇只要一兩秒
+      results.push(await judgeOne(claim, w, fetchImpl, n === 0 ? 180000 : 90000));
+      ok++; streak = 0;
+    } catch (err) {
+      lastErr = err;
+      if (++streak >= 2) throw err; // 不要再等剩下的篇數一個一個逾時
+      results.push({ rel: -1, stance: 'unrelated', finding: '' });
+    }
+  }
+  if (!ok) throw lastErr;
+  return results;
+}
+
+async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
   const out = await chatJSON({
     system:
-      '你是協助學生查證文獻的研究助理。學生有一個主張，下面是從學術資料庫找到的文獻（標題與摘要）。請逐篇判讀，標準要嚴格。\n' +
+      '你是協助學生查證文獻的研究助理。學生有一個主張，下面是從學術資料庫找到的一篇文獻（標題與摘要）。請判讀這一篇，標準要嚴格。\n' +
       'rel（相關度）：\n' +
       '3＝這篇直接在研究主張談的事（同樣的現象、同樣或相近的對象）。\n' +
       '2＝主題相同、對象或情境略有不同，可以當佐證。\n' +
@@ -194,23 +217,19 @@ export async function judgeWorks({ claim, works }, fetchImpl) {
       'unclear＝摘要只說明研究目的或方法、沒有寫出研究結果，無法判斷；unrelated＝rel 是 0 或 1。\n' +
       '判斷立場要看「研究發現」跟主張的方向是否一致，不是看摘要用了正面還是負面的字。主張說某事會變差，研究也發現變差，就是 support。\n' +
       '主張只說「影響」而沒有說變好或變差時：研究發現確實有影響（不論變好或變差）都算 support，發現沒有影響才是 counter。\n' +
-      'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。\n' +
-      '每一篇都要回答，i 是文獻的編號。',
-    user: `學生的主張：${clip(claim, 300)}\n\n` + list.map((w, i) => `[${i}] ${clip(w.title, 200)}\n摘要：${clip(w.abstract, 650) || '（沒有摘要）'}`).join('\n\n'),
+      '摘要裡的「建議」「可能」「未來研究應該」只是作者的推測或主張，不是研究發現；沒有寫出實際的數據或結果，stance 就是 unclear。\n' +
+      'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。',
+    user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, 650) || '（沒有摘要）'}`,
     schema: {
-      type: 'object', required: ['items'],
-      properties: { items: { type: 'array', items: { type: 'object', required: ['i', 'rel', 'stance', 'finding'], properties: { i: { type: 'integer' }, rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str } } } },
+      type: 'object', required: ['rel', 'stance', 'finding'],
+      properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str },
     },
-    maxTokens: 90 * list.length + 100,
-    timeout: 300000,
+    maxTokens: 160,
+    timeout,
   }, fetchImpl);
-  const by = new Map((out.items || []).map((x) => [x.i, x]));
-  return list.map((_, i) => {
-    const x = by.get(i);
-    if (!x) return { rel: -1, stance: 'unrelated', finding: '' }; // -1：模型漏掉這一篇，呼叫端沿用規則式的結果
-    const rel = Math.max(0, Math.min(3, Math.round(x.rel)));
-    return { rel, stance: rel < 2 ? 'unrelated' : x.stance, finding: clip(x.finding, 80) };
-  });
+  if (!Number.isFinite(out.rel)) return { rel: -1, stance: 'unrelated', finding: '' }; // 模型沒有給相關度：當作這一篇判讀失敗
+  const rel = Math.max(0, Math.min(3, Math.round(out.rel)));
+  return { rel, stance: rel < 2 ? 'unrelated' : out.stance, finding: clip(out.finding, 80) };
 }
 
 /**

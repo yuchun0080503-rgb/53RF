@@ -46,26 +46,66 @@ test('translate：只接受英文結果', async () => {
   await assert.rejects(translate('使用時間', '', fake(['qwen3.5:9b'], { en: '使用時間', synonyms: [] })), /英文/);
 });
 
-test('judgeWorks／refineEvidence：排除不切題的、依模型判斷的立場分類、摘要沒寫結果時沿用規則式分類', async () => {
-  const f = fake(['qwen3.5:9b'], { items: [
-    { i: 0, rel: 3, stance: 'support', finding: '過度依賴 AI 會降低獨立思考。' },
-    { i: 1, rel: 1, stance: 'support', finding: '談的是醫療決策。' },
-    { i: 2, rel: 2, stance: 'mixed', finding: '只有在缺乏引導時才會下降。' },
-    { i: 3, rel: 3, stance: 'unclear', finding: '' },
-    // 第 4 篇模型漏掉了
-  ] });
+// 一次問一篇的版本：每問一次就依序回傳下一個答案；答案是 Error 時模擬這一次失敗
+const sequence = (models, replies) => {
+  const calls = [];
+  let n = 0;
+  const fn = async (url, opts) => {
+    if (String(url).endsWith('/api/tags')) return { ok: true, json: async () => ({ models: models.map((name) => ({ name })) }) };
+    calls.push(JSON.parse(opts.body));
+    const reply = replies[n++];
+    if (reply instanceof Error) throw reply;
+    return { ok: true, json: async () => ({ message: { content: JSON.stringify(reply) } }) };
+  };
+  fn.calls = calls;
+  return fn;
+};
+
+test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、依模型判斷的立場分類、摘要沒寫結果時沿用規則式分類', async () => {
+  const replies = () => [
+    { rel: 3, stance: 'support', finding: '過度依賴 AI 會降低獨立思考。' },
+    { rel: 1, stance: 'support', finding: '談的是醫療決策。' },
+    { rel: 2, stance: 'mixed', finding: '只有在缺乏引導時才會下降。' },
+    { rel: 3, stance: 'unclear', finding: '' },
+    new Error('這一篇逾時'), // 第 5 篇判讀失敗：標成 -1，沿用規則式的結果
+  ];
+  const f = sequence(['qwen3.5:9b'], replies());
   await detect(true, f);
   const ev = ['a', 'b', 'c', 'd', 'e'].map((id, n) => ({ id, t: 'T' + id, f: '原摘要' + id, _ab: '完整摘要' + id, k: n === 3 ? 'c' : 's' }));
   const v = await judgeWorks({ claim: '主張', works: ev.map((e) => ({ title: e.t, abstract: e._ab })) }, f);
   assert.deepEqual(v.map((x) => [x.rel, x.stance]), [[3, 'support'], [1, 'unrelated'], [2, 'mixed'], [3, 'unclear'], [-1, 'unrelated']]);
-  const r = await refineEvidence({ claim: '主張', evidence: ev, model: 'Qwen' }, f);
+  // 每次只送一篇：不會把別篇的內容也交給模型
+  assert.equal(f.calls.length, 5);
+  assert.match(f.calls[0].messages[1].content, /完整摘要a/);
+  assert.doesNotMatch(f.calls[0].messages[1].content, /完整摘要b/);
+  assert.match(f.calls[1].messages[1].content, /完整摘要b/);
+  const f2 = sequence(['qwen3.5:9b'], replies());
+  const r = await refineEvidence({ claim: '主張', evidence: ev, model: 'Qwen' }, f2);
   assert.deepEqual([r.judged, r.removed], [4, 1]);
   assert.deepEqual(r.evidence.map((e) => [e.id, e.k, e.rel]), [['a', 's', '高'], ['d', 'c', '高'], ['c', 'c', '中'], ['e', 's', undefined]]);
   assert.equal(r.evidence[0].f, '過度依賴 AI 會降低獨立思考。');
   assert.equal(r.evidence[0].fo, '原摘要a');
   assert.equal(r.evidence[1].unc, true);
   assert.equal(r.evidence[2].mix, true);
-  assert.match(f.calls[1].messages[1].content, /完整摘要a/);
+});
+
+test('judgeWorks：單篇失敗只影響那一篇；連續兩篇失敗或全部失敗就丟出錯誤讓呼叫端整批退回', async () => {
+  const works = ['a', 'b', 'c', 'd'].map((id) => ({ title: 'T' + id, abstract: '摘要' + id }));
+  const good = { rel: 3, stance: 'support', finding: '有發現。' };
+  const boom = new Error('逾時');
+  // 失敗的不連續：只有那幾篇是 -1
+  const a = sequence(['qwen3.5:9b'], [good, boom, good, boom]);
+  await detect(true, a);
+  assert.deepEqual((await judgeWorks({ claim: '主張', works }, a)).map((x) => x.rel), [3, -1, 3, -1]);
+  // 連續兩篇失敗：不再等剩下的，只問了三次（一次成功、兩次失敗）就丟出錯誤
+  const b = sequence(['qwen3.5:9b'], [good, boom, boom, good]);
+  await assert.rejects(judgeWorks({ claim: '主張', works }, b), /逾時/);
+  assert.equal(b.calls.length, 3);
+  // 只有一篇、而且失敗：一篇都沒成功，也是錯誤
+  await assert.rejects(judgeWorks({ claim: '主張', works: works.slice(0, 1) }, sequence(['qwen3.5:9b'], [boom])), /逾時/);
+  // 模型沒給相關度：當作這一篇判讀失敗
+  const c = sequence(['qwen3.5:9b'], [good, { stance: 'support', finding: '沒有 rel' }]);
+  assert.deepEqual((await judgeWorks({ claim: '主張', works: works.slice(0, 2) }, c)).map((x) => x.rel), [3, -1]);
 });
 
 test('readInk：把圖片交給模型並回傳文字；模型沒照格式回答時丟出錯誤', async () => {
