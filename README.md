@@ -107,17 +107,36 @@ AI 權限（新專案預設 Level 2）：0 全部關閉；1 可判斷範圍與�
 1. 安裝 Ollama，下載 `qwen3:4b-instruct-2507-q4_K_M`（文字步驟）與 `qwen3.5:4b`（手寫辨識）。
 2. 設定使用者環境變數 `OLLAMA_ORIGINS`，內容同 `tools/start-ollama.bat`，然後重新啟動 Ollama。
 3. 安裝並登入 Tailscale，到管理後台開啟 HTTPS Certificates，並啟用 Funnel。
-4. 啟動轉接站：`node tools/ai-relay.mjs`。
+4. 啟動轉接站：`node tools/ai-relay.mjs`（先手動跑一次確認可以用；要開機自動啟動的話，見下面「讓轉接站開機自動啟動」）。
 5. 對外開放：`tailscale funnel --bg 11435`。
 6. 把這台主機的網址（`https://<裝置名稱>.<tailnet>.ts.net`）加進 `researchflow.html` 的 `RF_AI_HOSTS`，開 Pull Request、合併後部署。
 
-**重開機（或睡眠、登出）之後要手動恢復**
+**讓轉接站開機自動啟動（Windows）**
 
-轉接站不會自己啟動；Funnel 的設定 Tailscale 會記住，通常不用重做。Windows 上依序做：
+在工作排程器建一個「登入 Windows 時執行」的工作，用隱藏視窗跑轉接站，不需要系統管理員權限。把 `<專案路徑>` 換成這個專案在這台電腦上的位置，用 PowerShell 執行：
+
+```powershell
+$node = (Get-Command node).Source
+$act = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$node`" <專案路徑>\tools\ai-relay.mjs" -WorkingDirectory '<專案路徑>'
+$trg = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+$prn = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName 'ResearchFlow AI Relay' -Action $act -Trigger $trg -Settings $set -Principal $prn
+```
+
+移除：`Unregister-ScheduledTask -TaskName 'ResearchFlow AI Relay' -Confirm:$false`。注意：這個工作只在「登入」時觸發，開機後停在登入畫面時轉接站還不會跑；它只負責轉送，Ollama 要自己在跑。
+
+**重開機（或登出）之後**
+
+- 有設上面的自動啟動：登入 Windows 後轉接站會自己起來，Funnel 的設定 Tailscale 通常會記住，只需要確認 Ollama 和 Funnel 還在（步驟 1、4、5）。
+- 沒設自動啟動：轉接站要手動啟動（步驟 3）。
+- 睡眠不會結束轉接站，但電腦睡著時平板連不到；喚醒後就會恢復。
+
+Windows 上依序檢查：
 
 1. 打開 Ollama 程式，或執行 `ollama serve`。圖示出現了不代表伺服器有在跑，用 `ollama list` 確認。
 2. 確認 `OLLAMA_ORIGINS` 還在：`[Environment]::GetEnvironmentVariable('OLLAMA_ORIGINS','User')` 應該印出網站網址。
-3. 啟動轉接站：`node tools/ai-relay.mjs`，視窗要一直開著；看到「ResearchFlow AI 轉接站」那行就是成功。
+3. 確認轉接站有在跑：`Invoke-WebRequest http://127.0.0.1:11435/api/tags -Headers @{Origin='https://researchflow-3dd2c.web.app'}` 應該回 200。沒有的話，執行 `Start-ScheduledTask -TaskName 'ResearchFlow AI Relay'`；沒設自動啟動的話，改用 `node tools/ai-relay.mjs`，視窗要一直開著，看到「ResearchFlow AI 轉接站」那行就是成功。
 4. 確認 Funnel 還在：`tailscale funnel status` 應該列出 `Funnel on`。沒有的話重做 `tailscale funnel --bg 11435`。
 5. 驗證：用平板打開網站，畫布上方的標籤應該顯示 Qwen 與主機名稱；或在電腦上測 `Invoke-WebRequest https://<網址>/api/tags -Headers @{Origin='https://researchflow-3dd2c.web.app'}`，要回 200 並列出模型。
 
@@ -125,12 +144,12 @@ AI 權限（新專案預設 Level 2）：0 全部關閉；1 可判斷範圍與�
 
 | 症狀 | 原因與處理 |
 |---|---|
-| 平板標籤顯示「規則式」 | 主機沒開機／睡眠，或轉接站沒在跑；照上面的步驟恢復 |
+| 平板標籤顯示「規則式」 | 主機沒開機／睡眠、還沒登入 Windows，或轉接站沒在跑；照上面的步驟檢查 |
 | 電腦自己的網站連不到本機 Ollama（403） | `OLLAMA_ORIGINS` 沒有生效；設好後要重新啟動 Ollama，而且要從新的終端機啟動 |
 | 回 502 | 轉接站有在跑，但 Ollama 沒有回應；先做步驟 1 |
 | 回 503 | 同時處理的請求太多（最多 2 個，排隊 8 個）；稍後再試 |
 
-**停止對外開放**：`tailscale funnel --https=443 off`，再關掉轉接站視窗。
+**停止對外開放**：`tailscale funnel --https=443 off`，再結束轉接站（有設自動啟動的話，用 `Stop-ScheduledTask -TaskName 'ResearchFlow AI Relay'`；它下次登入還會再起來，要永久停用請用上面的移除指令）。
 
 **注意**：主機會處理其他組員的題目、摘要與手寫圖片，資料會經過主機電腦；轉接站只記錄狀態碼與耗時，不記內容。Funnel 的網址在公開網路上任何人都連得到，轉接站檢查的「來源網站」可以被瀏覽器以外的程式偽造，所以它不是真正的身分驗證；只在需要時開啟。
 
