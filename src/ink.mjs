@@ -159,6 +159,45 @@ function clusters(strokes, ax, slack = 0) {
   return out;
 }
 
+// ---- 手寫分組：哪些筆畫算同一段文字 ----
+// 停筆之後，緊鄰的、還沒確認的筆畫會併成同一段一起辨識，所以一句話可以慢慢寫、可以寫成好幾行。
+// 「多近算鄰近」要用字的大小來比：以前用整組筆畫外框的短邊，組越大門檻越寬，
+// 內文寫成兩行之後，上面的標題也被吸進來，兩段話被當成一句話辨識（字還被打亂）。
+// 現在改用「這組筆畫的典型大小」（每一筆外框較長邊的中位數 × 2，約等於一個字），不會隨整組變大。
+const median = (xs) => { const s = [...xs].sort((p, q) => p - q); return s[Math.floor(s.length / 2)] || 0; };
+const strokeSize = (pts) => { const b = boxOf(pts); return Math.max(b.w, b.h); };
+const mergeBox = (a, b) => { const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y); return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }; };
+function nearBox(A, unit, B) {
+  const H = Math.max(unit, Math.min(B.w, B.h), 30);
+  const gx = Math.max(B.x - (A.x + A.w), A.x - (B.x + B.w), 0), gy = Math.max(B.y - (A.y + A.h), A.y - (B.y + B.h), 0);
+  return gx < 1.3 * H && gy < 0.9 * H; // 同一行往後寫、直書往下寫，或換到下一行
+}
+
+/** 新筆畫 b 是不是接在這組筆畫 a 旁邊。a、b 都是「筆畫的陣列」，一筆是 [[x, y, t], …]。 */
+export function strokesNear(a, b) {
+  if (!a.length || !b.length) return false;
+  return nearBox(boxOf(a.flat()), 2 * median(a.map(strokeSize)), boxOf(b.flat()));
+}
+
+/**
+ * 從 seed 這幾筆開始，把 pool 裡緊鄰的筆畫一路併進來（併進來的筆畫也會再吸引它旁邊的）。
+ * @returns {number[]} 要併入的 pool 索引（由小到大）
+ */
+export function growGroup(seed, pool, max = 300) {
+  const sizes = seed.map(strokeSize);
+  let box = boxOf(seed.flat()), unit = 2 * median(sizes), count = seed.length;
+  const taken = new Set();
+  for (let added = true; added && count < max;) {
+    added = false;
+    for (let i = pool.length - 1; i >= 0 && count < max; i--) {
+      if (taken.has(i) || !pool[i].length || !nearBox(box, unit, boxOf(pool[i]))) continue;
+      taken.add(i); count++; added = true;
+      sizes.push(strokeSize(pool[i])); box = mergeBox(box, boxOf(pool[i])); unit = 2 * median(sizes);
+    }
+  }
+  return [...taken].sort((x, y) => x - y);
+}
+
 // 分行：沿垂直於書寫方向的軸找完全沒有筆跡的空白帶。只有夠高的帶才算一行，
 // 否則「二」「三」這種筆畫之間本來就有空隙的字會被拆成好幾行。
 function splitLines(strokes, ax) {

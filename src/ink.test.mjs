@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   classifyStroke, classifyGroup, describeShape, inkRequest, parseInkResponse, recognizeInk, recognizeInkDetailed,
-  smoothStroke, pickCandidate, _clearInkCache, joinText, pickSequence, setLexicon, loadLexicon,
+  smoothStroke, pickCandidate, _clearInkCache, joinText, pickSequence, setLexicon, loadLexicon, strokesNear, growGroup,
 } from './ink.mjs';
 
 beforeEach(() => _clearInkCache());
@@ -157,4 +157,63 @@ test('loadLexicon：一行一個詞，越前面越常用', async () => {
   assert.equal(n, 2);
   await assert.rejects(loadLexicon('x', async () => ({ ok: false, status: 404 })), /404/);
   setLexicon([]);
+});
+
+// ---- 手寫分組：標題與兩行內文要分開，兩行內文仍要在一起 ----
+// 位置是依一張真實截圖估出來的（標題「AI 對於報告的實用性」，下面是兩行內文；螢幕縮放 68%，座標換回畫布座標）。
+// 每個字三筆，每一筆只用外框的左上與右下表示（分組只看外框大小）。
+const zoom = 1 / 0.68;
+const glyphs = (n, x0, x1, y0, h) => {
+  const step = (x1 - x0) / n, out = [];
+  for (let c = 0; c < n; c++) for (let s = 0; s < 3; s++) {
+    const x = (x0 + c * step + (s * step) / 4) * zoom, y = (y0 + ((s % 2) * h) / 3) * zoom;
+    out.push([[x, y, 0], [x + step * 0.4 * zoom, y + h * 0.55 * zoom, 10]]);
+  }
+  return out;
+};
+const scaleStrokes = (strokes, k) => strokes.map((s) => s.map(([x, y, t]) => [x * k, y * k, t]));
+const inkLayout = () => {
+  const title = glyphs(10, 100, 505, 640, 55), body1 = glyphs(14, 55, 670, 775, 70), body2 = glyphs(15, 115, 820, 825, 85);
+  return { title, body: [...body1, ...body2], all: [...title, ...body1, ...body2] };
+};
+// 從 all 裡的第 seedAt 筆開始併組，回傳併進來的是哪些筆（原始索引）
+const groupFrom = (all, seedAt) => {
+  const rest = all.map((s, i) => [s, i]).filter(([, i]) => i !== seedAt);
+  return new Set([seedAt, ...growGroup([all[seedAt]], rest.map(([s]) => s)).map((j) => rest[j][1])]);
+};
+
+test('growGroup：兩行內文不會把上面的標題一起吸進來，兩行內文仍在同一組', () => {
+  const { title, body, all } = inkLayout();
+  const nTitle = title.length;
+  const fromBody = groupFrom(all, all.length - 1);
+  assert.equal([...fromBody].filter((i) => i < nTitle).length, 0, '標題不該被併進內文');
+  assert.equal([...fromBody].filter((i) => i >= nTitle).length, body.length, '兩行內文要在同一組');
+  const fromTitle = groupFrom(all, nTitle - 1);
+  assert.deepEqual([...fromTitle].sort((a, b) => a - b), title.map((_, i) => i), '從標題開始也只有標題');
+});
+
+test('growGroup：結果跟字寫得多大無關（整個畫面放大、縮小，分組不變）', () => {
+  for (const k of [0.5, 2, 3]) {
+    const { title, all } = inkLayout(), big = scaleStrokes(all, k);
+    const g = groupFrom(big, big.length - 1);
+    assert.equal([...g].filter((i) => i < title.length).length, 0, `放大 ${k} 倍`);
+    assert.equal(g.size, all.length - title.length, `放大 ${k} 倍`);
+  }
+});
+
+test('growGroup：隔得夠遠的另一段不併入；緊鄰著往下寫的下一行會併入', () => {
+  const { body } = inkLayout();
+  const far = scaleStrokes(glyphs(10, 100, 505, 640 + 600, 55), 1); // 離內文有好幾個字高
+  const near = growGroup([body[0]], [...body.slice(1), ...far]);
+  assert.ok(near.every((i) => i < body.length - 1), '遠處的字不該併進來');
+  assert.equal(near.length, body.length - 1, '同一段內文的其他筆畫都要併進來');
+});
+
+test('strokesNear：同一行接著寫算鄰近、離得遠或空的不算', () => {
+  const a = glyphs(3, 100, 220, 400, 55), next = glyphs(1, 225, 265, 400, 55), farRight = glyphs(1, 900, 940, 400, 55), farBelow = glyphs(1, 100, 140, 900, 55);
+  assert.equal(strokesNear(a, next), true);
+  assert.equal(strokesNear(a, farRight), false);
+  assert.equal(strokesNear(a, farBelow), false);
+  assert.equal(strokesNear([], next), false);
+  assert.equal(strokesNear(a, []), false);
 });
