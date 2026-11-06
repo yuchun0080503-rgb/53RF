@@ -753,7 +753,7 @@ const canon=v=>Array.isArray(v)?"["+v.map(canon).join(",")+"]":v&&typeof v==="ob
 function canonicalObj(o){return canon({id:o.id,...toRemoteObj(o)})}
 // 「返回上一步」只復原使用者自己的動作（寫字、移動、刪除…）。AI 辨識手寫、學生確認讀取結果這類標記不算一步：
 // 辨識結果寫進物件時不新增復原紀錄，復原時也保留目前的辨識結果，所以按一次返回就是拿掉上一筆字，不會先跳回「辨識前」。
-const AI_FIELDS=["aiRead","hwSub","hwBusy","alts","hwBy","shape","sg","conf","read"];
+const AI_FIELDS=["aiRead","hwSub","hwBusy","alts","hwBy","shape","sg","conf","read","hg"]; // hg：使用者手動分段的編號，跟「確認」一樣不算可復原的一步
 const inkOnly=o=>{const c={...o};AI_FIELDS.forEach(k=>delete c[k]);return c};
 const sameInk=(a,b)=>a.length===b.length&&(()=>{const m=new Map(b.map(o=>[o.id,o]));return a.every(o=>m.has(o.id)&&canonicalObj(inkOnly(o))===canonicalObj(inkOnly(m.get(o.id))))})();
 // 把目前物件上的 AI 標記套到從復原紀錄取回的物件上（同一個 id 才套）
@@ -1019,7 +1019,8 @@ $("#sim").onclick=()=>{const t=p.objs.filter(o=>o.type==="text")[1]||p.objs.find
 function delSel(){p.objs=p.objs.filter(o=>!sel.has(o.id)&&!sel.has(o.a)&&!sel.has(o.b));sel.clear();op("刪除選取物件")}
 function insp(){anlSync();const el=$("#insp");if(!sel.size||!p){el.classList.add("hide");return}
  const os=[...sel].map(getO).filter(Boolean),ed=canEdit(),dis=ed?"":"disabled";
- let h=`<div class="ib"><b>已選取 ${os.length} 項</b>${os.some(o=>o.group)?`<button data-x="ung" ${dis}>${I("grp")}取消群組</button>`:os.length>1?`<button data-x="grp" ${dis}>${I("grp")}群組</button>`:""}<button data-x="dup" ${dis}>${I("copy")}複製</button><button data-x="del" ${dis}>${I("trash")}刪除</button>
+ const hand=os.some(o=>o.type==="stroke"&&!o.shape&&!o.sg&&o.pts&&o.pts.length),segDis=ed&&p.LV>=1&&window.RFINK?"":"disabled";
+ let h=`<div class="ib"><b>已選取 ${os.length} 項</b>${os.some(o=>o.group)?`<button data-x="ung" ${dis}>${I("grp")}取消群組</button>`:os.length>1?`<button data-x="grp" ${dis}>${I("grp")}群組</button>`:""}<button data-x="dup" ${dis}>${I("copy")}複製</button><button data-x="del" ${dis}>${I("trash")}刪除</button>${hand?`<button data-x="seg" ${segDis} title="AI 把兩句話當成一句時：框選其中一句，按這裡把它獨立出來重新辨識">獨立成一段</button>`:""}${hand&&os.some(o=>o.hg)?`<button data-x="seg0" ${segDis} title="清掉手動分段，讓選到的筆畫依距離自動分組">併回自動分段</button>`:""}
  <select data-x="tag" ${dis} aria-label="標籤"><option value="">標籤</option>${Object.entries(TAGS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select><select data-x="stage" ${dis} aria-label="研究階段"><option value="">研究階段</option>${STG.map(s=>`<option>${s}</option>`).join("")}</select></div>`;
  if(os.length===1){const o=os[0];h+=`<div class="kv"><span>建立者 ${esc(U[o.by].n)}</span><span>最後修改 ${esc(U[o.mod].n)}</span><span>物件版本 v${o.ver}</span><span>${o.read?"已被 Agent 讀取":"尚未被 Agent 讀取"}</span><span>${o.conf?"使用者已確認":"AI 讀取尚未確認"}</span></div>`;
   if(o.type==="stroke"||o.orig)h+=`<div style="display:flex;gap:6px"><input data-x="ai" value="${esc(o.aiRead)}" placeholder="AI 讀取結果（可修正）" ${dis}>${o.type==="stroke"?`<button data-x="conv" ${dis||!o.aiRead?"disabled":""}>轉為文字</button>`:`<button data-x="orig">${o.showOrig?"隱藏":"對照"}原始手寫</button>`}</div>`;
@@ -1033,6 +1034,8 @@ function insp(){anlSync();const el=$("#insp");if(!sel.size||!p){el.classList.add
   if(x==="ung"){each(o=>o.group="");op("取消群組")}
   if(x==="dup"){const n=os.map(o=>mkO({...JSON.parse(JSON.stringify(o)),id:undefined,by:ME,group:"",read:false,conf:false,...(o.type==="text"?{x:o.x+24,y:o.y+24}:{pts:o.pts.map(z=>[z[0]+24,z[1]+24])})}));n.forEach((o,i)=>o.id=++uid);p.objs.push(...n);sel.clear();n.forEach(o=>sel.add(o.id));op("複製物件")}
   if(x==="conv"){const o=os[0];o.orig=o.pts;o.showOrig=true;const b=bbox(o);o.type="text";o.text=o.aiRead;o.x=b.x;o.y=b.y+b.h/2+5;delete o.pts;o.mod=ME;o.ver++;op("將手寫內容轉換為可編輯文字（保留原始手寫）")}
+  if(x==="seg")splitSeg(false);
+  if(x==="seg0")splitSeg(true);
   if(x==="orig"){os[0].showOrig=!os[0].showOrig;insp();draw()}});
  el.querySelectorAll("select[data-x]").forEach(s=>s.onchange=()=>{const k=s.dataset.x;if(!s.value)return;each(o=>o[k]=s.value);op("修改標籤／研究階段")});
  el.querySelector("[data-x=ai]")?.addEventListener("change",e=>{each(o=>{o.aiRead=e.target.value;o.conf=false});op("修正 AI 讀取結果")});
@@ -1537,12 +1540,22 @@ let lastHW=null;
 function queueHW(o){if(!canEdit()||p.LV<1||!(window.RFINK||HW||SAMP))return;hwQ.push(o);clearTimeout(hwT);hwT=setTimeout(runHW,900)}
 const hwText=o=>o.type==="text"?o.text:o.type==="stroke"&&!o.hwSub&&!o.shape?o.aiRead:"";
 // 新寫的筆畫是不是接在上一組旁邊（同一行往後寫、直書往下寫，或換到下一行）：距離以字的大小為單位判斷
-const hwNear=(a,b)=>RFINK.strokesNear(a.map(o=>o.pts),b.map(o=>o.pts)); // 距離用字的大小比（src/ink.mjs）；以前用整組外框，兩行內文會把上面的標題一起吸進來
+const hwNear=(a,b)=>RFINK.segmentNear(a,b); // 距離用字的大小比（src/ink.mjs）；使用者手動分開的段（hg 不同）不會再併回去
 async function nativeRec(b){const d=HW.startDrawing({recognitionType:"text",inputType:"pen",alternatives:1});try{for(const o of b){const st=new HandwritingStroke();for(const q of o.pts)st.addPoint({x:q[0],y:q[1],t:Math.round(q[2]||0)});d.addStroke(st)}const r=await d.getPrediction();return r&&r[0]?r[0].text:""}finally{d.clear()}}
 // 把緊鄰的、還沒確認的手寫筆畫併成同一段——不管隔了多久才接著寫（原本只會跟 20 秒內的上一組合併，寫得慢就會變成一個字一組）
 function hwGrow(b){const ids=new Set(b.map(o=>o.id)),g=b.slice(),pool=p.objs.filter(o=>o.type==="stroke"&&!o.conf&&!o.shape&&!o.sg&&!ids.has(o.id)&&o.pts&&o.pts.length);
- RFINK.growGroup(g.map(o=>o.pts),pool.map(o=>o.pts)).forEach(i=>g.push(pool[i]));
+ RFINK.growSegment(g,pool).forEach(i=>g.push(pool[i]));
  return g.sort((x,y)=>(x.ts||0)-(y.ts||0))}
+// 使用者自己決定分段：框選一段手寫字 →「獨立成一段」，被選到的筆畫跟原本同組的其他筆畫分開重新辨識，之後也不會再被自動併回去。
+// 「併回自動分段」反過來：清掉分段標記，讓選到的筆畫依距離自動分組。兩個動作都會讓這幾筆回到「待確認」。
+async function splitSeg(back){if(!canEdit()||p.LV<1||!window.RFINK)return;
+ const picks=[...sel].map(getO).filter(o=>o&&o.type==="stroke"&&!o.shape&&!o.sg&&o.pts&&o.pts.length);if(!picks.length)return;
+ const pid=new Set(picks.map(o=>o.id)),pool=p.objs.filter(o=>o.type==="stroke"&&!o.shape&&!o.sg&&!pid.has(o.id)&&o.pts&&o.pts.length);
+ const rest=RFINK.growSegment(picks,pool).map(i=>pool[i]); // 原本跟選到的筆畫同一段的其他筆畫（包含已確認的）
+ if(back)picks.forEach(o=>delete o.hg);else{const g="h"+(++uid);picks.forEach(o=>o.hg=g)}
+ [...picks,...rest].forEach(o=>{o.conf=false;o.aiRead="";delete o.hwSub;delete o.alts;delete o.hwBy;o.mod=ME;o.ver++});
+ lastHW=null;op(back?"把選取的手寫字併回自動分段":"把選取的手寫字獨立成一段");
+ for(const part of [rest,picks]){if(!part.length)continue;hwQ.push(...part);clearTimeout(hwT);await runHW()}}
 // 一組筆畫畫成白底黑字的 PNG（base64），給看得懂圖片的模型讀
 async function inkPNG(b){const xs=[],ys=[];b.forEach(o=>o.pts.forEach(q=>{xs.push(q[0]);ys.push(q[1])}));
  const x0=Math.min(...xs),y0=Math.min(...ys),w=Math.max(...xs)-x0||1,h=Math.max(...ys)-y0||1,k=Math.min(1100/w,420/h,4),pd=28;
