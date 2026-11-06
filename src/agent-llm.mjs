@@ -182,15 +182,17 @@ export async function translate(term, context = '', fetchImpl) {
  * @returns {Promise<{rel:number, stance:'support'|'counter'|'mixed'|'unclear'|'unrelated', finding:string}[]>} 順序與 works 相同
  *   rel：0 無關、1 只沾到邊、2 相關、3 直接在研究這個主張；-1 是這一篇判讀失敗，呼叫端沿用規則式的結果。
  *   連續兩篇失敗（Ollama 沒開、模型壞掉），或一篇都沒成功時丟出錯誤，呼叫端會整批退回規則式。
+ *   逾時：第一篇 180 秒（可能要先載入模型），其餘每篇 90 秒。
  */
 export async function judgeWorks({ claim, works }, fetchImpl) {
   const list = (Array.isArray(works) ? works : []).slice(0, 12);
   if (!list.length) return [];
   const results = [];
   let streak = 0, ok = 0, lastErr;
-  for (const w of list) {
+  for (const [n, w] of list.entries()) {
     try {
-      results.push(await judgeOne(claim, w, fetchImpl));
+      // 第一篇可能要先把模型載入顯存（實測可能超過一分鐘），逾時放寬；之後模型已經在記憶體裡，一篇只要一兩秒
+      results.push(await judgeOne(claim, w, fetchImpl, n === 0 ? 180000 : 90000));
       ok++; streak = 0;
     } catch (err) {
       lastErr = err;
@@ -202,7 +204,7 @@ export async function judgeWorks({ claim, works }, fetchImpl) {
   return results;
 }
 
-async function judgeOne(claim, w, fetchImpl) {
+async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
   const out = await chatJSON({
     system:
       '你是協助學生查證文獻的研究助理。學生有一個主張，下面是從學術資料庫找到的一篇文獻（標題與摘要）。請判讀這一篇，標準要嚴格。\n' +
@@ -223,7 +225,7 @@ async function judgeOne(claim, w, fetchImpl) {
       properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str },
     },
     maxTokens: 160,
-    timeout: 90000,
+    timeout,
   }, fetchImpl);
   if (!Number.isFinite(out.rel)) return { rel: -1, stance: 'unrelated', finding: '' }; // 模型沒有給相關度：當作這一篇判讀失敗
   const rel = Math.max(0, Math.min(3, Math.round(out.rel)));
