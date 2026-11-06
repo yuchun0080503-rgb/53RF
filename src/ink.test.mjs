@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   classifyStroke, classifyGroup, describeShape, inkRequest, parseInkResponse, recognizeInk, recognizeInkDetailed,
-  smoothStroke, pickCandidate, _clearInkCache, joinText, pickSequence, setLexicon, loadLexicon, strokesNear, growGroup,
+  smoothStroke, pickCandidate, _clearInkCache, joinText, pickSequence, setLexicon, loadLexicon, strokesNear, growGroup, segmentNear, growSegment,
 } from './ink.mjs';
 
 beforeEach(() => _clearInkCache());
@@ -216,4 +216,32 @@ test('strokesNear：同一行接著寫算鄰近、離得遠或空的不算', () 
   assert.equal(strokesNear(a, farBelow), false);
   assert.equal(strokesNear([], next), false);
   assert.equal(strokesNear(a, []), false);
+});
+
+// ---- 使用者手動分段：分開的段不會再被自動併回去 ----
+// 兩行離得很近（行距跟同一句話換行差不多），自動分組會把它們併成一組；使用者手動分段之後就不再併。
+const rowObjs = (n, x0, x1, y0, h, hg) => glyphs(n, x0, x1, y0, h).map((pts) => (hg ? { pts, hg } : { pts }));
+test('growSegment：沒有分段標記時照距離自動併組；有了手動分段就不會再併回去', () => {
+  const row1 = rowObjs(10, 100, 505, 640, 55), row2 = rowObjs(10, 100, 505, 640 + 55 + 8, 55);
+  const seed = [row2[row2.length - 1]], pool = [...row1, ...row2.slice(0, -1)];
+  assert.equal(growSegment(seed, pool).length, pool.length, '緊鄰的兩行自動併成一組');
+  const split1 = rowObjs(10, 100, 505, 640, 55, 'h1'); // 使用者把上面一行獨立成一段
+  const pool2 = [...split1, ...row2.slice(0, -1)];
+  const got = growSegment(seed, pool2);
+  assert.equal(got.length, row2.length - 1, '只併入沒有標記的那一行');
+  assert.ok(got.every((i) => i >= split1.length), '上面已獨立的一行不會被併進來');
+  // 從已獨立的那一行開始，也只會併同一個編號的筆畫
+  const fromSplit = growSegment([split1[0]], [...split1.slice(1), ...row2]);
+  assert.equal(fromSplit.length, split1.length - 1);
+  assert.deepEqual(growSegment([], pool), []);
+});
+
+test('segmentNear：分段編號不同就不算同一段，就算緊鄰', () => {
+  const a = rowObjs(3, 100, 220, 400, 55), next = rowObjs(1, 225, 265, 400, 55);
+  assert.equal(segmentNear(a, next), true);
+  const tagged = a.map((o) => ({ ...o, hg: 'h1' }));
+  assert.equal(segmentNear(tagged, next), false);
+  assert.equal(segmentNear(tagged, next.map((o) => ({ ...o, hg: 'h1' }))), true);
+  assert.equal(segmentNear(tagged, next.map((o) => ({ ...o, hg: 'h2' }))), false);
+  assert.equal(segmentNear([], next), false);
 });

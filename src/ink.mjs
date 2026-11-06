@@ -198,6 +198,29 @@ export function growGroup(seed, pool, max = 300) {
   return [...taken].sort((x, y) => x - y);
 }
 
+// ---- 使用者手動分段 ----
+// 使用者可以把一段手寫字「獨立成一段」：被選到的筆畫會得到新的分段編號（hg），
+// 之後不同編號的筆畫不會再被自動併在一起，就算它們離得很近。沒有編號的筆畫都算同一類。
+const segOf = (o) => (o && o.hg) || '';
+
+/** 兩批筆畫（物件陣列，各有 pts 與選用的 hg）是不是同一個分段、而且緊鄰。 */
+export function segmentNear(a, b) {
+  if (!a.length || !b.length) return false;
+  const s = segOf(a[0]);
+  return a.every((o) => segOf(o) === s) && b.every((o) => segOf(o) === s) && strokesNear(a.map((o) => o.pts), b.map((o) => o.pts));
+}
+
+/**
+ * 從 seed 開始，把 pool 裡「分段編號相同、而且緊鄰」的筆畫一路併進來。seed、pool 都是物件陣列（有 pts、選用的 hg）。
+ * @returns {number[]} 要併入的 pool 索引（由小到大）
+ */
+export function growSegment(seed, pool, max = 300) {
+  if (!seed.length) return [];
+  const s = segOf(seed[0]), keep = [];
+  pool.forEach((o, i) => { if (segOf(o) === s) keep.push(i); });
+  return growGroup(seed.map((o) => o.pts), keep.map((i) => pool[i].pts), max).map((j) => keep[j]);
+}
+
 // 分行：沿垂直於書寫方向的軸找完全沒有筆跡的空白帶。只有夠高的帶才算一行，
 // 否則「二」「三」這種筆畫之間本來就有空隙的字會被拆成好幾行。
 function splitLines(strokes, ax) {
