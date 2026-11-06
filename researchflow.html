@@ -321,7 +321,7 @@ window.RF_VER = "2026.10.12-4";
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 本機模型：使用者電腦上的 Ollama（Qwen）。有偵測到時，關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒有就用規則式。
 // 團隊 AI 主機：自己這台裝置沒有 Qwen（iPad、Safari、沒裝的電腦）時，改用這裡分享出來的 Qwen。主機沒開時自動退回規則式。
-window.RF_AI_HOSTS = [{ base: "https://fannymacbook-air.tailf2e29d.ts.net", label: "團隊 AI 主機" }];
+window.RF_AI_HOSTS = [{ base: "https://fannymacbook-air.tailf2e29d.ts.net", label: "團隊 AI 主機" }, { base: "https://node.taile1bf83.ts.net", label: "備用 AI 主機" }];
 try { window.RFLLM = await import("./src/llm.mjs"); window.RFAI = await import("./src/agent-llm.mjs"); window.RFLLM.detect().then(() => window.dispatchEvent(new Event("rf:llm"))); } catch (err) { console.info("[ResearchFlow] 無法載入本機模型模組：", err?.message || err); }
 try { window.RFAGENT = await import("./src/agent-local.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 agent-local.mjs：", err?.message || err); }
 try {
