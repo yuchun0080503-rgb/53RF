@@ -96,6 +96,44 @@ AI 權限（新專案預設 Level 2）：0 全部關閉；1 可判斷範圍與�
 
 程式在 `src/llm.mjs`（連線與偵測）和 `src/agent-llm.mjs`（四個任務的提示與結果整理）。
 
+### 團隊 AI 主機：讓 iPad、Safari、沒裝 Qwen 的裝置也能用
+
+這些裝置連不到自己電腦裡的模型，所以網站會改連 `researchflow.html` 裡 `window.RF_AI_HOSTS` 列出的主機，依序試，用第一個有 Qwen 的；都連不到就退回規則式。目前有兩個：組員的 MacBook（團隊 AI 主機）和一台 Windows 筆電（備用 AI 主機）。
+
+主機的做法：在那台電腦跑 `tools/ai-relay.mjs`（只轉送查模型、查版本、對話三種請求，只接受網站來源與 `qwen` 開頭的模型），再用 Tailscale Funnel 給它一個公開的 https 網址。
+
+**第一次設定（每台主機做一次）**
+
+1. 安裝 Ollama，下載 `qwen3:4b-instruct-2507-q4_K_M`（文字步驟）與 `qwen3.5:4b`（手寫辨識）。
+2. 設定使用者環境變數 `OLLAMA_ORIGINS`，內容同 `tools/start-ollama.bat`，然後重新啟動 Ollama。
+3. 安裝並登入 Tailscale，到管理後台開啟 HTTPS Certificates，並啟用 Funnel。
+4. 啟動轉接站：`node tools/ai-relay.mjs`。
+5. 對外開放：`tailscale funnel --bg 11435`。
+6. 把這台主機的網址（`https://<裝置名稱>.<tailnet>.ts.net`）加進 `researchflow.html` 的 `RF_AI_HOSTS`，開 Pull Request、合併後部署。
+
+**重開機（或睡眠、登出）之後要手動恢復**
+
+轉接站不會自己啟動；Funnel 的設定 Tailscale 會記住，通常不用重做。Windows 上依序做：
+
+1. 打開 Ollama 程式，或執行 `ollama serve`。圖示出現了不代表伺服器有在跑，用 `ollama list` 確認。
+2. 確認 `OLLAMA_ORIGINS` 還在：`[Environment]::GetEnvironmentVariable('OLLAMA_ORIGINS','User')` 應該印出網站網址。
+3. 啟動轉接站：`node tools/ai-relay.mjs`，視窗要一直開著；看到「ResearchFlow AI 轉接站」那行就是成功。
+4. 確認 Funnel 還在：`tailscale funnel status` 應該列出 `Funnel on`。沒有的話重做 `tailscale funnel --bg 11435`。
+5. 驗證：用平板打開網站，畫布上方的標籤應該顯示 Qwen 與主機名稱；或在電腦上測 `Invoke-WebRequest https://<網址>/api/tags -Headers @{Origin='https://researchflow-3dd2c.web.app'}`，要回 200 並列出模型。
+
+**常見狀況**
+
+| 症狀 | 原因與處理 |
+|---|---|
+| 平板標籤顯示「規則式」 | 主機沒開機／睡眠，或轉接站沒在跑；照上面的步驟恢復 |
+| 電腦自己的網站連不到本機 Ollama（403） | `OLLAMA_ORIGINS` 沒有生效；設好後要重新啟動 Ollama，而且要從新的終端機啟動 |
+| 回 502 | 轉接站有在跑，但 Ollama 沒有回應；先做步驟 1 |
+| 回 503 | 同時處理的請求太多（最多 2 個，排隊 8 個）；稍後再試 |
+
+**停止對外開放**：`tailscale funnel --https=443 off`，再關掉轉接站視窗。
+
+**注意**：主機會處理其他組員的題目、摘要與手寫圖片，資料會經過主機電腦；轉接站只記錄狀態碼與耗時，不記內容。Funnel 的網址在公開網路上任何人都連得到，轉接站檢查的「來源網站」可以被瀏覽器以外的程式偽造，所以它不是真正的身分驗證；只在需要時開啟。
+
 ### 老師端
 
 登入時選「我是老師」會進入老師端儀表板（老師不建立研究，所以沒有建立區塊）：
