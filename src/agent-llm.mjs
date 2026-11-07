@@ -1,4 +1,4 @@
-// agent-llm.mjs — 用本機的 Qwen 模型（經由 llm.mjs／Ollama）做「需要理解」的那幾步。
+// agent-llm.mjs — 用 Claude（經由 llm.mjs／後端代理）做「需要理解」的那幾步。
 //
 // 規則式的 agent-local.mjs 只會比對字詞，所以會把「自主判斷能力」拆成零碎的詞、把關鍵字翻錯、
 // 分不出一篇文獻到底在不在談這個主張。這裡把那幾步交給模型：
@@ -181,7 +181,7 @@ export async function translate(term, context = '', fetchImpl) {
  * @param {{title:string, abstract:string}[]} o.works 最多判讀 12 篇
  * @returns {Promise<{rel:number, stance:'support'|'counter'|'mixed'|'unclear'|'unrelated', finding:string}[]>} 順序與 works 相同
  *   rel：0 無關、1 只沾到邊、2 相關、3 直接在研究這個主張；-1 是這一篇判讀失敗，呼叫端沿用規則式的結果。
- *   連續兩篇失敗（Ollama 沒開、模型壞掉），或一篇都沒成功時丟出錯誤，呼叫端會整批退回規則式。
+ *   連續兩篇失敗（後端連不上、模型壞掉），或一篇都沒成功時丟出錯誤，呼叫端會整批退回規則式。
  *   逾時：第一篇 180 秒（可能要先載入模型），其餘每篇 90 秒。
  */
 export async function judgeWorks({ claim, works }, fetchImpl) {
@@ -254,7 +254,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
     kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? e.k : v.stance === 'support' ? 's' : 'c', mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
-      f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Qwen', unc: unclear || undefined } });
+      f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
   kept.sort((a, b) => b.rel - a.rel);
   return { evidence: kept.slice(0, 10).map((x) => x.e), removed: list.length - kept.length, judged };

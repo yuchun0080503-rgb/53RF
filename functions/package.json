@@ -1,0 +1,14 @@
+{
+  "name": "researchflow-functions",
+  "private": true,
+  "description": "ResearchFlow 的 AI 代理（驗證 Firebase 登入後轉給 Claude）",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test *.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}

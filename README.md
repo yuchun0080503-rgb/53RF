@@ -74,84 +74,39 @@ AI 權限（新專案預設 Level 2）：0 全部關閉；1 可判斷範圍與�
 - 筆的橡皮擦端／橡皮擦鍵按著時就是橡皮擦；筆的側鍵與「筆尖在同一個地方快點兩下」可以在工具列的筆設定裡自訂（切換橡皮擦、復原上一步、不做事）。
 - Apple Pencil 筆身的雙擊手勢只有原生 App 收得到，網頁讀不到，所以用筆尖雙擊代替。設定存在各自的瀏覽器裡。
 
-### AI 模型：本機的 Qwen（Ollama）
+### AI 模型：Claude（經 Firebase Cloud Function 代理）
 
-系統會自動偵測使用者電腦上有沒有 [Ollama](https://ollama.com) 和 Qwen 模型。有的話，下面這幾步交給模型；沒有就用內建的規則式程式（畫布上方的標籤會顯示「AI：Qwen …（本機）」或「AI：規則式」）。不需要金鑰、不花錢，資料不離開電腦。
+登入後，下面這幾步交給 Claude；沒登入、展示模式、或後端連不上時，就用內建的規則式程式（畫布上方的標籤會顯示「AI：Claude Haiku 5.5」或「AI：未連線（規則式）」）。
 
-| 步驟 | 有本機模型時 | 沒有時（備援） |
+| 步驟 | 有 AI 時 | 沒有時（備援） |
 |---|---|---|
-| 規劃搜尋關鍵字 | Qwen 讀題目＋主張＋畫布內容，決定主題詞、範圍詞、學術英文與同義詞 | 內建對照表＋詞庫斷詞 |
-| 翻譯關鍵字 | Qwen 依脈絡翻成論文會用的說法 | 對照表 → 維基百科 → 機器翻譯 |
-| 判讀文獻 | Qwen 逐篇讀摘要：排除不切題的、依研究發現判斷支持或反向、用一句中文寫出主要發現 | 比對字詞與正負向用語 |
-| 手寫辨識 | 筆跡辨識先給一版，Qwen 再看整段圖片校正成通順詞句 | 只有筆跡辨識 |
+| 規劃搜尋關鍵字 | Claude 讀題目＋主張＋畫布內容，決定主題詞、範圍詞、學術英文與同義詞 | 內建對照表＋詞庫斷詞 |
+| 翻譯關鍵字 | Claude 依脈絡翻成論文會用的說法 | 對照表 → 維基百科 → 機器翻譯 |
+| 判讀文獻 | Claude 逐篇讀摘要：排除不切題的、依研究發現判斷支持或反向、用一句中文寫出主要發現 | 比對字詞與正負向用語 |
+| 手寫辨識 | 筆跡辨識先給一版，Claude 再看整段圖片校正成通順詞句 | 只有筆跡辨識 |
 
 文獻本身仍然來自真實的學術資料庫（OpenAlex／Crossref），模型只負責理解與判斷；模型寫的「主要發現」會標示出來，並附上摘要原文。
 
-**安裝（每台要用模型的電腦都要做一次）**
+**資料會送到哪裡**：白板文字、文獻摘要、手寫圖片會經 ResearchFlow 的後端（Firebase Cloud Function）傳到 Anthropic 的 Claude API，**不再是只在自己電腦上處理**。使用前請讓組員與老師知道。
 
-1. 到 https://ollama.com 下載安裝 Ollama。
-2. 下載模型：`ollama pull qwen3.5:9b`（約 7.6 GB，建議 16 GB 記憶體；8 GB 的電腦改用 `qwen3.5:4b`）。
-3. 啟動：Mac 在 Finder 對 `tools/start-ollama.command` 按兩下；Windows 執行 `tools/start-ollama.bat`。這兩個檔案會設定 `OLLAMA_ORIGINS`，允許 ResearchFlow 網站連到本機的 Ollama。直接開 Ollama 程式的話，網站會被擋下來。
-4. 用 Chrome 或 Edge 開網站；第一次瀏覽器可能會詢問是否允許連線到本機裝置，請允許。
+**運作方式**：網站帶著使用者的 Firebase 登入憑證呼叫同網域的 `/api/ai`（`firebase.json` 轉給 Cloud Function `ai`）。函式驗證憑證後，才用存在 Secret Manager 的金鑰呼叫 Claude；金鑰不會出現在網頁或程式碼裡。函式也限制了請求大小與輸出長度。
 
-程式在 `src/llm.mjs`（連線與偵測）和 `src/agent-llm.mjs`（四個任務的提示與結果整理）。
+**用哪個模型**：在 `functions/proxy.js` 的 `MODELS` 設定，文字步驟（`text`）與手寫辨識（`ink`）分開。目前兩個都是 `claude-haiku-5-5`。要試手寫改用 Sonnet，把 `ink` 改成 `claude-sonnet-5-5` 後重新部署（`firebase deploy --only functions`）即可，其他程式不用動。
 
-### 團隊 AI 主機：讓 iPad、Safari、沒裝 Qwen 的裝置也能用
+**第一次部署**
 
-這些裝置連不到自己電腦裡的模型，所以網站會改連 `researchflow.html` 裡 `window.RF_AI_HOSTS` 列出的主機，依序試，用第一個有 Qwen 的；都連不到就退回規則式。目前有兩個：組員的 MacBook（團隊 AI 主機）和一台 Windows 筆電（備用 AI 主機）。
+1. Cloud Functions 需要 Firebase 的 **Blaze（用量計費）方案**。到 Firebase Console 升級，並建議在 Google Cloud 設定預算提醒。
+2. 到 https://console.anthropic.com 建立 API 金鑰（建議另外建一把專用的，並在 Anthropic 設定用量上限）。
+3. 設定金鑰：`firebase functions:secrets:set ANTHROPIC_API_KEY`，貼上金鑰。
+4. 安裝函式的依賴：`cd functions && npm install`。
+5. 部署：`npm run deploy`（規則、函式、網站一起）。
+6. 驗證：登入網站，畫布上方標籤應顯示「AI：Claude Haiku 5.5」；沒有的話，看瀏覽器主控台與 Firebase Console 的 Functions 記錄。
 
-主機的做法：在那台電腦跑 `tools/ai-relay.mjs`（只轉送查模型、查版本、對話三種請求，只接受網站來源與 `qwen` 開頭的模型），再用 Tailscale Funnel 給它一個公開的 https 網址。
+**費用**：每次關鍵字規劃、翻譯、逐篇文獻判讀、手寫辨識都是一次 API 呼叫。判讀文獻是一次一篇，一輪搜尋可能就有十幾次；請在 Anthropic Console 觀察實際用量，再決定要不要調整。
 
-**第一次設定（每台主機做一次）**
+**本機預覽**（`npm start`）沒有 `/api/ai`，所以 AI 會顯示「規則式」；要測 AI 請用部署後的網站，或用 `firebase emulators:start`。
 
-1. 安裝 Ollama，下載 `qwen3:4b-instruct-2507-q4_K_M`（文字步驟）與 `qwen3.5:4b`（手寫辨識）。
-2. 設定使用者環境變數 `OLLAMA_ORIGINS`，內容同 `tools/start-ollama.bat`，然後重新啟動 Ollama。
-3. 安裝並登入 Tailscale，到管理後台開啟 HTTPS Certificates，並啟用 Funnel。
-4. 啟動轉接站：`node tools/ai-relay.mjs`（先手動跑一次確認可以用；要開機自動啟動的話，見下面「讓轉接站開機自動啟動」）。
-5. 對外開放：`tailscale funnel --bg 11435`。
-6. 把這台主機的網址（`https://<裝置名稱>.<tailnet>.ts.net`）加進 `researchflow.html` 的 `RF_AI_HOSTS`，開 Pull Request、合併後部署。
-
-**讓轉接站開機自動啟動（Windows）**
-
-在工作排程器建一個「登入 Windows 時執行」的工作，用隱藏視窗跑轉接站，不需要系統管理員權限。把 `<專案路徑>` 換成這個專案在這台電腦上的位置，用 PowerShell 執行：
-
-```powershell
-$node = (Get-Command node).Source
-$act = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless `"$node`" <專案路徑>\tools\ai-relay.mjs" -WorkingDirectory '<專案路徑>'
-$trg = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
-$prn = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName 'ResearchFlow AI Relay' -Action $act -Trigger $trg -Settings $set -Principal $prn
-```
-
-移除：`Unregister-ScheduledTask -TaskName 'ResearchFlow AI Relay' -Confirm:$false`。注意：這個工作只在「登入」時觸發，開機後停在登入畫面時轉接站還不會跑；它只負責轉送，Ollama 要自己在跑。
-
-**重開機（或登出）之後**
-
-- 有設上面的自動啟動：登入 Windows 後轉接站會自己起來，Funnel 的設定 Tailscale 通常會記住，只需要確認 Ollama 和 Funnel 還在（步驟 1、4、5）。
-- 沒設自動啟動：轉接站要手動啟動（步驟 3）。
-- 睡眠不會結束轉接站，但電腦睡著時平板連不到；喚醒後就會恢復。
-
-Windows 上依序檢查：
-
-1. 打開 Ollama 程式，或執行 `ollama serve`。圖示出現了不代表伺服器有在跑，用 `ollama list` 確認。
-2. 確認 `OLLAMA_ORIGINS` 還在：`[Environment]::GetEnvironmentVariable('OLLAMA_ORIGINS','User')` 應該印出網站網址。
-3. 確認轉接站有在跑：`Invoke-WebRequest http://127.0.0.1:11435/api/tags -Headers @{Origin='https://researchflow-3dd2c.web.app'}` 應該回 200。沒有的話，執行 `Start-ScheduledTask -TaskName 'ResearchFlow AI Relay'`；沒設自動啟動的話，改用 `node tools/ai-relay.mjs`，視窗要一直開著，看到「ResearchFlow AI 轉接站」那行就是成功。
-4. 確認 Funnel 還在：`tailscale funnel status` 應該列出 `Funnel on`。沒有的話重做 `tailscale funnel --bg 11435`。
-5. 驗證：用平板打開網站，畫布上方的標籤應該顯示 Qwen 與主機名稱；或在電腦上測 `Invoke-WebRequest https://<網址>/api/tags -Headers @{Origin='https://researchflow-3dd2c.web.app'}`，要回 200 並列出模型。
-
-**常見狀況**
-
-| 症狀 | 原因與處理 |
-|---|---|
-| 平板標籤顯示「規則式」 | 主機沒開機／睡眠、還沒登入 Windows，或轉接站沒在跑；照上面的步驟檢查 |
-| 電腦自己的網站連不到本機 Ollama（403） | `OLLAMA_ORIGINS` 沒有生效；設好後要重新啟動 Ollama，而且要從新的終端機啟動 |
-| 回 502 | 轉接站有在跑，但 Ollama 沒有回應；先做步驟 1 |
-| 回 503 | 同時處理的請求太多（最多 2 個，排隊 8 個）；稍後再試 |
-
-**停止對外開放**：`tailscale funnel --https=443 off`，再結束轉接站（有設自動啟動的話，用 `Stop-ScheduledTask -TaskName 'ResearchFlow AI Relay'`；它下次登入還會再起來，要永久停用請用上面的移除指令）。
-
-**注意**：主機會處理其他組員的題目、摘要與手寫圖片，資料會經過主機電腦；轉接站只記錄狀態碼與耗時，不記內容。Funnel 的網址在公開網路上任何人都連得到，轉接站檢查的「來源網站」可以被瀏覽器以外的程式偽造，所以它不是真正的身分驗證；只在需要時開啟。
+程式在 `src/llm.mjs`（前端連線與偵測）、`src/agent-llm.mjs`（各任務的提示與結果整理）、`functions/`（後端代理）。
 
 ### 老師端
 
@@ -177,8 +132,8 @@ researchflow.html          前端（單一檔案）
 dev-server.mjs             本機預覽用的靜態伺服器（npm start）
 src/
   db.mjs                    Firebase 資料層：登入、Firestore 讀寫、執行 Agent 前的權限檢查
-  llm.mjs                   連到本機的 Ollama：偵測 Qwen 模型、要求照 JSON 格式回答
-  agent-llm.mjs (+test)     用 Qwen 規劃關鍵字、翻譯、判讀文獻、讀手寫圖片
+  llm.mjs                   連到 AI 後端（/api/ai）：偵測能不能用、要求 Claude 照 JSON 格式回答
+  agent-llm.mjs (+test)     用 Claude 規劃關鍵字、翻譯、判讀文獻、讀手寫圖片
   teamwork.mjs (+test)      分工：畫布活動統計、任務類型、規則式提示（純邏輯）
   agent-local.mjs (+test)   規則式 Agent：判斷範圍、研究問題、OpenAlex 搜尋、證據初步分類
   ink.mjs (+test)           自動偵測手寫內容：圖示的幾何判斷、手寫文字辨識（切字、詞庫校正）
@@ -189,7 +144,10 @@ src/
   sync.mjs (+test)          畫布同步的純邏輯
   firebase-config.example.js  設定值範本
 firestore.rules            Firestore 安全規則（所有硬限制都在這裡，由 Firebase 伺服器強制執行）
-firebase.json              rules／hosting 設定
+firebase.json              rules／functions／hosting 設定（含 /api/ai 轉給 Cloud Function）
+functions/
+  index.js                  Cloud Function「ai」：驗證 Firebase 登入，用 Secret 裡的金鑰呼叫 Claude
+  proxy.js                  代理的邏輯與模型設定（MODELS；測試在 src/functions-proxy.test.mjs）
 tools/make-config.mjs      產生 src/firebase-config.js（npm run config）
 ```
 

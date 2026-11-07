@@ -319,10 +319,8 @@ window.RF_MODE = "demo";
 window.RF_VER = "2026.10.12-4";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
-// 本機模型：使用者電腦上的 Ollama（Qwen）。有偵測到時，關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒有就用規則式。
-// 團隊 AI 主機：自己這台裝置沒有 Qwen（iPad、Safari、沒裝的電腦）時，改用這裡分享出來的 Qwen。主機沒開時自動退回規則式。
-window.RF_AI_HOSTS = [{ base: "https://fannymacbook-air.tailf2e29d.ts.net", label: "團隊 AI 主機" }, { base: "https://node.taile1bf83.ts.net", label: "備用 AI 主機" }];
-try { window.RFLLM = await import("./src/llm.mjs"); window.RFAI = await import("./src/agent-llm.mjs"); window.RFLLM.detect().then(() => window.dispatchEvent(new Event("rf:llm"))); } catch (err) { console.info("[ResearchFlow] 無法載入本機模型模組：", err?.message || err); }
+// AI：Claude（經 Firebase Cloud Function 代理，見 functions/index.js）。登入後關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒登入或後端不可用就用規則式。
+try { window.RFLLM = await import("./src/llm.mjs"); window.RFAI = await import("./src/agent-llm.mjs"); window.RFLLM.detect().then(() => window.dispatchEvent(new Event("rf:llm"))); } catch (err) { console.info("[ResearchFlow] 無法載入 AI 模組：", err?.message || err); }
 try { window.RFAGENT = await import("./src/agent-local.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 agent-local.mjs：", err?.message || err); }
 try {
   window.RFINK = await import("./src/ink.mjs");
@@ -789,7 +787,7 @@ function syncObjsLive(bump=true){if(!LIVE()||!p||!p.fid||!canEdit())return;
  if(bump)RFDB.bumpCanvasVersion(p.fid).catch(err=>console.error("[ResearchFlow] 更新 Canvas 版本失敗：",err));
  upserts.forEach(o=>RFDB.setCanvasObject(p.fid,o.id,toRemoteObj(o),ME).catch(err=>console.error("[ResearchFlow] 同步畫布物件失敗：",err)));
  deletes.forEach(id=>RFDB.deleteCanvasObject(p.fid,id).catch(err=>console.error("[ResearchFlow] 刪除畫布物件失敗：",err)))}
-/* 本機模型（Ollama 的 Qwen）。AI()：這個研究現在能不能用模型——有偵測到模型，而且老師沒有把 AI 權限關掉（Level 0）。 */
+/* AI（Claude，經後端代理）。AI()：這個研究現在能不能用模型——已登入、後端可用，而且老師沒有把 AI 權限關掉（Level 0）。 */
 const AI=()=>!!(window.RFLLM&&window.RFAI&&RFLLM.status().ok&&p&&p.LV>=1);
 const AIN=()=>window.RFLLM?RFLLM.modelLabel():"";
 // 搜尋輪數預算：預設 3 輪；用完後由小組決定要不要擴大範圍（每次允許多 1 輪）
@@ -798,31 +796,19 @@ const capOf=()=>(S&&S.cap)||3;
 const reflOf=n=>{const r=(S.refl||[]).find(x=>x.after===n);return r?`<div class="refl"><b>Agent 檢討（${esc(r.by)}）</b>${esc(r.why)}</div>`:""};
 // 關卡 4：搜尋預算用完、證據仍不足時，由小組決定
 const gate4=()=>`<div class="box sm warn"><b>已用完 ${capOf()} 輪搜尋預算，證據還不夠</b><div class="mute" style="margin-top:4px">${esc(evGap())}。Agent 不會自己繼續搜尋，請小組決定：</div><div class="acts"><button class="pri" data-a="expand">允許擴大範圍（再搜 1 輪，放寬條件）</button><button data-a="kwedit">自己修改關鍵字</button><button data-a="stopsearch">停止搜尋，直接看結果</button></div></div>`;
-// 證據頁頁尾：依實際情況說明是誰做的判斷（有標「判讀」的是本機模型讀過摘要，其餘是規則式依用語分類）
+// 證據頁頁尾：依實際情況說明是誰做的判斷（有標「判讀」的是 AI 讀過摘要，其餘是規則式依用語分類）
 const evNote=what=>{const ev=(S&&S.ev)||[],n=ev.filter(e=>e.ai).length,m=ev.length-n,who=n?(ev.find(e=>e.ai).ai.replace(/（.*$/,"")):"";
- return what+(n&&m?`：標有「${who} 判讀」的 ${n} 筆由本機模型讀過摘要後判斷，其餘 ${m} 筆是依摘要用語的規則式初步分類。`:n?`由本機模型 ${who} 讀過摘要後判斷（模型在本機執行，資料不送到外部 AI 服務）。`:"是 Agent 依摘要用語做的規則式初步判斷，這一批沒有經過模型判讀。")+"引用前請開啟原始來源，由小組確認。"};
+ return what+(n&&m?`：標有「${who} 判讀」的 ${n} 筆由 AI 讀過摘要後判斷，其餘 ${m} 筆是依摘要用語的規則式初步分類。`:n?`由 AI（${who}）讀過摘要後判斷（文獻摘要會經後端傳到 Anthropic 的 Claude）。`:"是 Agent 依摘要用語做的規則式初步判斷，這一批沒有經過模型判讀。")+"引用前請開啟原始來源，由小組確認。"};
 function aiChip(){const e=$("#aimodel");if(!e||!p)return;const st=window.RFLLM?RFLLM.status():{ok:false,reason:"模組未載入"};
  e.textContent=p.LV<1?"AI：已關閉":st.ok?"AI："+AIN():"AI：未連線（規則式）";e.className="tag"+(AI()?" ai":" warn");
  e.title=p.LV<1?"老師把 AI 權限設為 Level 0":st.ok?aiWhere(st):"沒有連到 AI："+st.reason+"。目前使用內建的規則式程式。點一下看怎麼處理。"}
-const aiWhere=st=>st.where==="本機"?"由這台電腦上的 "+st.model+"（Ollama）執行，資料不會離開這台電腦。":"由"+st.where+"上的 Qwen 執行（這台裝置沒有可用的本機模型）。";
+const aiWhere=st=>"由 "+AIN()+" 執行。送出的內容（白板文字、文獻摘要、手寫圖片）會經 ResearchFlow 的後端傳到 Anthropic 的 Claude。";
 // 沒連到 AI 時，在 Agent 側欄最上面明確說明（原本只有左上角一個小標籤，很容易沒注意到結果其實是規則式）
-// 這台電腦有 Ollama、但網站連不上（blocked）時，主動問要不要設定：下載一次性的設定檔，按兩下就好。之後網站每 5 秒重新偵測，連上就自動切換。
-const isMacPC=()=>/Macintosh/.test(navigator.userAgent)&&!(navigator.maxTouchPoints>1),isWin=()=>/Windows/.test(navigator.userAgent);
-const setupAsk=()=>{if(!window.RFLLM||LS("rf.aisetup.no")==="1")return "";const st=RFLLM.status(),w=st.ok?st.localWhy:st.why;if(w!=="blocked"||!(isMacPC()||isWin()))return "";
- if(aiSetup.wait)return `<div class="box sm" style="margin-bottom:10px"><b>等你打開設定檔…</b><div class="mute" style="margin-top:4px">${isMacPC()?"打開「下載項目」：先按兩下「ResearchFlow-AI-setup.zip」解壓縮，再對解出來的「ResearchFlow-AI-setup.command」<b>按右鍵 → 打開</b>，跳出提示再按一次「打開」。（直接按兩下的話，Mac 會說無法打開）":"打開剛下載的「ResearchFlow-AI-setup.bat」，如果 Windows 跳出警告，按「其他資訊 → 仍要執行」。"}<br>黑色視窗寫「完成」後就好，這裡會自動偵測，不用重新整理。</div></div>`;
- return `<div class="box sm" style="margin-bottom:10px"><b>你的電腦有 Qwen，但 ResearchFlow 還連不到</b><div class="mute" style="margin-top:3px">要設定成讓 ResearchFlow 使用這台電腦的 Qwen 嗎？只要做一次，之後開機都會自動生效。${st.ok?"（目前先用"+esc(st.where)+"。）":""}</div><div class="acts"><button class="pri" data-aisetup="go">好，幫我設定</button><button data-aisetup="no">不用</button></div></div>`};
-const aiSetup={wait:false,timer:0};
-document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-aisetup]");if(!b)return;
- if(b.dataset.aisetup==="no"){LS("rf.aisetup.no","1");renderPane();return}
- // 設定檔由瀏覽器當場產生（src/setup-files.mjs）：Firebase 免費方案不准網站主機放 .bat／.command 這類可執行檔
- import("./src/setup-files.mjs").then(({setupFile})=>{const f=setupFile(isWin()),u=URL.createObjectURL(f.blob),a=document.createElement("a");a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000)}).catch(err=>alert("設定檔產生失敗："+(err?.message||err)));
- aiSetup.wait=true;renderPane();clearInterval(aiSetup.timer);let n=0;
- aiSetup.timer=setInterval(async()=>{const st=await RFLLM.detect(true);if((st.ok&&st.where==="本機")||++n>120){clearInterval(aiSetup.timer);aiSetup.wait=false;aiChip();renderPane();if(st.ok&&st.where==="本機")setStat("已連上這台電腦的 Qwen")}},5000)});
-const aiNote=()=>{if(!p||p.LV<1||!window.RFLLM)return "";if(AI())return setupAsk();const st=RFLLM.status();if(!st.checked)return "";
- return setupAsk()+`<div class="box warn sm" style="margin-bottom:10px"><b>目前沒有連到 AI，以下結果是規則式初步判斷</b><div class="mute" style="margin-top:3px">${esc(st.reason)}。</div><div class="acts"><button data-aire="1">重新偵測</button></div></div>`};
-// 點標籤：重新偵測一次，並說明目前的狀態與怎麼啟用模型
+const aiNote=()=>{if(!p||p.LV<1||!window.RFLLM)return "";if(AI())return "";const st=RFLLM.status();if(!st.checked)return "";
+ return `<div class="box warn sm" style="margin-bottom:10px"><b>目前沒有連到 AI，以下結果是規則式初步判斷</b><div class="mute" style="margin-top:3px">${esc(st.reason)}。</div><div class="acts"><button data-aire="1">重新偵測</button></div></div>`};
+// 點標籤：重新偵測一次，並說明目前的狀態
 $("#aimodel").style.cursor="pointer";$("#aimodel").onclick=async()=>{if(!window.RFLLM)return;const st=await RFLLM.detect(true);aiChip();if(pane==="agent")renderPane();
- alert(p.LV<1?"老師把這份研究的 AI 權限設為 Level 0，Agent 已關閉。":st.ok?"目前使用 "+AIN()+"。\n\n"+aiWhere(st):"目前沒有連到 AI，Agent 使用內建的規則式程式。\n\n原因："+st.reason+"。\n\n要用到 Qwen，有兩種方式：\n1. 這台電腦自己跑：安裝 Ollama（ollama.com），下載 qwen3:4b-instruct-2507-q4_K_M 與 qwen3.5:9b，用專案裡的 tools/start-ollama 啟動，再用 Chrome 開網站\n2. 用團隊 AI 主機：請負責主機的組員把主機打開，再點一次這個標籤重新偵測")};
+ alert(p.LV<1?"老師把這份研究的 AI 權限設為 Level 0，Agent 已關閉。":st.ok?"目前使用 "+AIN()+"。\n\n"+aiWhere(st):"目前沒有連到 AI，Agent 使用內建的規則式程式。\n\n原因："+st.reason+"。")};
 document.addEventListener("click",async e=>{if(e.target.closest&&e.target.closest("[data-aire]")&&window.RFLLM){await RFLLM.detect(true);aiChip();renderPane()}});
 window.addEventListener("rf:llm",()=>{aiChip();if(p&&pane==="agent"&&!$("#v-ws").classList.contains("hide"))renderPane()});
 // Agent（模型）做的事寫進研究歷程
