@@ -24,6 +24,10 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+// AI 後端（functions/index.js，經由 Hosting 的 /api/ai）：llm.mjs 用這兩個全域值呼叫，沒登入時 token 是 null，AI 會退回規則式。
+globalThis.RF_AI_ENDPOINT = '/api/ai';
+globalThis.RF_AI_TOKEN = async () => (auth.currentUser ? auth.currentUser.getIdToken() : null);
+
 // ---------------- Agent（在瀏覽器裡執行，不需要金鑰、不需要後端）----------------
 // Agent 的邏輯在 agent-local.mjs（規則式＋OpenAlex 公開資料庫）。這裡負責每次執行前的 AI Harness 檢查：
 // 從 Firestore 讀「老師設定的 AI Level」跟「我在這個專案的角色」（不是相信畫面上的值），
@@ -50,7 +54,7 @@ const agentLog = (projectId, uid, x) => addTrace(projectId, { w: 'Agent', x, k: 
 export async function analyzeScope(projectId, items) {
   const uid = await guard(projectId, 'analyzeScope');
   const out = agent.analyzeScope(items);
-  // 有本機模型時：由模型讀白板內容判斷範圍，聚焦選項依題目產生；沒有或失敗時用規則式（固定詞庫與固定選項）
+  // 有 AI（Claude）時：由模型讀白板內容判斷範圍，聚焦選項依題目產生；沒有或失敗時用規則式（固定詞庫與固定選項）
   let by = '';
   const st = await llm.detect();
   if (st.ok && out.topic) {
@@ -87,7 +91,7 @@ export async function proposeQuestion(projectId, { items, answers, ownQuestion, 
 export async function searchEvidence(projectId, { keywords, keywordsZh, coreCount, coreZh, claimNeg, round, excludeIds, mode, claim, synonyms }) {
   const uid = await guard(projectId, 'searchEvidence');
   const zhQueries = agent.buildQueriesZh(keywordsZh, round, mode, coreZh);
-  // 這台電腦有本機模型（Ollama 的 Qwen）時：多抓幾篇候選，讓模型逐篇讀摘要——排除不切題的、依研究發現判斷支持或反向。
+  // 有 AI（Claude）時：多抓幾篇候選，讓模型逐篇讀摘要——排除不切題的、依研究發現判斷支持或反向。
   // 沒有模型或模型出錯時，沿用規則式的結果（ai.error 會說明原因）。
   const st = await llm.detect();
   const out = await agent.searchRelaxed({ keywords, coreCount, round, mode, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg, synonyms, limit: 10 });

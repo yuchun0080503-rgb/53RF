@@ -2,9 +2,13 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
+      "functions/**",
       "firebase.json",
       "firestore.rules",
       ".firebaserc",
@@ -30,6 +34,13 @@
       "**/*.sh"
     ],
     "rewrites": [
+      {
+        "source": "/api/ai",
+        "function": {
+          "functionId": "ai",
+          "region": "asia-east1"
+        }
+      },
       {
         "source": "/",
         "destination": "/researchflow.html"

@@ -397,7 +397,7 @@ const SYNONYMS = {
   exercise: ['physical activity'],
 };
 // 一個關鍵字連同它的同義詞
-// 這一次搜尋額外的同義詞（由本機模型 Qwen 規劃搜尋時提供，見 agent-llm.mjs 的 planSearch）。key 一律小寫。
+// 這一次搜尋額外的同義詞（由 Claude 規劃搜尋時提供，見 agent-llm.mjs 的 planSearch）。key 一律小寫。
 let EXTRA_SYNONYMS = {};
 export function setExtraSynonyms(map) {
   EXTRA_SYNONYMS = {};
