@@ -103,14 +103,21 @@ function verifyPapers(papers, results, exclude = []) {
   return { items: out, dropped, droppedList };
 }
 
-// verify(token)：驗證 Firebase ID token，失敗要 throw；apiKey()：回傳 Anthropic 金鑰
-async function handle(req, res, { verify, apiKey, fetchImpl = fetch, now = Date.now }) {
+// verify(token)：驗證 Firebase ID token（回傳解碼後的使用者），失敗要 throw；apiKey()：回傳 Anthropic 金鑰
+// check（選填）：跟 /api/ai 共用的伺服器端檢查（proxy.js 的 makeCheck：研究成員、AI 權限、全站每日次數），回傳 null 代表通過
+// onUsage（選填）：記錄 token 與網路搜尋次數
+async function handle(req, res, { verify, apiKey, fetchImpl = fetch, now = Date.now, check, onUsage }) {
   if (req.method !== 'POST') return bad(res, 405, '只接受 POST');
   const m = /^Bearer (.+)$/.exec(req.get('Authorization') || '');
   if (!m) return bad(res, 401, '請先登入');
-  try { await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
+  let user;
+  try { user = await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
   let input;
   try { input = parseBody(req.body); } catch (e) { return bad(res, 400, e.message); }
+  if (check) {
+    const why = await check({ uid: user && user.uid, body: req.body });
+    if (why) return bad(res, why.status || 403, why.message || String(why));
+  }
   const t0 = now();
   const first = buildRequest(input);
   let messages = first.messages;
@@ -143,6 +150,7 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, now = Date.
   const meta = { model: MODEL, queries, results: results.length, dropped, parsed: Boolean(parsed), stop: last?.stop_reason || '', ms: now() - t0, usage };
   // 記錄用量與找到的論文標題（論文標題是公開的書目資料）；不記學生輸入的主張、關鍵字與搜尋詞
   console.log('[zhsearch]', JSON.stringify({ ...meta, queries: queries.length, items: items.length, titles: items.map((x) => `${x.source}｜${x.title.slice(0, 60)}`), droppedList }));
+  if (onUsage) { try { await onUsage(usage); } catch { /* 記錄失敗不影響結果 */ } }
   return res.json({ items, meta: { ...meta, droppedList } });
 }
 

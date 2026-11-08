@@ -118,7 +118,7 @@ const sequence = (replies) => {
   return fn;
 };
 
-test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、依模型判斷的立場分類、摘要沒寫結果時沿用規則式分類', async () => {
+test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、依模型判斷的立場分類、摘要沒寫結果時列為立場待確認（k=u）', async () => {
   const replies = () => [
     { rel: 3, stance: 'support', finding: '過度依賴 AI 會降低獨立思考。' },
     { rel: 1, stance: 'support', finding: '談的是醫療決策。' },
@@ -138,7 +138,7 @@ test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、�
   const f2 = sequence(replies());
   const r = await refineEvidence({ claim: '主張', evidence: ev, model: 'Claude' }, f2);
   assert.deepEqual([r.judged, r.removed], [4, 1]);
-  assert.deepEqual(r.evidence.map((e) => [e.id, e.k, e.rel]), [['a', 's', '高'], ['d', 'c', '高'], ['c', 'c', '中'], ['e', 's', undefined]]);
+  assert.deepEqual(r.evidence.map((e) => [e.id, e.k, e.rel]), [['a', 's', '高'], ['d', 'u', '高'], ['c', 'c', '中'], ['e', 's', undefined]]);
   assert.equal(r.evidence[0].f, '過度依賴 AI 會降低獨立思考。');
   assert.equal(r.evidence[0].fo, '原摘要a');
   assert.equal(r.evidence[1].unc, true);

@@ -51,7 +51,7 @@
       {
         "source": "/api/openalex",
         "function": {
-          "functionId": "openalex",
+          "functionId": "oaproxy",
           "region": "asia-east1"
         }
       },

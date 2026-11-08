@@ -7,8 +7,10 @@
 //   - 證據分類：依摘要裡的正向／負向用語做「初步分類」，一律標示為待小組確認，學生可以改列
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
-import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref } from './searchLogic.mjs';
-import { SOURCES, routeFor, jstageTerms, localHints, normalizeZhWeb, ZHSEARCH_ENDPOINT } from './sources.mjs';
+import { clampQueries, openAlexUrl, openAlexInit, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
+import { routeFor, jstageTerms, jstageUrl, normalizeJstage, normalizeZhWeb, ZHSEARCH_ENDPOINT } from './sources.mjs';
+// 給畫面用（證據頁的中文資料庫連結）：挑關鍵字、組華藝搜尋網址
+export { localTerms, airitiUrl } from './sources.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -500,11 +502,18 @@ export async function searchRelaxed({ keywords, coreCount = 2, round, mode, minH
     const got = await searchEvidence({ ...rest, ...plan, keywords, limit, ja: first, web: first }, fetchImpl);
     queries = [...queries, ...got.queries.filter((q) => !queries.includes(q))];
     // 放寬後找到的也併進來，但嚴格條件找到的排前面
-    out = out ? { ...got, evidence: [...out.evidence, ...got.evidence.filter((e) => !out.evidence.some((x) => x.id === e.id)).map((e) => ({ ...e, rel: '中' }))], dropped: out.dropped + got.dropped, fallback: out.fallback || got.fallback, sources: [...new Set([...out.sources, ...got.sources])] } : got;
+    const union = (k) => [...new Set([...(out[k] || []), ...(got[k] || [])])];
+    out = out ? {
+      ...got, evidence: [...out.evidence, ...got.evidence.filter((e) => !out.evidence.some((x) => x.id === e.id)).map((e) => ({ ...e, rel: '中' }))],
+      dropped: out.dropped + got.dropped, fallback: out.fallback || got.fallback,
+      dbNames: union('dbNames'), sources: union('sources'), failedSources: union('failedSources'),
+    } : got;
     if (out.evidence.filter((e) => e.lang !== 'zh').length >= minHits) break;
   }
   const kept = Math.max(n, Math.min(2, start));
-  return { ...out, evidence: out.evidence.slice(0, limit), scanned: Math.min(limit, out.evidence.length), queries, relaxed: buildQueries(keywords, round, mode, start).core.slice(kept) };
+  const evidence = out.evidence.slice(0, limit), bySource = {};
+  for (const e of evidence) bySource[e.src || 'OpenAlex'] = (bySource[e.src || 'OpenAlex'] || 0) + 1;
+  return { ...out, evidence, bySource, scanned: Math.min(limit, out.evidence.length), queries, relaxed: buildQueries(keywords, round, mode, start).core.slice(kept) };
 }
 
 /**
@@ -607,65 +616,69 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
     d: kws.length && matched >= Math.ceil(kws.length / 2) ? '直接' : '間接',
     v: Boolean(work.doi),
     auto: true, // 規則式初步分類，尚未經小組確認
-    _ab: String(work.abstract || '').slice(0, 1200), // 完整一點的摘要：只給本機模型判讀用，判讀完就丟掉，不會存進資料庫
+    _ab: String(work.abstract || '').slice(0, 2400), // 完整一點的摘要：只給本機模型判讀用，判讀完就丟掉，不會存進資料庫
   };
 }
 
 // queries／core／scope：buildQueries 的輸出（英文，國際文獻）；zhQueries／keywordsZh：中文查詢與中文關鍵字（中文文獻）。
 // 兩邊至少要有一邊。流程：查詢（只比對標題與摘要）→ 丟掉沒有提到全部主題詞的 → 依相關度排序 → 每一輪最多 10 篇（中文最多 4 篇、日文最多 2 篇）。
-// discipline：學科（見 sources.mjs 的 DISCIPLINES；空的就從 routeText 與關鍵字判斷），決定 OpenAlex 之外還查哪些資料庫。
-// ja：這次要不要查 J-STAGE（只有東亞主題、已登入時才會真的查；見 sources.mjs 的 routeFor）。
-const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-const OPENALEX_PROXY = '/api/openalex';
-const SRC_NAME = { openalex: 'OpenAlex', crossref: 'Crossref', zhweb: '華藝／臺灣博碩士論文網（網路搜尋）', ...Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, s.name])) };
+// sources：要加查的領域資料庫（searchLogic.SOURCES 的代號，例如 ['eric','europepmc','openaire']），由老師在課程設定勾選或依領域自動挑（pickSources）。
+// sourcesLocked：老師有勾選時為 true，只查老師勾的；否則再依學科自動加查（sources.mjs 的 routeFor：discipline 空的就從 routeText 與關鍵字判斷）。
+// ja：這次要不要查 J-STAGE（只有東亞主題、已登入時才會真的查）。
+// web：這次要不要用 Claude 的網路搜尋找華藝、臺灣博碩士論文網的中文文獻（要登入；見 functions/zhsearch.js）。
 // fromYear：英文文獻的出版年份下限（buildQueries 依輪次給，見 fromYearOf）；中文文獻再往前 5 年，最晚 2015 年起。
-// web：這次要不要用 Claude 的網路搜尋找華藝、臺灣博碩士論文網的中文文獻（要登入；見 functions/zhsearch.js）
-export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, discipline = '', routeText = '', ja = false, web = false, fromYear = 2020 }, fetchImpl = fetch) {
-  const zhFrom = Math.min(2015, fromYear - 5);
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const SRC_NAME = (key) => (key === 'openalex' ? 'OpenAlex' : key === 'crossref' ? 'Crossref' : key === 'zhweb' ? '華藝／臺灣博碩士論文網（網路搜尋）' : key === 'jstage' ? 'J-STAGE' : SOURCES[key]?.name || key);
+export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, sources = [], sourcesLocked = false, discipline = '', routeText = '', ja = false, web = false, fromYear = 2020 }, fetchImpl = fetch) {
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
+  const zhFrom = Math.min(2015, fromYear - 5);
   const getJson = async (url, name, init) => {
     const res = await (init ? fetchImpl(url, init) : fetchImpl(url));
     if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
     return res.json();
   };
-  // 登入時帶憑證：OpenAlex 經後端代查（帶金鑰，見 functions/openalex.js），J-STAGE 也要用
-  let token = null;
-  if (typeof globalThis.RF_AI_TOKEN === 'function') { try { token = await globalThis.RF_AI_TOKEN(); } catch { token = null; } }
-  const auth = token ? { headers: { Authorization: `Bearer ${token}` } } : null;
-  // OpenAlex：先走代查；代查失敗（本機開發沒有後端、金鑰額度用完、後端出錯）就退回直接查詢（用這個網路的免費額度）
+  // OpenAlex：網站設定 RF_OA_ENDPOINT 時走後端代理 oaproxy（後端加金鑰，見 functions/openalex.js）；
+  // 代理還沒部署或暫時壞掉（404／5xx、401）就改回直接連，額度用完（429）則不改（直接連也一樣會被擋）
   const run = async (q, opts) => {
-    const direct = openAlexUrl(q, opts);
-    let json = auth ? await getJson(`${OPENALEX_PROXY}${new URL(direct).search}`, 'OpenAlex', auth).catch(() => null) : null;
-    if (!json) json = await getJson(direct, 'OpenAlex');
+    const url = openAlexUrl(q, opts);
+    let res = await fetchImpl(url, await openAlexInit(url));
+    if (url.startsWith('/') && !res.ok && res.status !== 429) res = await fetchImpl(openAlexUrl(q, { ...opts, direct: true }));
+    if (!res.ok) throw new Error(`OpenAlex HTTP ${res.status}`);
+    const json = await res.json();
     return (Array.isArray(json.results) ? json.results : []).map((w) => normalizeWork(w, q)).filter(Boolean);
   };
-  const runSrc = async (key, q, init, opts) => {
-    const s = SOURCES[key], list = s.list(await getJson(s.url(q, opts), s.name, init));
-    return (Array.isArray(list) ? list : []).map((w) => s.norm(w, q)).filter(Boolean);
-  };
+  // 領域資料庫（ERIC、Europe PMC、DOAJ、OpenAIRE）：searchLogic 的 sourceUrl／normalizeSource
+  const runSource = async (key, q) => normalizeSource(key, await getJson(sourceUrl(key, q, { fromYear }), SRC_NAME(key)), q, { fromYear });
   const coreEn = Array.isArray(core) && core.length ? core : (Array.isArray(keywords) ? keywords : []).slice(0, 2);
   const scopeEn = Array.isArray(scope) ? scope : [];
   const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, Math.min(3, Math.max(1, coreZh || 2)));
   const jaKeys = jstageTerms(zhKeys, Array.isArray(keywordsZh) ? keywordsZh.filter(hasZh) : []);
   const route = routeFor({ discipline, text: [routeText, ...(Array.isArray(keywordsZh) ? keywordsZh : []), ...(Array.isArray(keywords) ? keywords : [])].join(' ') });
-  // J-STAGE 經由後端代查，要帶登入憑證；沒登入就不查
+  // 加查哪些：老師勾的（或依領域自動挑的）＋老師沒勾時再依學科自動加查；只留 searchLogic.SOURCES 認得的
+  const extra = [...new Set([...(Array.isArray(sources) ? sources : []), ...(sourcesLocked ? [] : route.extra)])].filter((k) => k in SOURCES);
+  // 登入憑證：J-STAGE 代查與中文網路搜尋都要
+  let token = null;
+  if (typeof globalThis.RF_AI_TOKEN === 'function') { try { token = await globalThis.RF_AI_TOKEN(); } catch { token = null; } }
+  const auth = token ? { headers: { Authorization: `Bearer ${token}` } } : null;
   const useJa = Boolean(ja && route.jstage && jaKeys.length && auth);
   const jaText = jaKeys.slice(0, 2).join(' ');
-  // 學科專門的資料庫排在 OpenAlex 前面：它們找到的已經夠多時，OpenAlex 的英文查詢就不用查了（省下 OpenAlex 的每日額度）
+  const wait = (ms) => pause(fetchImpl === fetch ? ms : 0);
+  // 中文網路搜尋要 20～35 秒，所以最先送出、跟其他資料庫同時進行，最後才等它的結果。
+  // 帶 projectId：後端跟 /api/ai 一樣檢查研究成員、AI 權限、全站每日次數（functions/proxy.js 的 makeCheck）
+  const webQ = `網路搜尋（華藝、臺灣博碩士論文網）：${zhKeys.join(' ')}`;
+  const projectId = String((typeof globalThis.RF_AI_PROJECT === 'function' ? globalThis.RF_AI_PROJECT() : globalThis.RF_AI_PROJECT) || '');
+  const webP = web && auth && zhKeys.length
+    ? getJson(ZHSEARCH_ENDPOINT, '中文網路搜尋', { method: 'POST', headers: { ...auth.headers, 'content-type': 'application/json' }, body: JSON.stringify({ projectId, claim: String(routeText || '').slice(0, 300), keywords: zhKeys, exclude: (Array.isArray(excludeIds) ? excludeIds : []).filter((x) => /^https:\/\//.test(String(x))).slice(0, 60) }) })
+      .then((j) => ({ ok: true, value: (Array.isArray(j.items) ? j.items : []).map((it) => normalizeZhWeb(it, webQ)).filter(Boolean) }), () => ({ ok: false, value: [] }))
+    : null;
+  // 領域資料庫排在 OpenAlex 前面：它們找到的已經夠多時，OpenAlex 的英文查詢就不用查了（省下 OpenAlex 的每日額度）
   const jobs = [
-    ...(en.length ? route.extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSrc(key, en[0], undefined, { fromYear }) })) : []),
-    ...(useJa ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => runSrc('jstage', jaText, auth) }] : []),
+    ...(en.length ? extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSource(key, en[0]) })) : []),
+    ...(useJa ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => getJson(jstageUrl(jaText), 'J-STAGE', auth).then((j) => (Array.isArray(j.items) ? j.items : []).map((it) => normalizeJstage(it, jaText)).filter(Boolean)) }] : []),
     ...en.map((q) => ({ lang: 'en', src: 'openalex', q, go: () => run(q, { tiab: true, perPage: 15, fromYear }) })),
     ...zh.map((q) => ({ lang: 'zh', src: 'openalex', q, go: () => run(q, { lang: 'zh', fromYear: zhFrom }) })),
   ];
-  const wait = (ms) => pause(fetchImpl === fetch ? ms : 0);
-  // 中文網路搜尋要 20～35 秒，所以最先送出、跟其他資料庫同時進行，最後才等它的結果
-  const webQ = `網路搜尋（華藝、臺灣博碩士論文網）：${zhKeys.join(' ')}`;
-  const webP = web && auth && zhKeys.length
-    ? getJson(ZHSEARCH_ENDPOINT, '中文網路搜尋', { method: 'POST', headers: { ...auth.headers, 'content-type': 'application/json' }, body: JSON.stringify({ claim: String(routeText || '').slice(0, 300), keywords: zhKeys, exclude: (Array.isArray(excludeIds) ? excludeIds : []).filter((x) => /^https:\/\//.test(String(x))).slice(0, 60) }) })
-      .then((j) => ({ ok: true, value: (Array.isArray(j.items) ? j.items : []).map((it) => normalizeZhWeb(it, webQ)).filter(Boolean) }), () => ({ ok: false, value: [] }))
-    : null;
   // 一條一條查、中間稍微停一下：這些是免費的公開服務，不要同時灌好幾個請求。
   const settled = [];
   const enHits = () => dedupeWorks(settled.flatMap((s, i) => (jobs[i].lang === 'en' ? s.value : [])), excludeIds).filter((w) => relevance(w, coreEn, scopeEn).ok).length;
@@ -695,8 +708,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     return zhKeys.every((k) => text.includes(k)) && inTitle ? zhKeys.length + inTitle : -1;
   };
   // 日文（J-STAGE）：查詢詞（主題詞＋地名）都要出現在標題或摘要，而且至少一個出現在標題。
-  // 日文論文常換說法（女子教育／女子学校／女学校），所以地名有出現、而且主題詞的前兩個字出現在標題，也算候選（分數較低）；
-  // 之後有 AI 時仍會逐篇讀摘要判斷切不切題。
+  // 日文論文常換說法（女子教育／女子学校），所以地名有出現、而且主題詞的前兩個字出現在標題，也算候選（分數較低）
   const jaScore = (w) => {
     const text = w.title + w.abstract, inTitle = jaKeys.filter((k) => w.title.includes(k)).length;
     if (jaKeys.length && jaKeys.every((k) => text.includes(k)) && inTitle) return jaKeys.length + inTitle;
@@ -720,14 +732,20 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     // web：摘要取自網路搜尋結果的片段，畫面上會提醒學生點原文確認
     ...webPick.map((w) => ({ ...classifyWork(w, kind, zhKeys, claimNeg), lang: 'zh', src: w.src, web: true, rel: zhKeys.some((k) => w.title.includes(k)) ? '高' : '中' })),
     ...zhPick.map(({ w }) => ({ ...classifyWork(w, kind, zhKeys, claimNeg), rel: zhKeys.every((k) => w.title.includes(k)) ? '高' : '中' })),
-    // 日文文獻：lang 標成 ja，網站會照英文文獻的方式產生中文摘要
+    // 日文文獻：lang 標成 ja，網站會照英文文獻的方式產生重點整理
     ...jaPick.map(({ w }) => ({ ...classifyWork(w, kind, jaKeys, claimNeg), lang: 'ja', src: 'J-STAGE', rel: jaKeys.every((k) => w.title.includes(k)) ? '高' : '中' })),
   ];
-  // 這次實際查到資料的資料庫（給紀錄與畫面顯示）
-  const sources = [...new Set(jobs.filter((j, i) => settled[i].ok && !settled[i].skipped).map((j) => SRC_NAME[j.src]))];
-  // 人文、法律、臺灣與東亞主題：研究多半在沒有開放查詢介面的中文資料庫，附上建議（畫面在證據不足時顯示）
-  const local = localHints({ discipline: route.discipline, keywordsZh, text: routeText });
-  return { evidence, queries: [...en, ...zh, ...(useJa ? [jaText] : []), ...(webP ? [webQ] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, fromYear, local, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
+  // 每個資料庫各查到幾篇（給畫面與評測看：老師勾的資料庫有沒有真的派上用場）
+  const bySource = {};
+  for (const e of evidence) bySource[e.src || 'OpenAlex'] = (bySource[e.src || 'OpenAlex'] || 0) + 1;
+  // dbNames：這次實際查到資料的資料庫（給搜尋訊息與研究歷程）
+  const dbNames = [...new Set(jobs.filter((j, i) => settled[i].ok && !settled[i].skipped).map((j) => SRC_NAME(j.src)))];
+  return {
+    evidence, queries: [...en, ...zh, ...(useJa ? [jaText] : []), ...(webP ? [webQ] : [])], scanned: evidence.length, fallback,
+    sources: extra, bySource, failedSources: extra.filter((k) => { const i = jobs.findIndex((j) => j.src === k); return i >= 0 && !settled[i].ok; }),
+    dbNames, discipline: route.discipline, fromYear,
+    dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length,
+  };
 }
 
 // ---------------- 證據摘要（Level 3）----------------

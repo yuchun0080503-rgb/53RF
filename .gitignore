@@ -5,3 +5,6 @@ firebase-debug.log
 functions/.env
 *.log
 .DS_Store
+
+# 評測輸出（正式要交的報告另外挑出來）
+tools/eval/out/

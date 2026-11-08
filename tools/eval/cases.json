@@ -1,0 +1,25 @@
+{
+  "note": "示範用畫布內容（模擬三位組員在白板上的文字），每題附上「參考英文術語」供自動比對。要測真實效果，請把 canvas 換成你們白板上的真實內容；refTerms 可以留空，留空時只做人工評分。",
+  "samples": [
+    { "id": "s01", "canvas": "家欣：AI 搜尋資料速度比較快。\nFanny：但是可能產生 AI 依賴。\n小明：需要確認是否真的提高學習成績。", "refTerms": ["generative AI", "academic performance", "AI dependence", "cognitive offloading", "university students"] },
+    { "id": "s02", "canvas": "睡前滑手機會讓人睡不好？\n大學生熬夜跟藍光有關嗎\n睡眠品質要怎麼量？PSQI?", "refTerms": ["smartphone use", "bedtime", "sleep quality", "blue light", "college students", "PSQI"] },
+    { "id": "s03", "canvas": "線上課程比實體課沒動力\n可是有些人說線上比較自由\n動機要分內在外在？", "refTerms": ["online learning", "learning motivation", "intrinsic motivation", "self-determination theory", "face-to-face"] },
+    { "id": "s04", "canvas": "社群媒體使用時間 ↑ → 焦慮 ↑？\n可能是比較心態（社會比較）\n青少年 vs 大學生 不同？", "refTerms": ["social media use", "anxiety", "social comparison", "adolescents", "young adults"] },
+    { "id": "s05", "canvas": "打工時數太多會影響成績嗎\n經濟壓力\n有的人打工反而比較會時間管理", "refTerms": ["part-time employment", "academic achievement", "financial stress", "time management", "college students"] },
+    { "id": "s06", "canvas": "正念練習可以降低考試焦慮？\n八週課程 vs 一次介入\n效果可以維持多久", "refTerms": ["mindfulness", "test anxiety", "mindfulness-based intervention", "randomized controlled trial", "students"] },
+    { "id": "s07", "canvas": "ChatGPT 寫報告 = 抄襲嗎？\n學術誠信\n老師怎麼判斷 AI 寫的", "refTerms": ["ChatGPT", "academic integrity", "plagiarism", "AI-generated text detection", "higher education"] },
+    { "id": "s08", "canvas": "運動完念書記憶比較好？\n有氧運動 vs 重訓\n前額葉 執行功能", "refTerms": ["aerobic exercise", "memory", "executive function", "cognitive performance", "acute exercise"] },
+    { "id": "s09", "canvas": "小組報告總有人不做事（搭便車）\n分工透明會不會好一點\n同儕互評有用嗎", "refTerms": ["social loafing", "free-riding", "group work", "peer assessment", "collaborative learning"] },
+    { "id": "s10", "canvas": "邊聽音樂邊念書 好還是不好\n有歌詞 vs 純音樂\n內向外向差別？", "refTerms": ["background music", "reading comprehension", "lyrics", "introversion", "extraversion", "cognitive load"] },
+    { "id": "s11", "canvas": "拖延跟完美主義有關？\n截止日前才開始做\n自我調節", "refTerms": ["procrastination", "perfectionism", "self-regulation", "academic procrastination", "students"] },
+    { "id": "s12", "canvas": "寵物可以降低孤獨感嗎\n獨居老人\n養狗 vs 養貓", "refTerms": ["pet ownership", "loneliness", "older adults", "living alone", "human-animal interaction"] },
+    { "id": "s13", "canvas": "手寫筆記 vs 打字筆記 哪個記得多\n概念理解 vs 逐字記錄", "refTerms": ["longhand note-taking", "laptop note-taking", "conceptual understanding", "learning", "memory"] },
+    { "id": "s14", "canvas": "疫情後大學生心理健康變差？\n憂鬱 焦慮 盛行率\n學校諮商資源夠不夠", "refTerms": ["COVID-19", "mental health", "depression", "anxiety", "prevalence", "university students", "counseling services"] },
+    { "id": "s15", "canvas": "短影音（抖音 IG reels）讓注意力變差？\n專注時間\n成癮傾向", "refTerms": ["short-form video", "attention", "TikTok", "problematic use", "addiction", "sustained attention"] },
+    { "id": "s16", "canvas": "雙語教育 讓孩子比較聰明？\n執行功能優勢 有爭議\n社經地位要控制", "refTerms": ["bilingualism", "bilingual advantage", "executive function", "children", "socioeconomic status"] },
+    { "id": "s17", "canvas": "遊戲化教學提升參與度\n積分 排行榜 徽章\n新鮮感消失之後呢", "refTerms": ["gamification", "student engagement", "leaderboards", "badges", "novelty effect"] },
+    { "id": "s18", "canvas": "自我效能高的人比較不怕上台報告？\n公開演講焦慮\n練習次數", "refTerms": ["self-efficacy", "public speaking anxiety", "oral presentation", "students"] },
+    { "id": "s19", "canvas": "家長控制型教養 → 大學生自主性低？\n直升機父母\n台灣文化脈絡", "refTerms": ["helicopter parenting", "parental control", "autonomy", "emerging adults", "Taiwan"] },
+    { "id": "s20", "canvas": "吃早餐的學生上課比較專心？\n血糖 認知表現\n國小 vs 大學", "refTerms": ["breakfast consumption", "cognitive performance", "attention", "school children", "glycemic"] }
+  ]
+}

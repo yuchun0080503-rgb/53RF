@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, localTerms, airitiUrl, localHints, normalizeZhWeb, DISCIPLINES, ROUTES,
-  ericUrl, normalizeEric, openAireUrl, normalizeOpenAire, europePmcUrl, normalizeEuropePmc, jstageUrl, normalizeJstage, SOURCES,
+  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, localTerms, airitiUrl, normalizeZhWeb, DISCIPLINES, ROUTES,
+  openAireUrl, normalizeOpenAire, jstageUrl, normalizeJstage,
 } from './sources.mjs';
 
 test('guessDiscipline：涵蓋大學 8 個學院的論點（文獻搜尋測試用的 16 題）', () => {
@@ -77,16 +77,17 @@ test('airitiUrl：跟華藝首頁搜尋框送出的格式相同，每個詞各�
   assert.deepEqual(q.BSF.SearchFiledList.map((x) => x.SearchKeyWord), ['女子教育', '日治']);
 });
 
-test('localHints：人文、法律或臺灣主題才建議；理工醫護等國際期刊為主的不建議', () => {
-  const h = localHints({ discipline: 'humanities', keywordsZh: ['女子教育', '日治時期臺灣'] });
-  assert.equal(h.terms, '女子教育 日治');
-  assert.deepEqual(h.links.map((l) => l.name), ['華藝線上圖書館', '臺灣博碩士論文知識加值系統', '臺灣期刊論文索引系統（國家圖書館）', 'Google 學術搜尋']);
-  assert.ok(h.links.every((l) => l.url.startsWith('https://')));
-  assert.ok(localHints({ discipline: 'law', keywordsZh: ['國民法官', '量刑'] }));
-  assert.ok(localHints({ discipline: 'education', keywordsZh: ['原住民教育'], text: '臺灣原住民學生' }), '臺灣主題也建議');
-  assert.equal(localHints({ discipline: 'stem', keywordsZh: ['鈣鈦礦', '穩定性'] }), null);
-  assert.equal(localHints({ discipline: 'health', keywordsZh: ['正念', '倦怠'] }), null);
-  assert.equal(localHints({ discipline: 'humanities', keywordsZh: [] }), null);
+test('OpenAIRE 也在 searchLogic 的資料庫清單裡（老師可以勾選）：sourceUrl 會減少運算子、normalizeSource 會過濾年份', async () => {
+  const { SOURCES, sourceUrl, normalizeSource, pickSources } = await import('./searchLogic.mjs');
+  assert.equal(SOURCES.openaire.name, 'OpenAIRE');
+  const q = '("a b" OR "c d" OR "e f") AND ("g h" OR "i j" OR "k l")';
+  const u = new URL(sourceUrl('openaire', q, { fromYear: 2010 }));
+  assert.equal(u.origin + u.pathname, 'https://api.openaire.eu/graph/v1/researchProducts');
+  assert.ok((u.searchParams.get('search').match(/\b(AND|OR)\b/g) || []).length <= 4);
+  assert.equal(u.searchParams.get('fromPublicationDate'), '2010-01-01');
+  const r = (year) => ({ id: 'x' + year, mainTitle: 'Title ' + year, descriptions: ['abstract text'], publicationDate: `${year}-01-01`, instances: [{ type: 'Article' }] });
+  assert.deepEqual(normalizeSource('openaire', { results: [r(2021), r(2005)] }, q, { fromYear: 2010 }).map((w) => w.year), [2021]);
+  assert.deepEqual(pickSources({ teacher: ['openaire', 'bogus'] }), ['openaire'], '老師勾的 openaire 會被接受');
 });
 
 test('limitOps：OpenAIRE 最多 4 個 AND／OR，先刪同義詞最多那組的同義詞，每組至少留一個詞', () => {
@@ -98,20 +99,6 @@ test('limitOps：OpenAIRE 最多 4 個 AND／OR，先刪同義詞最多那組的
   assert.equal(limitOps('a AND b AND c AND d AND e AND f'), 'a AND b AND c AND d AND e', '組數超過時刪最後的組');
   const count = (s) => (s.match(/\b(AND|OR)\b/g) || []).length;
   assert.ok(count(new URL(openAireUrl(q)).searchParams.get('search')) <= 4);
-});
-
-test('ERIC：網址帶年份範圍與欄位；沒有摘要或編號不對的不要，連結指向 eric.ed.gov', () => {
-  const u = new URL(ericUrl('a OR b', { fromYear: 2020 }));
-  assert.equal(u.origin + u.pathname, 'https://api.ies.ed.gov/eric/');
-  assert.match(u.searchParams.get('search'), /^\(a OR b\) AND publicationdateyear:\[2020 TO \d{4}\]$/);
-  assert.equal(u.searchParams.get('format'), 'json');
-  const doc = { id: 'EJ1361735', title: 'Flipped Classroom in Calculus', author: ['Ramadhani, Rahmi', 'Bina, N'], description: 'This project aims to <b>investigate</b> &amp; improve.', publicationdateyear: 2022, source: 'J Math' };
-  assert.deepEqual(normalizeEric(doc, 'q'), {
-    id: 'https://eric.ed.gov/?id=EJ1361735', title: 'Flipped Classroom in Calculus', year: 2022, doi: '', url: 'https://eric.ed.gov/?id=EJ1361735',
-    authors: ['Ramadhani, Rahmi', 'Bina, N'], venue: 'J Math', abstract: 'This project aims to investigate & improve.', q: 'q', src: 'ERIC',
-  });
-  assert.equal(normalizeEric({ ...doc, description: '' }, 'q'), null);
-  assert.equal(normalizeEric({ ...doc, id: 'javascript:alert(1)' }, 'q'), null);
 });
 
 test('OpenAIRE：取出出版社 DOI（不用預印本 DOI）、作者、期刊；資料集與沒有摘要的不要', () => {
@@ -143,19 +130,6 @@ test('OpenAIRE：取出出版社 DOI（不用預印本 DOI）、作者、期刊�
   assert.match(noDoi.id, /^https:\/\/explore\.openaire\.eu\//);
 });
 
-test('Europe PMC：只查 PubMed 收錄、有摘要的；撤稿與社論不要', () => {
-  const q = new URL(europePmcUrl('mindfulness AND burnout', { fromYear: 2020 })).searchParams;
-  assert.match(q.get('query'), /^\(mindfulness AND burnout\) AND PUB_YEAR:\[2020 TO \d{4}\] AND SRC:MED AND HAS_ABSTRACT:y$/);
-  assert.equal(q.get('resultType'), 'core');
-  const r = { pmid: '42742488', doi: '10.1111/inr.70245', title: 'Mindfulness for nurse burnout.', abstractText: '<h4>Aim</h4>To assess…', pubYear: '2026',
-    authorList: { author: [{ fullName: 'Wu C' }] }, journalInfo: { journal: { title: 'International nursing review' } }, pubTypeList: { pubType: ['Systematic Review'] } };
-  const w = normalizeEuropePmc(r, 'q');
-  assert.deepEqual([w.id, w.title, w.year, w.abstract, w.venue, w.src], ['https://doi.org/10.1111/inr.70245', 'Mindfulness for nurse burnout', 2026, 'Aim To assess…', 'International nursing review', 'PubMed']);
-  assert.equal(normalizeEuropePmc({ ...r, doi: undefined }, 'q').url, 'https://pubmed.ncbi.nlm.nih.gov/42742488/');
-  assert.equal(normalizeEuropePmc({ ...r, pubTypeList: { pubType: ['Retracted Publication'] } }, 'q'), null);
-  assert.equal(normalizeEuropePmc({ ...r, abstractText: '' }, 'q'), null);
-});
-
 test('J-STAGE：網址指向自己的後端；只接受 J-STAGE 文章頁的連結', () => {
   assert.equal(jstageUrl('台湾 女子教育', { fromYear: 2010 }), '/api/jstage?text=%E5%8F%B0%E6%B9%BE+%E5%A5%B3%E5%AD%90%E6%95%99%E8%82%B2&from=2010');
   const it = { title: '日本統治期台湾における修学旅行の展開', year: 2013, doi: '10.32170/tourismstudies.1.2_185', url: 'https://www.jstage.jst.go.jp/article/x/1/2/1_185/_article/-char/ja/', authors: ['A'], venue: '観光学', abstract: '修学旅行について検討した。' };
@@ -174,12 +148,4 @@ test('normalizeZhWeb：只收華藝與國圖的 https 網址、要有摘要；�
   assert.equal(normalizeZhWeb({ ...it, url: 'javascript:alert(1)' }, 'q'), null);
   assert.equal(normalizeZhWeb({ ...it, abstract: '太短' }, 'q'), null);
   assert.ok(normalizeZhWeb({ ...it, url: 'https://www.airitilibrary.com/Article/Detail/x' }, 'q'));
-});
-
-test('SOURCES：每個來源都能從回應取出清單', () => {
-  assert.deepEqual(SOURCES.eric.list({ response: { docs: [1] } }), [1]);
-  assert.deepEqual(SOURCES.openaire.list({ results: [1] }), [1]);
-  assert.deepEqual(SOURCES.europepmc.list({ resultList: { result: [1] } }), [1]);
-  assert.deepEqual(SOURCES.jstage.list({ items: [1] }), [1]);
-  assert.equal(SOURCES.eric.list({}), undefined);
 });

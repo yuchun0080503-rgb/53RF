@@ -1,9 +1,9 @@
-// sources.mjs — OpenAlex 以外的學術資料庫：依學科決定查哪些、組查詢網址、把回應整理成跟 normalizeWork 相同的格式。
+// sources.mjs — 依學科自動加查資料庫（routeFor），以及 OpenAIRE、J-STAGE、中文網路搜尋（華藝、臺灣博碩士論文網）的網址與回應整理。
 // 純邏輯，不含網路呼叫（fetch 在 agent-local.mjs 的 searchEvidence），可以直接用 node:test 驗證。
 //
-// 為什麼要多個來源：OpenAlex 對沒有金鑰的請求，同一個網路位址每天共用一份免費額度；
-// 而且各學科的專門資料庫收錄得更完整（教育看 ERIC、醫護看 PubMed、法律與人文看 OpenAIRE、日治時期與東亞看 J-STAGE）。
-// 2026-11-08 實測：ERIC、OpenAIRE、Europe PMC 允許瀏覽器直接呼叫，也看得懂網站的布林查詢；
+// 資料庫清單與 ERIC、Europe PMC、DOAJ 的實作在 searchLogic.mjs（SOURCES、sourceUrl、normalizeSource，老師可以在課程設定勾選）；
+// 這裡的 ROUTES 用同一套代號，老師沒勾選時依學科自動加查。
+// 2026-11-08 實測：OpenAIRE 允許瀏覽器直接呼叫，也看得懂網站的布林查詢（但一條最多 4 個 AND／OR，見 limitOps）；
 // J-STAGE 不允許瀏覽器直接讀取，而且搜尋結果沒有摘要，所以經由後端 /api/jstage 代查（見 functions/jstage.js）。
 
 const MAX_ABSTRACT_LEN = 1200;
@@ -44,7 +44,8 @@ export const normDiscipline = (d) => (DISCIPLINES.includes(d) ? d : '');
 const EAST_ASIA = /臺灣|台灣|台湾|日治|日據|日本|朝鮮|韓國|中國|東亞|滿洲|殖民|清代|琉球|taiwan|japan|korea|china|east asia/i;
 export const isEastAsia = (text) => EAST_ASIA.test(String(text || ''));
 
-// 每個學科在 OpenAlex 之外另外查的資料庫（英文查詢）；J-STAGE 另外看主題是不是東亞
+// 每個學科在 OpenAlex 之外自動加查的資料庫（代號是 searchLogic.mjs 的 SOURCES）；老師在課程設定勾選時以老師的為準。
+// J-STAGE 另外看主題是不是東亞（JSTAGE_DISCIPLINES）
 export const ROUTES = {
   humanities: ['openaire'],
   law: ['openaire'],
@@ -64,31 +65,6 @@ export const JSTAGE_DISCIPLINES = ['humanities', 'education', 'social'];
 export function routeFor({ discipline, text }) {
   const d = normDiscipline(discipline) || guessDiscipline(text);
   return { discipline: d, extra: ROUTES[d] || [], jstage: JSTAGE_DISCIPLINES.includes(d) && isEastAsia(text) };
-}
-
-// ---------------- ERIC（教育）----------------
-// 文件：https://api.ies.ed.gov/eric/ ；查詢語法是 Solr，支援 AND／OR／括號／引號。ERIC 沒有 DOI 欄位，連結用 eric.ed.gov。
-
-export function ericUrl(boolQuery, { fromYear = 2020, rows = 15 } = {}) {
-  const params = new URLSearchParams({
-    search: `(${boolQuery}) AND publicationdateyear:[${fromYear} TO ${thisYear()}]`,
-    fields: 'id,title,author,publicationdateyear,description,source,peerreviewed,publicationtype',
-    rows: String(rows),
-    format: 'json',
-  });
-  return `https://api.ies.ed.gov/eric/?${params}`;
-}
-
-export function normalizeEric(d, query) {
-  if (!d || typeof d !== 'object' || typeof d.id !== 'string' || !/^E[JD]\d+$/.test(d.id)) return null;
-  const title = clean(d.title), abstract = clean(d.description).slice(0, MAX_ABSTRACT_LEN);
-  if (!title || !abstract) return null;
-  const url = `https://eric.ed.gov/?id=${d.id}`;
-  return {
-    id: url, title: title.slice(0, 300), year: Number.isInteger(d.publicationdateyear) ? d.publicationdateyear : null,
-    doi: '', url, authors: (Array.isArray(d.author) ? d.author : []).filter((a) => typeof a === 'string').slice(0, 3),
-    venue: typeof d.source === 'string' ? d.source : '', abstract, q: query, src: 'ERIC',
-  };
 }
 
 // ---------------- OpenAIRE（法律、社科、人文）----------------
@@ -133,32 +109,6 @@ export function normalizeOpenAire(r, query) {
     id: doi || page, title: title.slice(0, 300), year: Number.isInteger(year) ? year : null, doi, url: doi || link,
     authors: (Array.isArray(r.authors) ? r.authors : []).map((a) => a?.fullName).filter((n) => typeof n === 'string' && n).slice(0, 3),
     venue: clean(r.container?.name), abstract, q: query, src: 'OpenAIRE',
-  };
-}
-
-// ---------------- Europe PMC（醫護、生科；只查 PubMed 收錄的文獻）----------------
-// 文件：https://europepmc.org/RestfulWebService ；resultType=core 一次就有摘要。SRC:MED 是 PubMed 的紀錄。
-
-export function europePmcUrl(boolQuery, { fromYear = 2020, size = 15 } = {}) {
-  const params = new URLSearchParams({
-    query: `(${boolQuery}) AND PUB_YEAR:[${fromYear} TO ${thisYear()}] AND SRC:MED AND HAS_ABSTRACT:y`,
-    format: 'json', pageSize: String(size), resultType: 'core',
-  });
-  return `https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params}`;
-}
-
-export function normalizeEuropePmc(r, query) {
-  if (!r || typeof r !== 'object' || !r.pmid) return null;
-  const title = clean(r.title).replace(/\.$/, ''), abstract = clean(r.abstractText).slice(0, MAX_ABSTRACT_LEN);
-  if (!title || !abstract) return null;
-  const types = r.pubTypeList?.pubType;
-  if (Array.isArray(types) && types.some((t) => /retract|erratum|comment|editorial/i.test(t))) return null;
-  const doi = doiUrl(r.doi), pub = `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/`;
-  const year = parseInt(r.pubYear, 10);
-  return {
-    id: doi || pub, title: title.slice(0, 300), year: Number.isInteger(year) ? year : null, doi, url: doi || pub,
-    authors: (Array.isArray(r.authorList?.author) ? r.authorList.author : []).map((a) => a?.fullName).filter(Boolean).slice(0, 3),
-    venue: r.journalInfo?.journal?.title || '', abstract, q: query, src: 'PubMed',
   };
 }
 
@@ -262,30 +212,3 @@ export function airitiUrl(terms) {
   };
   return `https://www.airitilibrary.com/Article/Query?queryString=${encodeURIComponent(JSON.stringify(q))}`;
 }
-
-export const LOCAL_DISCIPLINES = ['humanities', 'law'];
-/**
- * @returns {null | {terms:string, links:{name:string, url:string, note:string}[]}} 不需要建議（理工、醫護等國際期刊為主的領域）時回 null
- */
-export function localHints({ discipline, keywordsZh, text = '' }) {
-  const terms = localTerms(keywordsZh, text);
-  if (!terms) return null;
-  if (!LOCAL_DISCIPLINES.includes(discipline) && !/臺灣|台灣|日治|日據/.test(`${text} ${(keywordsZh || []).join(' ')}`)) return null;
-  return {
-    terms,
-    links: [
-      { name: '華藝線上圖書館', url: airitiUrl(terms), note: '臺灣期刊與學位論文，多數有摘要；全文可能要透過學校圖書館' },
-      { name: '臺灣博碩士論文知識加值系統', url: 'https://ndltd.ncl.edu.tw/', note: '臺灣的碩博士論文；進入後在搜尋框輸入關鍵字' },
-      { name: '臺灣期刊論文索引系統（國家圖書館）', url: 'https://tpl.ncl.edu.tw/NclService/', note: '國內期刊文章索引；進入後在搜尋框輸入關鍵字' },
-      { name: 'Google 學術搜尋', url: `https://scholar.google.com/scholar?hl=zh-TW&q=${encodeURIComponent(terms)}`, note: '中英文都有，可以先用來找線索' },
-    ],
-  };
-}
-
-// 給 searchEvidence 用：每個來源怎麼組網址、怎麼從回應拿出清單、怎麼整理一筆
-export const SOURCES = {
-  eric: { name: 'ERIC', url: ericUrl, list: (j) => j?.response?.docs, norm: normalizeEric },
-  openaire: { name: 'OpenAIRE', url: openAireUrl, list: (j) => j?.results, norm: normalizeOpenAire },
-  europepmc: { name: 'PubMed', url: europePmcUrl, list: (j) => j?.resultList?.result, norm: normalizeEuropePmc },
-  jstage: { name: 'J-STAGE', url: jstageUrl, list: (j) => j?.items, norm: normalizeJstage },
-};

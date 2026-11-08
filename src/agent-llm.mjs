@@ -40,7 +40,10 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '5. zh 用學生原本的中文說法（繁體）。不要列「影響」「研究」「能力」這類太籠統的詞。\n' +
       '6. focus 用一句繁體中文說明這次要查證的重點。\n' +
       '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。\n' +
-      '8. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。',
+      '8. 觀點詞（role=aspect）0 到 4 個：畫布上其他內容提到、但不是主題詞的具體概念（例如要比較的條件、可能的原因或機制、子問題），每個概念一個。不要漏掉學生寫下的概念（例如畫布寫了「通勤時間」「搭公車」，就要有 commuting time、public transportation）。\n' +
+      '9. 概念在學術界有固定名稱時（理論、效應、量表、現象的正式名稱），en 或 synonyms 要用那個名稱：例如「只看到跟自己想法一樣的意見」是 echo chamber，「一直反覆想同一件不開心的事」是 rumination，「住的地方附近買不到新鮮食物」是 food desert。\n' +
+      '10. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。\n' +
+      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
       type: 'object', required: ['focus', 'keywords', 'discipline'],
@@ -48,14 +51,16 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
         focus: str,
         discipline: { type: 'string', enum: DISCIPLINES },
         keywords: {
-          type: 'array', minItems: 2, maxItems: 5,
-          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
+          type: 'array', minItems: 2, maxItems: 9,
+          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
         },
       },
     },
-    maxTokens: 500,
+    maxTokens: 900,
   }, fetchImpl);
-  const keywords = normKeywords(out.keywords);
+  // 主題詞 → 範圍詞 → 觀點詞：搜尋只用前面的主題詞＋第一個範圍詞，觀點詞給學生看、之後換方向時用，不會讓查詢條件變嚴
+  const order = { core: 0, scope: 1, aspect: 2 };
+  const keywords = normKeywords(out.keywords).sort((a, b) => order[a.role] - order[b.role]);
   if (keywords.filter((k) => k.role === 'core').length < 1) throw new Error('模型沒有給出主題詞');
   // 學科給錯或沒給不算失敗：留空，搜尋時改用規則式判斷（sources.mjs 的 guessDiscipline）
   return { focus: clip(out.focus, 120), keywords, discipline: normDiscipline(out.discipline) };
@@ -71,7 +76,7 @@ function normKeywords(list) {
   });
   const keywords = split
     // 中文去掉括號裡的說明：模型會寫「女子教育（學校教育）」，但中文文獻要求關鍵字原樣出現在標題或摘要，括號會讓每篇都對不上
-    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' ? 'scope' : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
   // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
   // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
@@ -217,6 +222,10 @@ export async function judgeWorks({ claim, works }, fetchImpl) {
   return results;
 }
 
+// 判讀立場時給模型看的摘要長度。原本是 650 字，但英文摘要通常 1000–2000 字、研究結果寫在最後面，
+// 切到 650 字模型只看得到背景和方法，就會判成「沒寫結果（unclear）」。2026-11-08 評測 s06、s14 失敗的主因。
+const JUDGE_ABSTRACT_LEN = 2400;
+
 async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
   const out = await chatJSON({
     system:
@@ -235,7 +244,7 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
       '主張只說「影響」而沒有說變好或變差時：研究發現確實有影響（不論變好或變差）都算 support，發現沒有影響才是 counter。\n' +
       '摘要裡的「建議」「可能」「未來研究應該」只是作者的推測或主張，不是研究發現；沒有寫出實際的數據或結果，stance 就是 unclear。\n' +
       'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。',
-    user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, 650) || '（沒有摘要）'}`,
+    user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, JUDGE_ABSTRACT_LEN) || '（沒有摘要）'}`,
     schema: {
       type: 'object', required: ['rel', 'stance', 'finding'],
       properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str },
@@ -270,13 +279,14 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
     // 中文網路搜尋（華藝、博碩士論文網）的文獻：摘要只是搜尋結果的片段，比較短，容易被判成只沾到邊；
     // 而且 Claude 搜尋時已經依論點挑過一次。相關度 1 時仍保留，標成相關度低、立場待確認，請學生讀原文
     if (v.rel === 1 && e.web) {
-      kept.push({ rel: 0.5, e: { ...e, rel: '低', d: '間接', unc: true, ai: model || 'Claude', fo: e.f, f: '摘要只看得出部分相關，請閱讀原文確認是否適用於你們的主張。' } });
+      kept.push({ rel: 0.5, e: { ...e, k: 'u', rel: '低', d: '間接', unc: true, ai: model || 'Claude', fo: e.f, f: '摘要只看得出部分相關，請閱讀原文確認是否適用於你們的主張。' } });
       return;
     }
     if (v.rel < 2) { removedItems.push({ t: clip(e.t, 60), src: e.src || 'OpenAlex', rel: v.rel }); return; } // 不切題：排除
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
-    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? e.k : v.stance === 'support' ? 's' : 'c', mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
+    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' ? 's' : 'c', // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
+      mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
   kept.sort((a, b) => b.rel - a.rel);
