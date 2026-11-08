@@ -308,6 +308,25 @@ export async function summarizeZh(title, abstract, fetchImpl) {
  * @returns {Promise<{question:string, method:string, findings:string, limits:string, use:string}|null>} 摘要太短時回傳 null
  */
 export const KP_FIELDS = ['question', 'method', 'findings', 'limits', 'use'];
+
+// 模型偶爾會把下一個欄位連同標記寫進前一個欄位（預覽網站實際出現過：
+// findings 的結尾是「…平均值。</findings>\n<parameter name="limits">研究範圍限於日本…」）。
+// 把標記後面的內容搬回它該在的欄位（那個欄位原本是空的或「摘要沒有說明」時），再去掉殘留的標記。
+const EMPTYISH = (s) => !String(s || '').trim() || /^摘要沒有說明。?$/.test(String(s).trim());
+export function fixLeakedFields(out) {
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, String(out?.[k] ?? '')]));
+  for (const k of KP_FIELDS) {
+    const parts = kp[k].split(/<parameter\s+name="(\w+)"\s*>/);
+    if (parts.length < 2) continue;
+    kp[k] = parts[0];
+    for (let i = 1; i < parts.length; i += 2) {
+      const name = parts[i], text = parts[i + 1] || '';
+      if (KP_FIELDS.includes(name) && EMPTYISH(kp[name])) kp[name] = text;
+    }
+  }
+  for (const k of KP_FIELDS) kp[k] = kp[k].replace(/<\/?(?:parameter|invoke|antml:[\w]+|question|method|findings|limits|use)\b[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return kp;
+}
 export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
   if (clip(abstract, 1200).length < 60) return null;
   const out = await chatJSON({
@@ -325,7 +344,7 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
     schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
     maxTokens: 900, timeout: 90000,
   }, fetchImpl);
-  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(out[k], k === 'findings' ? 260 : 160)]));
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' ? 260 : 160)]));
   // 小模型偶爾會寫成別的語言：主要發現與用處合起來不是以繁體中文為主就不採用，呼叫端會再試一次或改用翻譯
   if (!isZhText(kp.findings + kp.use) || !kp.findings) throw new Error('模型沒有用中文寫重點整理');
   return kp;

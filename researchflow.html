@@ -1299,9 +1299,13 @@ const zhBusy=new Set();
 const KP_N={question:"研究問題",method:"對象與方法",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
 const kpClaim=()=>S.claim||S.rq||"";
 function kpHTML(e){
- if(e.kp)return `<div class="box sm" style="margin:6px 0"><b>重點整理</b><span class="mute">（${esc(e.kpBy||"AI")} 依摘要整理，請對照原文）</span>${Object.entries(KP_N).map(([k,n])=>e.kp[k]?`<p style="margin:4px 0"><b>${n}：</b>${esc(e.kp[k])}</p>`:"").join("")}</div>`;
+ // 已經存下來的重點整理也在顯示時清掉模型誤寫的欄位標記（見 agent-llm.mjs 的 fixLeakedFields）
+ if(e.kp){const kp=window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp;
+  return `<div class="box sm" style="margin:6px 0"><b>重點整理</b><span class="mute">（${esc(e.kpBy||"AI")} 依摘要整理，請對照原文）</span>${Object.entries(KP_N).map(([k,n])=>kp[k]?`<p style="margin:4px 0"><b>${n}：</b>${esc(kp[k])}</p>`:"").join("")}</div>`}
  if(!zhBad(e)&&e.zh)return `<p><b>中文摘要：</b>${esc(e.zh)}</p>`;
  if(!(e.ab||e.fo||e.f))return `<p class="mute">資料庫沒有提供這篇的摘要，請開啟原始來源閱讀。</p>`;
+ // 摘要太短（例如網路搜尋只拿到一小段）：整理不出重點，直接說明（RFAI.keyPoints 也是 60 字以下不整理）
+ if(String(e.ab||e.fo||e.f).trim().length<60)return `<p class="mute">只有摘要片段，無法整理重點，請開啟原始來源閱讀完整摘要。</p>`;
  if(zhBusy.has(e.id)||(AI()&&!e.zhx))return `<p class="mute">重點整理產生中…</p>`;
  return e.lang==="zh"?"":`<p class="mute">無法產生重點整理，請開啟原始來源閱讀。</p>`}
 async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id===id),e0=e()[0];

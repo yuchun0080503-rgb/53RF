@@ -179,6 +179,26 @@ test('keyPoints：五個欄位的中文重點整理，帶入學生的主張；�
   await assert.rejects(keyPoints({ title: 't', abstract: abs }, fake({ ...reply, findings: 'Math scores improved significantly in the experimental group.', use: 'Supports the claim.' })), /中文/);
 });
 
+test('keyPoints：模型把下一個欄位連同標記寫進前一個欄位時，拆回正確欄位並去掉標記', async () => {
+  const { keyPoints, fixLeakedFields } = await import('./agent-llm.mjs');
+  // 預覽網站實際出現的回應
+  const leaked = {
+    question: '日本刑事審判中 DNA 證據的可采性如何變化？', method: '分析 1989 至 2024 年的判決。',
+    findings: 'DNA證據案件的有罪率不高於一般公布的各審級有罪率。</findings>\n<parameter name="limits">研究範圍限於日本、以單一商業資料庫的判決為樣本。',
+    limits: '', use: '只能部分支持主張。',
+  };
+  const fixed = fixLeakedFields(leaked);
+  assert.equal(fixed.findings, 'DNA證據案件的有罪率不高於一般公布的各審級有罪率。');
+  assert.equal(fixed.limits, '研究範圍限於日本、以單一商業資料庫的判決為樣本。');
+  assert.equal(fixLeakedFields({ ...leaked, limits: '摘要沒有說明' }).limits, '研究範圍限於日本、以單一商業資料庫的判決為樣本。', '原本是「摘要沒有說明」也換掉');
+  assert.equal(fixLeakedFields({ ...leaked, limits: '樣本小。' }).limits, '樣本小。', '原本有內容就不覆蓋');
+  assert.equal(fixLeakedFields({ findings: '結果顯著。</findings>', use: 'x' }).findings, '結果顯著。');
+  const abs = 'This study analyzed Japanese criminal judgments from 1989 to 2024 involving DNA evidence and compared conviction rates before and after the lay judge system.';
+  const r = await keyPoints({ title: 't', abstract: abs }, fake(leaked));
+  assert.doesNotMatch(JSON.stringify(r), /parameter|<\//);
+  assert.match(r.limits, /研究範圍限於日本/);
+});
+
 test('judgeOne 的提示詞：不分學科，不再把司法等領域一律判成不切題', async () => {
   const f = sequence([{ rel: 3, stance: 'support', finding: 'x' }]);
   await judgeWorks({ claim: '國民法官制度對刑事量刑的影響', works: [{ title: 't', abstract: 'a' }] }, f);
