@@ -164,6 +164,21 @@ test('refineEvidence：中文網路搜尋的文獻相關度 1 時保留（相關
   assert.deepEqual(r.removedItems.map((x) => x.t), ['無關的中文文獻', 'Unrelated English paper']);
 });
 
+test('keyPoints：五個欄位的中文重點整理，帶入學生的主張；摘要太短不整理；不是中文就算失敗', async () => {
+  const { keyPoints, KP_FIELDS } = await import('./agent-llm.mjs');
+  const reply = { question: '翻轉教室能否提升國中數學成就？', method: '台灣某國中七年級 141 名學生，準實驗設計。', findings: '實驗組的數學成就測驗平均高於對照組 8 分，達顯著差異。', limits: '只在一所學校進行，樣本較小。', use: '可直接支持「翻轉教室提升國中數學成就」，但只涵蓋七年級。' };
+  const f = fake(reply);
+  const abs = 'This quasi-experimental study examined the effect of the flipped classroom on mathematics achievement among 141 seventh graders in Taiwan. Results showed significant gains.';
+  const r = await keyPoints({ title: 'Flipped classroom and math', abstract: abs, claim: '翻轉教室提升國中數學成就' }, f);
+  assert.deepEqual(Object.keys(r), KP_FIELDS);
+  assert.equal(r.findings, reply.findings);
+  assert.match(f.calls[0].user, /學生的主張：翻轉教室提升國中數學成就/);
+  assert.match(f.calls[0].system, /只能根據摘要/);
+  assert.deepEqual(f.calls[0].schema.required, KP_FIELDS);
+  assert.equal(await keyPoints({ title: 't', abstract: '太短' }, f), null);
+  await assert.rejects(keyPoints({ title: 't', abstract: abs }, fake({ ...reply, findings: 'Math scores improved significantly in the experimental group.', use: 'Supports the claim.' })), /中文/);
+});
+
 test('judgeOne 的提示詞：不分學科，不再把司法等領域一律判成不切題', async () => {
   const f = sequence([{ rel: 3, stance: 'support', finding: 'x' }]);
   await judgeWorks({ claim: '國民法官制度對刑事量刑的影響', works: [{ title: 't', abstract: 'a' }] }, f);

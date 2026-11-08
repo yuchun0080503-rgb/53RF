@@ -301,6 +301,36 @@ export async function summarizeZh(title, abstract, fetchImpl) {
   return zh;
 }
 
+/**
+ * 重點整理：依摘要寫成結構化的繁體中文，讓學生不用讀原文（多半是英文）就能判斷這篇對報告有沒有用。
+ * 取代原本 80 字的中文摘要（summarizeZh）。只能根據摘要——多數論文全文要付費或透過圖書館，網站拿不到。
+ * @param {{title:string, abstract:string, claim?:string}} o claim：學生的主張，用來寫「對報告的用處」
+ * @returns {Promise<{question:string, method:string, findings:string, limits:string, use:string}|null>} 摘要太短時回傳 null
+ */
+export const KP_FIELDS = ['question', 'method', 'findings', 'limits', 'use'];
+export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
+  if (clip(abstract, 1200).length < 60) return null;
+  const out = await chatJSON({
+    system:
+      '你是協助大學生閱讀文獻的研究助理。根據下面這篇文獻的標題與摘要，用繁體中文（台灣用語，不可以用韓文、日文或英文作答）寫重點整理，' +
+      '讓學生不用讀原文就能判斷這篇對報告有沒有用。只能根據摘要，不要加入摘要沒有的內容；摘要沒寫的欄位就寫「摘要沒有說明」。\n' +
+      '各欄位：\n' +
+      'question：研究問題，這篇想回答什麼（一句）。\n' +
+      'method：對象與方法，誰、多少人、在哪裡、怎麼研究（問卷、實驗、訪談、文獻分析…），一到兩句。\n' +
+      'findings：主要發現，兩到三句，保留摘要裡的關鍵數據；摘要只寫目的沒寫結果就寫「摘要沒有寫出研究結果」。\n' +
+      'limits：限制或適用範圍（例如只研究某個國家、某個年齡層、樣本小），一句；摘要沒寫就寫「摘要沒有說明」。\n' +
+      'use：對照學生的主張，說明這篇可以支持主張的哪一部分、哪裡不適用，一到兩句；沒有提供主張時寫這篇適合用在哪類報告。\n' +
+      '全部合起來 200 到 300 字。',
+    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
+    schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
+    maxTokens: 900, timeout: 90000,
+  }, fetchImpl);
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(out[k], k === 'findings' ? 260 : 160)]));
+  // 小模型偶爾會寫成別的語言：主要發現與用處合起來不是以繁體中文為主就不採用，呼叫端會再試一次或改用翻譯
+  if (!isZhText(kp.findings + kp.use) || !kp.findings) throw new Error('模型沒有用中文寫重點整理');
+  return kp;
+}
+
 // 是不是以中文為主的文字：有韓文或日文假名就不算；中文字要占文字的一半以上
 export function isZhText(t) {
   const s = String(t || '');
