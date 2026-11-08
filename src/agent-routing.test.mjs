@@ -17,7 +17,7 @@ function service(handlers) {
     return json({});
   };
   fn.calls = calls;
-  fn.hosts = () => calls.map((c) => (c.url.startsWith('/') ? 'jstage-proxy' : new URL(c.url).host));
+  fn.hosts = () => calls.map((c) => (c.url.startsWith('/api/jstage') ? 'jstage-proxy' : c.url.startsWith('/api/openalex') ? 'openalex-proxy' : new URL(c.url).host));
   return fn;
 }
 
@@ -71,6 +71,40 @@ test('專門資料庫失敗不影響 OpenAlex；全部失敗才報錯', async ()
   assert.equal(r.evidence.length, 1);
   assert.deepEqual(r.sources, ['OpenAlex']);
   await assert.rejects(searchEvidence({ ...buildQueries(FLIP, 0), keywords: FLIP, discipline: 'education' }, async () => ({ ok: false, status: 500 })), /都沒有回應/);
+});
+
+// ---------------- OpenAlex 代查（帶金鑰）----------------
+
+test('OpenAlex：登入時走 /api/openalex 並帶憑證，查詢參數跟直接查詢一樣；沒登入直接查', async () => {
+  const oa = () => json({ results: [oaWork(1, 'Remote work and productivity', 'remote work productivity')] });
+  const kw = ['remote work', 'productivity'];
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    const svc = service({ '/api/openalex': oa, 'api.openalex.org': () => { throw new Error('登入時不該直接查'); } });
+    const r = await searchEvidence({ ...buildQueries(kw, 0), keywords: kw, discipline: 'business' }, svc);
+    const c = svc.calls.find((x) => x.url.startsWith('/api/openalex?'));
+    assert.equal(c.init.headers.Authorization, 'Bearer tok');
+    assert.match(new URLSearchParams(c.url.split('?')[1]).get('filter'), /title_and_abstract\.search:/);
+    assert.equal(r.evidence.length, 1);
+    assert.deepEqual(r.sources, ['OpenAlex']);
+  } finally { delete globalThis.RF_AI_TOKEN; }
+  const direct = service({ 'api.openalex.org': oa });
+  await searchEvidence({ ...buildQueries(kw, 0), keywords: kw, discipline: 'business' }, direct);
+  assert.ok(direct.hosts().every((h) => h === 'api.openalex.org'), '沒登入：直接查');
+});
+
+test('OpenAlex：代查失敗（本機沒有後端、金鑰額度用完）就退回直接查詢，不算失敗', async () => {
+  const kw = ['remote work', 'productivity'];
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    for (const proxy of [() => ({ ok: false, status: 429 }), () => ({ ok: false, status: 404 }), () => { throw new Error('offline'); }]) {
+      const svc = service({ '/api/openalex': proxy, 'api.openalex.org': () => json({ results: [oaWork(1, 'Remote work and productivity', 'remote work productivity')] }) });
+      const r = await searchEvidence({ ...buildQueries(kw, 0), keywords: kw, discipline: 'business' }, svc);
+      assert.equal(r.evidence.length, 1);
+      assert.equal(r.fallback, false, '不用改查 Crossref');
+      assert.ok(svc.hosts().includes('api.openalex.org'));
+    }
+  } finally { delete globalThis.RF_AI_TOKEN; }
 });
 
 // ---------------- J-STAGE ----------------
@@ -139,7 +173,7 @@ test('searchRelaxed：J-STAGE 只在第 1 輪的第一次查詢時查（放寬�
     let svc = jsSvc();
     await searchRelaxed({ ...args, round: 0 }, svc); // 什麼都找不到 → 會放寬再查一次
     assert.equal(svc.hosts().filter((h) => h === 'jstage-proxy').length, 1);
-    assert.ok(svc.hosts().filter((h) => h === 'api.openalex.org').length > 2, '確實放寬重查了');
+    assert.ok(svc.hosts().filter((h) => h === 'openalex-proxy').length > 2, '確實放寬重查了（登入時 OpenAlex 走代查）');
     svc = jsSvc();
     await searchRelaxed({ ...args, round: 1 }, svc);
     assert.equal(svc.hosts().filter((h) => h === 'jstage-proxy').length, 0);

@@ -9,9 +9,11 @@ const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { handle } = require('./proxy');
 const jstage = require('./jstage');
+const openalex = require('./openalex');
 
 admin.initializeApp();
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const OPENALEX_API_KEY = defineSecret('OPENALEX_API_KEY');
 const verify = (t) => admin.auth().verifyIdToken(t);
 
 exports.ai = onRequest(
@@ -24,4 +26,10 @@ exports.ai = onRequest(
 exports.jstage = onRequest(
   { region: 'asia-east1', timeoutSeconds: 60, maxInstances: 3, memory: '256MiB' },
   (req, res) => jstage.handle(req, res, { verify }),
+);
+
+// OpenAlex 代查（/api/openalex）：帶上 Secret Manager 裡的 OPENALEX_API_KEY，額度從「同網路共用」變成「這把金鑰專用」。
+exports.openalex = onRequest(
+  { region: 'asia-east1', secrets: [OPENALEX_API_KEY], timeoutSeconds: 30, maxInstances: 5, memory: '256MiB' },
+  (req, res) => openalex.handle(req, res, { verify, apiKey: () => OPENALEX_API_KEY.value() }),
 );

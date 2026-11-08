@@ -605,6 +605,7 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
 // discipline：學科（見 sources.mjs 的 DISCIPLINES；空的就從 routeText 與關鍵字判斷），決定 OpenAlex 之外還查哪些資料庫。
 // ja：這次要不要查 J-STAGE（只有東亞主題、已登入時才會真的查；見 sources.mjs 的 routeFor）。
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const OPENALEX_PROXY = '/api/openalex';
 const SRC_NAME = { openalex: 'OpenAlex', crossref: 'Crossref', ...Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, s.name])) };
 export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, discipline = '', routeText = '', ja = false }, fetchImpl = fetch) {
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
@@ -614,8 +615,15 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
     return res.json();
   };
+  // 登入時帶憑證：OpenAlex 經後端代查（帶金鑰，見 functions/openalex.js），J-STAGE 也要用
+  let token = null;
+  if (typeof globalThis.RF_AI_TOKEN === 'function') { try { token = await globalThis.RF_AI_TOKEN(); } catch { token = null; } }
+  const auth = token ? { headers: { Authorization: `Bearer ${token}` } } : null;
+  // OpenAlex：先走代查；代查失敗（本機開發沒有後端、金鑰額度用完、後端出錯）就退回直接查詢（用這個網路的免費額度）
   const run = async (q, opts) => {
-    const json = await getJson(openAlexUrl(q, opts), 'OpenAlex');
+    const direct = openAlexUrl(q, opts);
+    let json = auth ? await getJson(`${OPENALEX_PROXY}${new URL(direct).search}`, 'OpenAlex', auth).catch(() => null) : null;
+    if (!json) json = await getJson(direct, 'OpenAlex');
     return (Array.isArray(json.results) ? json.results : []).map((w) => normalizeWork(w, q)).filter(Boolean);
   };
   const runSrc = async (key, q, init) => {
@@ -628,13 +636,12 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const jaKeys = jstageTerms(zhKeys, Array.isArray(keywordsZh) ? keywordsZh.filter(hasZh) : []);
   const route = routeFor({ discipline, text: [routeText, ...(Array.isArray(keywordsZh) ? keywordsZh : []), ...(Array.isArray(keywords) ? keywords : [])].join(' ') });
   // J-STAGE 經由後端代查，要帶登入憑證；沒登入就不查
-  let token = null;
-  if (ja && route.jstage && jaKeys.length && typeof globalThis.RF_AI_TOKEN === 'function') { try { token = await globalThis.RF_AI_TOKEN(); } catch { token = null; } }
+  const useJa = Boolean(ja && route.jstage && jaKeys.length && auth);
   const jaText = jaKeys.slice(0, 2).join(' ');
   // 學科專門的資料庫排在 OpenAlex 前面：它們找到的已經夠多時，OpenAlex 的英文查詢就不用查了（省下 OpenAlex 的每日額度）
   const jobs = [
     ...(en.length ? route.extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSrc(key, en[0]) })) : []),
-    ...(token ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => runSrc('jstage', jaText, { headers: { Authorization: `Bearer ${token}` } }) }] : []),
+    ...(useJa ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => runSrc('jstage', jaText, auth) }] : []),
     ...en.map((q) => ({ lang: 'en', src: 'openalex', q, go: () => run(q, { tiab: true, perPage: 15 }) })),
     ...zh.map((q) => ({ lang: 'zh', src: 'openalex', q, go: () => run(q, { lang: 'zh', fromYear: 2015 }) })),
   ];
@@ -693,7 +700,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   ];
   // 這次實際查到資料的資料庫（給紀錄與畫面顯示）
   const sources = [...new Set(jobs.filter((j, i) => settled[i].ok && !settled[i].skipped).map((j) => SRC_NAME[j.src]))];
-  return { evidence, queries: [...en, ...zh, ...(token ? [jaText] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
+  return { evidence, queries: [...en, ...zh, ...(useJa ? [jaText] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
 }
 
 // ---------------- 證據摘要（Level 3）----------------
