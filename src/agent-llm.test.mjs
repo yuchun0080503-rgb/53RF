@@ -150,6 +150,29 @@ test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、�
   assert.deepEqual(r3.removedItems, [{ t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', rel: 0 }]);
 });
 
+test('refineEvidence：中文網路搜尋的文獻相關度 1 時保留（相關度低、立場待確認），0 仍排除；其他來源相關度 1 照樣排除', async () => {
+  const ev = [
+    { id: 'w1', t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', web: true, k: 's', f: '片段一', _ab: '片段一' },
+    { id: 'w0', t: '無關的中文文獻', src: '華藝線上圖書館', web: true, k: 's', f: '片段二', _ab: '片段二' },
+    { id: 'o1', t: 'Unrelated English paper', src: 'OpenAlex', k: 's', f: 'abs', _ab: 'abs' },
+    { id: 'ok', t: 'Lay judges and sentencing', src: 'OpenAlex', k: 's', f: 'abs2', _ab: 'abs2' },
+  ];
+  const f = sequence([{ rel: 1, stance: 'unrelated', finding: '' }, { rel: 0, stance: 'unrelated', finding: '' }, { rel: 1, stance: 'unrelated', finding: '' }, { rel: 3, stance: 'support', finding: '參審員量刑較輕。' }]);
+  const r = await refineEvidence({ claim: '國民法官制度對刑事量刑的影響', evidence: ev, model: 'Claude' }, f);
+  assert.deepEqual(r.evidence.map((e) => [e.id, e.rel, e.unc]), [['ok', '高', undefined], ['w1', '低', true]], '保留的排在最後');
+  assert.match(r.evidence[1].f, /請閱讀原文確認/);
+  assert.deepEqual(r.removedItems.map((x) => x.t), ['無關的中文文獻', 'Unrelated English paper']);
+});
+
+test('judgeOne 的提示詞：不分學科，不再把司法等領域一律判成不切題', async () => {
+  const f = sequence([{ rel: 3, stance: 'support', finding: 'x' }]);
+  await judgeWorks({ claim: '國民法官制度對刑事量刑的影響', works: [{ title: 't', abstract: 'a' }] }, f);
+  const sys = f.calls[0].system;
+  assert.doesNotMatch(sys, /一律是 1/);
+  assert.doesNotMatch(sys, /標準要嚴格/);
+  assert.match(sys, /不要因為文獻屬於哪個學科就降級/);
+});
+
 test('judgeWorks：單篇失敗只影響那一篇；連續兩篇失敗或全部失敗就丟出錯誤讓呼叫端整批退回', async () => {
   const works = ['a', 'b', 'c', 'd'].map((id) => ({ title: 'T' + id, abstract: '摘要' + id }));
   const good = { rel: 3, stance: 'support', finding: '有發現。' };
