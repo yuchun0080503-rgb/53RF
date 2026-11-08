@@ -1831,10 +1831,10 @@ const CV_META=/摘要(沒有|沒|未|只|並未|僅)|需要閱讀原文|請閱�
 const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(x=>x&&!CV_META.test(x)).join("");
 const cvCut=(s,n)=>s.length>n?s.slice(0,n-1)+"…":s;
 const evSummary=e=>{const kp=e.kp?(window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp):null;
- // 研究經過（怎麼分組、各組做了什麼、多久、怎麼測量）優先；舊的重點整理沒有這欄時用「對象與方法」
- const q=kp?cvSents(kp.question):"",how=kp?cvSents(kp.process)||cvSents(kp.method):"";
+ // 中英文文獻同一個格式：研究問題、對象與方法、研究經過（怎麼分組、各組做了什麼、多久、怎麼測量）、主要發現；摘要沒寫的段落不顯示
+ const q=kp?cvSents(kp.question):"",who=kp?cvSents(kp.method):"",how=kp?cvSents(kp.process):"";
  const found=kp?cvSents(kp.findings):cvSents(e.ai&&!e.unc?e.f:"")||cvSents(!zhBad(e)&&e.zh?e.zh:"")||(e.lang==="zh"?cvSents(e.ab||e.f):"");
- return [q&&"研究問題："+cvCut(q,120),how&&(kp&&cvSents(kp.process)?"研究經過：":"對象與方法：")+cvCut(how,320),found&&"主要發現："+cvCut(found,320)].filter(Boolean).join("\n")};
+ return [q&&"研究問題："+cvCut(q,120),who&&"對象與方法："+cvCut(who,160),how&&"研究經過："+cvCut(how,320),found&&"主要發現："+cvCut(found,320)].filter(Boolean).join("\n")};
 async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
  const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
  const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);
@@ -1844,7 +1844,10 @@ async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S
   setStat("OpenAlex 沒有這篇的摘要，向 Semantic Scholar 查詢中…","y");
   const ab=await RFAGENT.fetchAbstractByDoi(e.url);if(p!==proj)return;
   if(ab){[...S.ev,...(S.saved||[])].filter(x=>x.id===e.id).forEach(x=>{x.ab=ab;x.abs="Semantic Scholar"});saveS()}}
- if(LIVE()&&kpNeed(e)&&(AI()||((!e.zh||zhBad(e))&&e.lang!=="zh"))&&(e.ab||e.fo||e.f)){setStat("整理重點中…","y");await zhFor(e.id);if(p!==proj)return}
+ if(LIVE()&&(AI()||((!e.zh||zhBad(e))&&e.lang!=="zh"))&&(e.ab||e.fo||e.f)&&(kpNeed(e)||zhBusy.has(e.id))){setStat("整理重點中…","y");
+  // 這一篇的重點整理正在背景產生時要等它完成（最多 60 秒）：以前直接跳過，英文文獻的卡片就只剩標題
+  for(let t=0;zhBusy.has(e.id)&&t<120;t++)await new Promise(r=>setTimeout(r,500));
+  if(kpNeed(e))await zhFor(e.id);if(p!==proj)return}
  let card=p.objs.find(isCard);
  if(!card){const b=claim?bbox(claim):null,tops=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).map(l=>getO(l.b)).filter(Boolean).map(o=>{const q=bbox(o);return q.y+q.h}):[];
   card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?(tops.length?Math.max(...tops)+31:b.y+19):20+p.objs.length*6,text:[head,evSummary(e)].filter(Boolean).join("\n"),ml:true,eid:e.id,...(/^https:\/\//.test(e.url||"")?{url:e.url,ul:shortUrl(e.url)}:{}),tag:"evidence",stage:"證據"});p.objs.push(card)}
