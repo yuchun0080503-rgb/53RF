@@ -47,14 +47,39 @@ function extractAnswer(data) {
   return block.input;
 }
 
-// verify(token)：驗證 Firebase ID token，失敗要 throw；apiKey()：回傳 Anthropic 金鑰
-async function handle(req, res, { verify, apiKey, fetchImpl = fetch }) {
+// 伺服器端的使用檢查（2026/11/07 加）：瀏覽器裡的 AI 權限檢查可以被改掉，所以送給 Claude 之前在這裡再查一次。
+//   1. 請求要帶 projectId，而且登入的人是這份研究的 owner／editor（老師、viewer 不會用到 AI）
+//   2. 這份研究的 AI Level ≥ 1（老師設成 Level 0 就不能用）
+//   3. 全站每天最多 SITE_PER_DAY 次（團隊決定 2000 次），避免被濫用把儲值額度用完
+// 資料怎麼讀由 index.js 提供（getAccess、countToday），這裡只做判斷，方便測試。
+const SITE_PER_DAY = 2000;
+function makeCheck({ getAccess, countToday, sitePerDay = SITE_PER_DAY }) {
+  return async ({ uid, body }) => {
+    const pid = body && body.projectId;
+    if (typeof pid !== 'string' || !/^[\w-]{1,64}$/.test(pid)) return { status: 400, message: '缺少研究專案資訊' };
+    const a = await getAccess(pid, uid);
+    if (!a || !['owner', 'editor'].includes(a.role)) return { status: 403, message: '你不是這份研究的成員，或沒有使用 AI 的權限' };
+    const lv = Number.isInteger(a.aiLevel) ? a.aiLevel : 2;
+    if (lv < 1) return { status: 403, message: '老師把這份研究的 AI 權限設為 Level 0' };
+    if ((await countToday()) > sitePerDay) return { status: 429, message: '今天全站的 AI 額度已用完，網站會改用不需要 AI 的做法' };
+    return null;
+  };
+}
+
+// verify(token)：驗證 Firebase ID token（回傳解碼後的使用者），失敗要 throw；apiKey()：回傳 Anthropic 金鑰
+// check（選填）：送出前的使用檢查，回傳 null 代表通過；onUsage（選填）：記錄 token 用量
+async function handle(req, res, { verify, apiKey, fetchImpl = fetch, check, onUsage }) {
   if (req.method !== 'POST') return bad(res, 405, '只接受 POST');
   const m = /^Bearer (.+)$/.exec(req.get('Authorization') || '');
   if (!m) return bad(res, 401, '請先登入');
-  try { await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
+  let user;
+  try { user = await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
   let body;
   try { body = buildRequest(req.body); } catch (e) { return bad(res, 400, e.message); }
+  if (check) {
+    const why = await check({ uid: user && user.uid, body: req.body });
+    if (why) return bad(res, why.status || 403, why.message || String(why));
+  }
   let r;
   try {
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
@@ -64,7 +89,10 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch }) {
     });
   } catch (e) { return bad(res, 502, 'Claude 沒有回應：' + (e.message || e)); }
   if (!r.ok) return bad(res, 502, `Claude 回應 ${r.status}：${(await r.text()).slice(0, 200)}`);
-  try { return res.json({ data: extractAnswer(await r.json()), model: body.model }); } catch (e) { return bad(res, 502, e.message); }
+  let json;
+  try { json = await r.json(); } catch (e) { return bad(res, 502, '模型沒有照格式回答'); }
+  if (onUsage && json && json.usage) { try { await onUsage(json.usage); } catch { /* 記錄失敗不影響回答 */ } }
+  try { return res.json({ data: extractAnswer(json), model: body.model }); } catch (e) { return bad(res, 502, e.message); }
 }
 
-module.exports = { MODELS, LIMITS, buildRequest, extractAnswer, handle };
+module.exports = { MODELS, LIMITS, SITE_PER_DAY, buildRequest, extractAnswer, handle, makeCheck };

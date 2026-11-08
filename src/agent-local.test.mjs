@@ -312,3 +312,27 @@ test('reflectRule：切題文獻太少且主題詞超過 2 個時少用一個；
   assert.equal(nextDirection(1, 'claim'), '統整性研究（系統性回顧、後設分析）');
   assert.match(nextDirection(5), /擴大範圍/);
 });
+
+test('老師勾選的領域資料庫會加查，結果一樣要通過主題詞檢查', async () => {
+  const { searchEvidence } = await import('./agent-local.mjs');
+  const urls = [];
+  const fake = async (url) => {
+    urls.push(String(url));
+    const j = /api\.ies\.ed\.gov/.test(url)
+      ? { response: { docs: [
+        { id: 'EJ1', title: 'Generative AI and learning motivation of college students', publicationdateyear: 2025, description: 'Generative AI use improved learning motivation among college students.', peerreviewed: 'T', url: 'http://dx.doi.org/10.9/eric1' },
+        { id: 'EJ2', title: 'Unrelated history of chemistry', publicationdateyear: 2025, description: 'Nothing about the topic.', peerreviewed: 'T' },
+      ] } }
+      : { results: [] };
+    return { ok: true, status: 200, json: async () => j };
+  };
+  const out = await searchEvidence({ queries: ['"generative AI" AND "learning motivation"'], kind: 's', keywords: ['generative AI', 'learning motivation'], core: ['generative AI', 'learning motivation'], scope: [], sources: ['eric'] }, fake);
+  assert.ok(urls.some((u) => u.includes('api.ies.ed.gov/eric')), '有查 ERIC');
+  assert.equal(out.evidence.length, 1, '不切題的被過濾掉');
+  assert.equal(out.evidence[0].src, 'ERIC');
+  assert.deepEqual(out.bySource, { ERIC: 1 });
+  // 沒勾就不查
+  urls.length = 0;
+  await searchEvidence({ queries: ['"generative AI" AND "learning motivation"'], kind: 's', keywords: ['generative AI', 'learning motivation'], core: ['generative AI', 'learning motivation'], scope: [] }, fake);
+  assert.ok(!urls.some((u) => u.includes('eric')));
+});

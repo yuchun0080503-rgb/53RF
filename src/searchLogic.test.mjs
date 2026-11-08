@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampQueries, openAlexUrl, abstractFromInvertedIndex, normalizeWork, dedupeWorks } from './searchLogic.mjs';
+import { clampQueries, openAlexUrl, openAlexInit, abstractFromInvertedIndex, normalizeWork, dedupeWorks } from './searchLogic.mjs';
 
 test('clampQueries：去掉空字串與重複（不分大小寫），最多 3 條、每條最多 120 字', () => {
   const out = clampQueries(['AI  dependency', 'ai dependency', '', null, 'b', 'c', 'd', 'x'.repeat(500)]);
@@ -75,4 +75,54 @@ test('normalizeCrossref：整理成跟 OpenAlex 一樣的格式，摘要的 XML 
     authors: ['A Lin', 'Wu'], venue: 'J', abstract: 'Sleep improved.', q: 'q', src: 'Crossref' });
   assert.equal(normalizeCrossref({ ...item, abstract: '' }, 'q'), null);
   assert.equal(normalizeCrossref({ title: ['x'], abstract: 'y' }, 'q'), null);
+});
+
+// ---- 各領域資料庫 ----
+import { SOURCES, pickSources, sourceUrl, normalizeSource } from './searchLogic.mjs';
+
+test('領域資料庫：老師勾選優先，沒勾時依領域自動挑', () => {
+  assert.deepEqual(pickSources({ teacher: ['eric', 'xxx'] }), ['eric']);
+  assert.deepEqual(pickSources({ teacher: [] , field: '教育' }), []);
+  assert.deepEqual(pickSources({ field: '教育科技' }), ['eric']);
+  assert.deepEqual(pickSources({ course: '心理學研究法' }), ['europepmc']);
+  assert.deepEqual(pickSources({ field: '電機' }), []);
+});
+test('領域資料庫：查詢網址帶入年份與摘要條件', () => {
+  assert.match(sourceUrl('europepmc', '"a" AND b'), /PUB_YEAR%3A%5B2020%20TO%203000%5D%20AND%20HAS_ABSTRACT%3Ay/);
+  assert.match(sourceUrl('eric', 'x'), /^https:\/\/api\.ies\.ed\.gov\/eric\/\?search=x&format=json/);
+  assert.match(sourceUrl('doaj', 'x'), /^https:\/\/doaj\.org\/api\/search\/articles\//);
+  assert.throws(() => sourceUrl('nope', 'x'));
+});
+test('領域資料庫：回應整理成同一種格式，沒摘要或太舊的丟掉', () => {
+  const eric = normalizeSource('eric', { response: { docs: [
+    { id: 'EJ1', title: 'GenAI and engagement', author: ['A', 'B'], publicationdateyear: 2025, description: 'We found <b>higher</b> engagement.', url: 'http://dx.doi.org/10.1/x', peerreviewed: 'T', source: 'BERJ' },
+    { id: 'ED2', title: 'Report', publicationdateyear: 2025, description: 'x', peerreviewed: 'F', publicationtype: ['Reports'] },
+    { id: 'EJ3', title: 'Old', publicationdateyear: 2010, description: 'x', peerreviewed: 'T' },
+  ] } }, 'q');
+  assert.equal(eric.length, 1);
+  assert.equal(eric[0].id, 'https://doi.org/10.1/x'); assert.equal(eric[0].src, SOURCES.eric.name); assert.equal(eric[0].abstract, 'We found higher engagement.');
+  const pmc = normalizeSource('europepmc', { resultList: { result: [{ id: '42', source: 'MED', title: 'Sleep and GPA.', pubYear: '2026', authorString: 'Li X, Wang Y', journalInfo: { journal: { title: 'Sleep' } }, abstractText: 'Abstract text' }, { id: '43', source: 'MED', title: 'No abstract', pubYear: '2026' }] } }, 'q');
+  assert.equal(pmc.length, 1); assert.equal(pmc[0].title, 'Sleep and GPA'); assert.equal(pmc[0].url, 'https://europepmc.org/article/MED/42'); assert.deepEqual(pmc[0].authors, ['Li X', 'Wang Y']);
+  const doaj = normalizeSource('doaj', { results: [{ id: 'd1', bibjson: { title: 'T', year: '2024', abstract: 'A', identifier: [{ type: 'doi', id: '10.2/y' }], journal: { title: 'J' }, author: [{ name: 'N' }] } }] }, 'q');
+  assert.equal(doaj[0].doi, 'https://doi.org/10.2/y');
+});
+
+test('RF_OA_ENDPOINT 設定時 OpenAlex 改走後端代理，網址不含金鑰', async () => {
+  globalThis.RF_OA_ENDPOINT = '/api/openalex';
+  try {
+    const u = openAlexUrl('mindfulness');
+    assert.match(u, /^\/api\/openalex\?/); assert.doesNotMatch(u, /api_key/);
+    globalThis.RF_AI_TOKEN = async () => 'tk';
+    assert.deepEqual(await openAlexInit(u), { headers: { Authorization: 'Bearer tk' } });
+    assert.equal(await openAlexInit('https://api.openalex.org/works?x'), undefined);
+    assert.match(openAlexUrl('mindfulness', { direct: true }), /^https:\/\/api\.openalex\.org/);
+  } finally { delete globalThis.RF_OA_ENDPOINT; delete globalThis.RF_AI_TOKEN; }
+});
+
+test('dedupeWorks 用 DOI 比對：OpenAlex 和 Crossref 找到同一篇只留一篇，也能排除已經有的 DOI', () => {
+  const a = { id: 'https://openalex.org/W1', doi: 'https://doi.org/10.1/ABC' };
+  const b = { id: 'https://doi.org/10.1/abc', doi: 'https://doi.org/10.1/abc' };
+  assert.equal(dedupeWorks([a, b]).length, 1);
+  assert.equal(dedupeWorks([b], ['https://doi.org/10.1/ABC']).length, 0);
+  assert.equal(dedupeWorks([{ id: 'ERIC:EJ1', doi: '' }, { id: 'ERIC:EJ2', doi: '' }]).length, 2);
 });

@@ -1,0 +1,49 @@
+// course.mjs — 課程制的共用小工具（網頁、資料層、測試共用；不連網路）
+//
+// 課程制的流程：
+//   老師建立課程 → 系統給一組 6 碼課程代碼 → 老師把代碼給學生
+//   → 學生建立研究時輸入代碼 → 這份研究就屬於這門課，老師自動成為這份研究的老師（唯讀＋可設定 AI 權限）
+// 代碼有期限：過期或被老師停用後，就不能再用它「新加入」；已經加入的研究不受影響。
+
+// 代碼用的字：去掉容易看錯的 0/O、1/I/L，學生抄寫比較不會打錯
+export const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const CODE_LEN = 6;
+
+export function makeCode(rand = () => (globalThis.crypto?.getRandomValues ? globalThis.crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32 : Math.random())) {
+  let s = '';
+  for (let i = 0; i < CODE_LEN; i++) s += CODE_CHARS[Math.floor(rand() * CODE_CHARS.length)];
+  return s;
+}
+
+// 學生輸入時容錯：去空白、去連字號、轉大寫（代碼本來就不含 0/O/1/I/L，不會有看錯的問題）
+export function normalizeCode(input) {
+  return String(input || '').toUpperCase().replace(/[\s-]/g, '');
+}
+export const looksLikeCode = (s) => new RegExp(`^[${CODE_CHARS}]{${CODE_LEN}}$`).test(s);
+
+/**
+ * 預設期限：這學期結束那天的 23:59（台灣學期：8–1 月是上學期 → 1/31；2–7 月是下學期 → 7/31）
+ * @param {Date} [now]
+ * @returns {string} YYYY-MM-DD
+ */
+export function semesterEnd(now = new Date()) {
+  const y = now.getFullYear(), m = now.getMonth() + 1;
+  if (m === 1) return `${y}-01-31`;
+  if (m <= 7) return `${y}-07-31`;
+  return `${y + 1}-01-31`;
+}
+
+// YYYY-MM-DD → 那天台灣時間 23:59:59 的時間（毫秒）
+export const endOfDayTW = (ymd) => Date.parse(`${ymd}T23:59:59+08:00`);
+
+/**
+ * 這組代碼現在能不能用來加入？
+ * @param {{active?:boolean, expiresAt?:number}|null} code expiresAt 為毫秒
+ * @returns {{ok:boolean, reason?:string}}
+ */
+export function codeStatus(code, now = Date.now()) {
+  if (!code) return { ok: false, reason: '找不到這組課程代碼，請確認有沒有打錯。' };
+  if (code.active === false) return { ok: false, reason: '老師已經停用這組代碼，請向老師要新的代碼。' };
+  if (code.expiresAt && now > code.expiresAt) return { ok: false, reason: '這組代碼已經過期，請向老師要新的代碼。' };
+  return { ok: true };
+}

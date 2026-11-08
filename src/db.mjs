@@ -11,11 +11,12 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-  collection, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment,
+  collection, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment, Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 import { firebaseConfig } from './firebase-config.js';
 import { checkAgentCall } from './harness.mjs';
+import { makeCode, normalizeCode, looksLikeCode, codeStatus, endOfDayTW, semesterEnd } from './course.mjs';
 import * as agent from './agent-local.mjs';
 import * as llm from './llm.mjs';
 import { refineEvidence, scopeFocus, draftQuestion } from './agent-llm.mjs';
@@ -26,6 +27,7 @@ export const db = getFirestore(app);
 
 // AI 後端（functions/index.js，經由 Hosting 的 /api/ai）：llm.mjs 用這兩個全域值呼叫，沒登入時 token 是 null，AI 會退回規則式。
 globalThis.RF_AI_ENDPOINT = '/api/ai';
+globalThis.RF_OA_ENDPOINT = '/api/openalex'; // OpenAlex 改走後端代理（後端加金鑰）；代理壞掉時 agent-local 會自動改回直接連
 globalThis.RF_AI_TOKEN = async () => (auth.currentUser ? auth.currentUser.getIdToken() : null);
 
 // ---------------- Agent（在瀏覽器裡執行，不需要金鑰、不需要後端）----------------
@@ -88,13 +90,13 @@ export async function proposeQuestion(projectId, { items, answers, ownQuestion, 
 // keywords 是英文關鍵字（搜尋國際文獻），keywordsZh 是中文關鍵字（直接搜尋中文文獻）；兩者至少要有一個。
 // coreCount：keywords 的前幾個是主題詞（每篇結果的標題或摘要都必須提到），其餘是用來縮小範圍的範圍詞。
 // claimNeg：主張本身是負面的（「…會變差」）——這時發現負面結果的研究算支持。
-export async function searchEvidence(projectId, { keywords, keywordsZh, coreCount, coreZh, claimNeg, round, excludeIds, mode, claim, synonyms }) {
+export async function searchEvidence(projectId, { keywords, keywordsZh, coreCount, coreZh, claimNeg, round, excludeIds, mode, claim, synonyms, sources }) {
   const uid = await guard(projectId, 'searchEvidence');
   const zhQueries = agent.buildQueriesZh(keywordsZh, round, mode, coreZh);
   // 有 AI（Claude）時：多抓幾篇候選，讓模型逐篇讀摘要——排除不切題的、依研究發現判斷支持或反向。
   // 沒有模型或模型出錯時，沿用規則式的結果（ai.error 會說明原因）。
   const st = await llm.detect();
-  const out = await agent.searchRelaxed({ keywords, coreCount, round, mode, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg, synonyms, limit: 10 });
+  const out = await agent.searchRelaxed({ keywords, coreCount, round, mode, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg, synonyms, sources, limit: 10 });
   out.ai = { model: '', judged: 0, removed: 0, error: st.ok ? '' : st.reason };
   if (st.ok && out.evidence.length) {
     try {
@@ -222,16 +224,26 @@ export async function updateMyProfile(uid, { displayName, color }, projectIds = 
 // ---------------- Projects ----------------
 
 // profile: {displayName, email, color}——寫進 member 文件，組員列表才看得到名字
-export async function createProject({ name, course, teacherReq, dueDate, field }, uid, profile = {}) {
+// courseCode（選填）：有輸入課程代碼時，這份研究屬於那門課——課程名稱、老師要求、截止日、AI 權限照課程設定，
+// 老師自動加入成為這份研究的老師。代碼的有效性由 firestore.rules 在伺服器上再檢查一次。
+// assignmentId（選填）：課程有多個作業時，這份研究屬於哪一個作業（老師要求、截止日照那個作業）
+// group（選填）：課程分組。{ slot: 2 } = 老師預先開好的第 2 組；{ name: '第 3 組' } = 學生自己開的新組別
+export async function createProject({ name, course, teacherReq, dueDate, field, courseCode, assignmentId, group }, uid, profile = {}) {
+  const c = courseCode ? await lookupCourseCode(courseCode) : null;
+  if (c && !c.ok) throw new Error(c.reason);
+  const a = c && assignmentId ? (c.course.assignments || []).find((x) => x.id === assignmentId) : null;
   const ref = await addDoc(collection(db, 'projects'), {
     name: name || '未命名研究',
-    course: course || '',
-    teacherReq: teacherReq || '',
-    dueDate: dueDate || null,
+    course: c ? c.course.name : course || '',
+    teacherReq: teacherReq || (a ? a.req : c ? c.course.teacherReq : '') || '',
+    dueDate: dueDate || (a ? a.due : c ? c.course.dueDate : '') || null,
     field: field || '',
     ownerUid: uid,
-    memberUids: [uid],
-    aiLevel: 2, // 預設 Thinking Assistant；之後只有老師改得動（firestore.rules）
+    memberUids: c ? [uid, c.course.teacherUid] : [uid],
+    aiLevel: c ? c.course.defaultAiLevel : 2, // 沒有課程時預設 Thinking Assistant；之後只有老師改得動（firestore.rules）
+    ...(c ? { courseId: c.course.id, courseCode: c.code, teacherUid: c.course.teacherUid } : {}),
+    ...(a ? { assignmentId: a.id, assignmentTitle: a.title } : {}),
+    ...(c && group ? { groupName: group.slot ? `第 ${group.slot} 組` : String(group.name || '').slice(0, 30) } : {}),
     searchMode: '', // 預設查證模式：建立後由 Owner 在小視窗選擇（'procon' 正反例證／'claim' 主張論證）
     createdAt: serverTimestamp(),
   });
@@ -244,7 +256,137 @@ export async function createProject({ name, course, teacherReq, dueDate, field }
     color: profile.color || '',
     joinedAt: serverTimestamp(),
   });
+  if (c) await addCourseTeacher(ref.id, c.course);
+  // 登記到課程的組別清單，同學輸入代碼後就看得到這一組、可以直接加入。
+  // 老師預先開好的組別用固定的文件 id（作業_組號）：兩個人同時搶同一組時，第二個人的登記會被規則擋下（文件已存在），改成加入先建立的那一組。
+  if (c && group) {
+    const gid = group.slot ? `${a ? a.id : '_'}_${group.slot}` : ref.id;
+    try {
+      await setDoc(doc(db, 'courses', c.course.id, 'groups', gid), { assignmentId: a ? a.id : '', name: group.slot ? `第 ${group.slot} 組` : String(group.name || '').slice(0, 30), slot: group.slot || 0, projectId: ref.id, createdBy: uid, createdAt: serverTimestamp() });
+    } catch (err) {
+      const taken = await getDoc(doc(db, 'courses', c.course.id, 'groups', gid)).catch(() => null);
+      if (taken?.exists()) {
+        await deleteProject(ref.id, uid).catch(() => {});
+        await joinGroup(taken.data().projectId, c.code, uid, profile);
+        return taken.data().projectId;
+      }
+      throw err;
+    }
+  }
   return ref.id;
+}
+
+// 課程裡某份作業目前有哪些組別（含老師預先開好、還沒有人選的空組別）
+export async function listGroups(courseId, assignmentId = '') {
+  const snap = await getDocs(query(collection(db, 'courses', courseId, 'groups'), where('assignmentId', '==', assignmentId || '')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// 輸入課程代碼後直接加入某一組（不需要邀請連結）。規則會檢查：這份研究屬於這門課、代碼仍然有效。
+export async function joinGroup(projectId, code, uid, profile = {}) {
+  const me = await getDoc(doc(db, 'projects', projectId, 'members', uid)).catch(() => null);
+  if (me?.exists()) return 'already';
+  await setDoc(doc(db, 'projects', projectId, 'members', uid), {
+    role: 'editor', task: '', displayName: profile.displayName || '', email: profile.email || '', color: profile.color || '', joinCode: normalizeCode(code), joinedAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'projects', projectId), { memberUids: arrayUnion(uid) });
+  return 'joined';
+}
+
+// ---------------- Courses（課程制）----------------
+// courses/{courseId}      { name, teacherUid, teacherName, teacherReq, dueDate, defaultAiLevel, code, codeExpires(YYYY-MM-DD), createdAt }
+// courseCodes/{code}      { courseId, teacherUid, active, expiresAt(Timestamp) }   ← 學生用代碼查課程；代碼本身就是文件 id
+
+const codeExpiry = (ymd) => Timestamp.fromMillis(endOfDayTW(ymd || semesterEnd()));
+
+// 產生一組沒被用過的代碼：文件已存在時規則會拒絕（等於撞號），換一組再試
+async function claimCode(courseId, uid, expires) {
+  for (let i = 0; i < 6; i++) {
+    const code = makeCode();
+    try {
+      await setDoc(doc(db, 'courseCodes', code), { courseId, teacherUid: uid, active: true, expiresAt: codeExpiry(expires), createdAt: serverTimestamp() });
+      return code;
+    } catch (err) { if (err?.code !== 'permission-denied') throw err; }
+  }
+  throw new Error('產生課程代碼失敗，請再試一次。');
+}
+
+// sources：Agent 加查的領域資料庫；zhLinks：給學生的中文資料庫連結；readings：老師指定的閱讀 [{title,url}]
+// assignments：一門課的多個作業 [{id,title,req,due}]；沒有的話，課程本身的老師要求與截止日就是唯一的作業
+export async function createCourse({ name, teacherReq = '', dueDate = '', defaultAiLevel = 2, codeExpires = '', sources = [], zhLinks = null, readings = [], assignments = [] }, uid, profile = {}) {
+  const expires = codeExpires || semesterEnd();
+  const ref = await addDoc(collection(db, 'courses'), {
+    name: name || '未命名課程', teacherUid: uid, teacherName: profile.displayName || '老師',
+    teacherReq, dueDate, defaultAiLevel: +defaultAiLevel, code: '', codeExpires: expires, sources, zhLinks, readings: readings.slice(0, 30), assignments: assignments.slice(0, 20), createdAt: serverTimestamp(),
+  });
+  const code = await claimCode(ref.id, uid, expires);
+  await updateDoc(ref, { code });
+  return { id: ref.id, code };
+}
+
+// 老師的課程清單（即時）
+export function subscribeMyCourses(uid, onChange, onError) {
+  return onSnapshot(query(collection(db, 'courses'), where('teacherUid', '==', uid)),
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+}
+
+// 改課程設定；改了期限的話，目前的代碼一起延長／縮短
+export async function updateCourse(course, fields) {
+  const clean = {};
+  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
+  await updateDoc(doc(db, 'courses', course.id), clean);
+  if (clean.codeExpires && course.code && clean.codeExpires !== course.codeExpires) await updateDoc(doc(db, 'courseCodes', course.code), { expiresAt: codeExpiry(clean.codeExpires) });
+}
+
+// 停用／重新啟用目前的代碼（已經加入的研究不受影響）
+export async function setCourseCodeActive(course, active) {
+  await updateDoc(doc(db, 'courseCodes', course.code), { active: !!active });
+  await updateDoc(doc(db, 'courses', course.id), { codeActive: !!active });
+}
+
+// 換一組新代碼：舊代碼停用（例如代碼被傳到班外），已經加入的研究不受影響
+export async function resetCourseCode(course, uid) {
+  const code = await claimCode(course.id, uid, course.codeExpires);
+  if (course.code) await updateDoc(doc(db, 'courseCodes', course.code), { active: false }).catch(() => {});
+  await updateDoc(doc(db, 'courses', course.id), { code, codeActive: true });
+  return code;
+}
+
+// 學生端讀課程設定（指定閱讀、可信任資料庫）：任何登入者都能用 id 讀單一課程
+export async function getCourse(id) {
+  const s = await getDoc(doc(db, 'courses', id));
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+
+// 學生輸入代碼：回傳 { ok, reason?, code, course }
+export async function lookupCourseCode(input) {
+  const code = normalizeCode(input);
+  if (!looksLikeCode(code)) return { ok: false, code, reason: '課程代碼是 6 個英文字母或數字，請再確認一次。' };
+  const snap = await getDoc(doc(db, 'courseCodes', code));
+  const data = snap.exists() ? snap.data() : null;
+  const st = codeStatus(data && { active: data.active, expiresAt: data.expiresAt?.toMillis?.() });
+  if (!st.ok) return { ok: false, code, reason: st.reason };
+  const cs = await getDoc(doc(db, 'courses', data.courseId));
+  if (!cs.exists()) return { ok: false, code, reason: '這門課程已經不存在。' };
+  return { ok: true, code, course: { id: cs.id, ...cs.data() } };
+}
+
+// 老師成為這份研究的成員（角色 teacher：唯讀＋可設定 AI 權限）。規則只允許寫入 project.teacherUid 那位老師。
+async function addCourseTeacher(projectId, course) {
+  await setDoc(doc(db, 'projects', projectId, 'members', course.teacherUid), {
+    role: 'teacher', task: '', displayName: course.teacherName || '老師', email: '', color: '', joinedAt: serverTimestamp(),
+  });
+}
+
+// 已經建立的研究，之後才輸入課程代碼加入課程（只有 Owner）
+export async function joinCourse(projectId, input) {
+  const c = await lookupCourseCode(input);
+  if (!c.ok) throw new Error(c.reason);
+  await updateDoc(doc(db, 'projects', projectId), {
+    courseId: c.course.id, courseCode: c.code, teacherUid: c.course.teacherUid, course: c.course.name, memberUids: arrayUnion(c.course.teacherUid),
+  });
+  await addCourseTeacher(projectId, c.course);
+  return c.course;
 }
 
 // 即時訂閱「我的研究」列表。回傳 unsubscribe function。
@@ -293,6 +435,19 @@ export async function deleteProject(projectId, uid) {
   await wipe('invites');
   await wipe('agentTrace');
   await wipe('tasks');
+  await wipe('feedback');
+  // 老師在畫布上的留言：每則留言底下的回覆要先刪（子集合不會跟著母文件一起刪）
+  for (const pin of (await getDocs(collection(db, 'projects', projectId, 'pins'))).docs) {
+    const ms = await getDocs(collection(db, 'projects', projectId, 'pins', pin.id, 'msgs'));
+    await Promise.all(ms.docs.map((m) => deleteDoc(m.ref)));
+    await deleteDoc(pin.ref);
+  }
+  // 課程的組別清單裡指到這份研究的登記也一起清掉（不然同學會看到一個點不進去的組別）
+  const pdata = (await getDoc(ref).catch(() => null))?.data();
+  if (pdata?.courseId) {
+    const gs = await getDocs(query(collection(db, 'courses', pdata.courseId, 'groups'), where('projectId', '==', projectId))).catch(() => null);
+    await Promise.all((gs?.docs || []).map((d) => deleteDoc(d.ref).catch(() => {})));
+  }
   await wipe('members', (d) => d.id === uid);
   await deleteDoc(ref);
   await deleteDoc(doc(db, 'projects', projectId, 'members', uid));
@@ -422,6 +577,21 @@ export function subscribeTrace(projectId, onChange, onError) {
   }, onError);
 }
 
+// ---------------- 老師回饋（feedback）----------------
+export async function addFeedback(projectId, text, who) {
+  await addDoc(collection(db, 'projects', projectId, 'feedback'), { text: String(text).slice(0, 1000), uid: auth.currentUser.uid, by: who || '老師', at: serverTimestamp() });
+}
+export async function deleteFeedback(projectId, id) {
+  await deleteDoc(doc(db, 'projects', projectId, 'feedback', id));
+}
+export function subscribeFeedback(projectId, onChange, onError) {
+  const q = query(collection(db, 'projects', projectId, 'feedback'), orderBy('at', 'desc'), limit(50));
+  return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => {
+    const x = d.data({ serverTimestamps: 'estimate' });
+    return { id: d.id, text: x.text, by: x.by, uid: x.uid, at: x.at?.toMillis ? x.at.toMillis() : Date.now() };
+  })), onError);
+}
+
 // ---------------- 分工清單（tasks）----------------
 // 完成與否由負責人自己標記（firestore.rules 強制：只有負責人本人能改 done），系統不判斷；
 // doneBy／doneAt 記錄「誰在什麼時候標記的」，老師看到的是「這是誰說自己做完的」，不是系統說他做完。
@@ -463,4 +633,39 @@ function cryptoRandomToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------- 老師在畫布上的留言（pins）----------------
+// 像 Figma 的留言圖釘：老師點畫布留言；點在便利貼或手寫上時記住是哪一個（oid）和相對位置（dx, dy），內容被拖走時圖釘跟著走；
+// 點在空白處就用畫布座標（x, y）。學生和老師都可以在底下回覆（msgs 子集合），學生處理完按「已處理」（status: done，紅點變綠點）。
+const ms = (t) => (t?.toMillis ? t.toMillis() : t ? Date.now() : 0);
+export async function addPin(projectId, { oid, dx, dy, x, y, text }, who) {
+  const r = await addDoc(collection(db, 'projects', projectId, 'pins'), {
+    uid: auth.currentUser.uid, by: who || '老師', oid: oid || null, dx: Number(dx) || 0, dy: Number(dy) || 0, x: Number(x) || 0, y: Number(y) || 0,
+    text: String(text).slice(0, 1000), status: 'open', n: 0, at: serverTimestamp(),
+  });
+  return r.id;
+}
+export async function replyPin(projectId, pinId, text, who) {
+  await addDoc(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), { uid: auth.currentUser.uid, by: who || '', text: String(text).slice(0, 1000), at: serverTimestamp() });
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), { n: increment(1), lastAt: serverTimestamp(), lastBy: who || '' });
+}
+export async function setPinStatus(projectId, pinId, done, who) {
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), done ? { status: 'done', doneBy: who || '', doneAt: serverTimestamp() } : { status: 'open', doneBy: '', doneAt: null });
+}
+export async function deletePin(projectId, pinId) {
+  const m = await getDocs(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'));
+  await Promise.all(m.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'projects', projectId, 'pins', pinId));
+}
+export function subscribePins(projectId, onChange, onError) {
+  const q = query(collection(db, 'projects', projectId, 'pins'), orderBy('at', 'asc'), limit(200));
+  return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => {
+    const x = d.data({ serverTimestamps: 'estimate' });
+    return { id: d.id, uid: x.uid, by: x.by, oid: x.oid || null, dx: x.dx || 0, dy: x.dy || 0, x: x.x || 0, y: x.y || 0, text: x.text || '', status: x.status === 'done' ? 'done' : 'open', n: x.n || 0, doneBy: x.doneBy || '', at: ms(x.at), lastAt: ms(x.lastAt) };
+  })), onError);
+}
+export function subscribePinMsgs(projectId, pinId, onChange, onError) {
+  const q = query(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), orderBy('at', 'asc'), limit(200));
+  return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, uid: x.uid, by: x.by || '', text: x.text || '', at: ms(x.at) }; })), onError);
 }
