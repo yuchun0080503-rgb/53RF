@@ -94,8 +94,22 @@ export function normalizeEric(d, query) {
 // ---------------- OpenAIRE（法律、社科、人文）----------------
 // 文件：https://graph.openaire.eu/docs/apis/graph-api/ ；search 支援 AND／OR／括號／引號。
 
+// OpenAIRE 一條查詢最多 4 個 AND／OR（2026-11-08 實測，超過回 400「Too many logical operators」）；
+// 網站的布林查詢最多有 5 個（配合 OpenAlex）。所以先從同義詞最多的那一組開始刪同義詞，每組至少留第一個詞；
+// 組數本身就超過時，刪掉最後面的組（主題詞排在前面，範圍詞在後面）。
+// 只處理 buildQueries 產生的格式：「(a OR "b c") AND d AND (e OR f)」——組與組之間是 AND，組內是 OR。
+export function limitOps(boolQuery, max = 4) {
+  const groups = String(boolQuery).split(/\s+AND\s+(?![^()]*\))/).map((g) => g.trim().replace(/^\((.*)\)$/, '$1').split(/\s+OR\s+/).map((t) => t.trim()).filter(Boolean)).filter((g) => g.length);
+  const ops = () => groups.length - 1 + groups.reduce((n, g) => n + g.length - 1, 0);
+  while (ops() > max) {
+    const widest = groups.reduce((w, g, i) => (g.length > groups[w].length ? i : w), 0);
+    if (groups[widest].length > 1) groups[widest].pop(); else groups.pop();
+  }
+  return groups.map((g) => (g.length > 1 ? `(${g.join(' OR ')})` : g[0])).join(' AND ');
+}
+
 export function openAireUrl(boolQuery, { fromYear = 2020, size = 15 } = {}) {
-  const params = new URLSearchParams({ search: boolQuery, type: 'publication', fromPublicationDate: `${fromYear}-01-01`, pageSize: String(size) });
+  const params = new URLSearchParams({ search: limitOps(boolQuery, 4), type: 'publication', fromPublicationDate: `${fromYear}-01-01`, pageSize: String(size) });
   return `https://api.openaire.eu/graph/v1/researchProducts?${params}`;
 }
 
@@ -168,7 +182,7 @@ export function normalizeJstage(it, query) {
 }
 
 // 中文（繁體）關鍵字 → 日文的寫法，給 J-STAGE 用。先換整個詞（日治時期→日本統治期），再換常見的繁體字。
-const TERMS_JA = [['日治時期', '日本統治期'], ['日據時期', '日本統治期'], ['日治', '日本統治'], ['日據', '日本統治'], ['殖民地', '植民地'], ['殖民', '植民地'], ['總督府', '総督府']];
+const TERMS_JA = [['勞動參與', '労働参加'], ['勞動', '労働'], ['參與', '参加'], ['日治時期', '日本統治期'], ['日據時期', '日本統治期'], ['日治', '日本統治'], ['日據', '日本統治'], ['殖民地', '植民地'], ['殖民', '植民地'], ['總督府', '総督府']];
 const CHARS_JA = {
   臺: '台', 灣: '湾', 學: '学', 國: '国', 會: '会', 與: '与', 體: '体', 實: '実', 經: '経', 濟: '済', 歷: '歴', 圖: '図', 對: '対', 變: '変',
   發: '発', 關: '関', 應: '応', 傳: '伝', 戰: '戦', 爭: '争', 廣: '広', 醫: '医', 藥: '薬', 營: '営', 縣: '県', 區: '区', 黨: '党', 讀: '読',
@@ -177,6 +191,19 @@ const CHARS_JA = {
   總: '総', 從: '従', 據: '拠', 獨: '独', 狀: '状', 將: '将', 屬: '属', 歲: '歳', 惡: '悪', 擴: '拡', 來: '来', 數: '数', 錢: '銭', 鐵: '鉄',
   號: '号', 莊: '荘', 廳: '庁', 產: '産', 黃: '黄', 齊: '斉', 壓: '圧', 擔: '担', 擇: '択',
 };
+// J-STAGE 用的地名：從日文寫法的關鍵字裡找第一個東亞地名（「日本統治期台湾」→「台湾」）
+const PLACES_JA = /台湾|朝鮮|韓国|満洲|満州|中国|琉球|沖縄|東アジア/;
+export const placeJa = (terms) => ((terms || []).map(toJa).join(' ').match(PLACES_JA) || [''])[0];
+
+// J-STAGE 的查詢詞：第一個主題詞＋東亞地名。2026-11-08 實測「女子教育 女性就業」查到的是韓國與全球女性研究，
+// 「女子教育 台湾」才查到日治時期台灣女子教育的論文。沒有地名時用前兩個主題詞。
+export function jstageTerms(zhKeys, allZh = zhKeys) {
+  const core = (zhKeys || []).map(toJa).filter(Boolean), place = placeJa(allZh);
+  if (!core.length) return [];
+  const first = core[0].replace(place, '').trim() || core[1] || '';
+  return place ? [first, place].filter(Boolean) : core.slice(0, 2);
+}
+
 export function toJa(term) {
   let t = String(term || '').trim();
   for (const [zh, ja] of TERMS_JA) t = t.split(zh).join(ja);

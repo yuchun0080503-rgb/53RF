@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, DISCIPLINES, ROUTES,
+  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, DISCIPLINES, ROUTES,
   ericUrl, normalizeEric, openAireUrl, normalizeOpenAire, europePmcUrl, normalizeEuropePmc, jstageUrl, normalizeJstage, SOURCES,
 } from './sources.mjs';
 
@@ -45,6 +45,27 @@ test('toJa：把繁體中文關鍵字換成日文寫法', () => {
   assert.equal(toJa('女子教育'), '女子教育');
   assert.equal(toJa('殖民地教育'), '植民地教育');
   assert.equal(toJa('公學校'), '公学校');
+  assert.equal(toJa('女性勞動參與'), '女性労働参加');
+});
+
+test('jstageTerms：第一個主題詞＋東亞地名（實測只用主題詞會查到不相關的國家）；沒有地名時用前兩個主題詞', () => {
+  assert.deepEqual(jstageTerms(['女子教育', '女性就業'], ['女子教育', '女性就業', '日治時期臺灣']), ['女子教育', '台湾']);
+  assert.deepEqual(jstageTerms(['日治時期臺灣', '女子教育']), ['日本統治期', '台湾']);
+  assert.deepEqual(jstageTerms(['臺灣', '女子教育']), ['女子教育', '台湾'], '第一個詞就是地名時改用下一個主題詞');
+  assert.deepEqual(jstageTerms(['日治時期', '女子教育']), ['日本統治期', '女子教育']);
+  assert.deepEqual(jstageTerms([]), []);
+  assert.equal(placeJa(['朝鮮半島的教育']), '朝鮮');
+});
+
+test('limitOps：OpenAIRE 最多 4 個 AND／OR，先刪同義詞最多那組的同義詞，每組至少留一個詞', () => {
+  // 網站實際產生過、被 OpenAIRE 回 400 的查詢（5 個運算子）
+  const q = `("female schooling" OR "girls' education" OR "women's education") AND ("female labor supply" OR "female labor force participation" OR "women's employment")`;
+  assert.equal(limitOps(q), `("female schooling" OR "girls' education") AND ("female labor supply" OR "female labor force participation" OR "women's employment")`, '5 個運算子只要刪 1 個同義詞');
+  assert.equal(limitOps('a AND b'), 'a AND b');
+  assert.equal(limitOps('(a OR b) AND (c OR d) AND e'), '(a OR b) AND (c OR d) AND e', '剛好 4 個不用動');
+  assert.equal(limitOps('a AND b AND c AND d AND e AND f'), 'a AND b AND c AND d AND e', '組數超過時刪最後的組');
+  const count = (s) => (s.match(/\b(AND|OR)\b/g) || []).length;
+  assert.ok(count(new URL(openAireUrl(q)).searchParams.get('search')) <= 4);
 });
 
 test('ERIC：網址帶年份範圍與欄位；沒有摘要或編號不對的不要，連結指向 eric.ed.gov', () => {

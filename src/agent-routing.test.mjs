@@ -101,6 +101,23 @@ test('J-STAGE：東亞主題的人文研究，登入時用日文關鍵字經後�
   } finally { delete globalThis.RF_AI_TOKEN; }
 });
 
+test('J-STAGE：主題詞換了說法（女子教育→女子学校）但有地名時仍列為候選，排在完全符合的後面', async () => {
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    const svc = service({
+      '/api/jstage': () => json({ items: [
+        jstageItem(1, '日本統治初期台湾における纏足と女子学校体育に関する研究', '台湾の女子学校における体育を検討した。'),
+        jstageItem(2, '台湾における女子教育の展開', '台湾の女子教育について。'),
+        jstageItem(3, '女子学校の制服史', '日本国内の女子学校の制服について。'),
+      ] }),
+      'api.openalex.org': () => json({ results: [] }),
+    });
+    const r = await searchEvidence({ ...buildQueries(['girls education', 'women employment'], 0), keywords: ['girls education', 'women employment'], keywordsZh: ['女子教育', '女性就業', '日治時期臺灣'], coreZh: 2, discipline: 'humanities', ja: true }, svc);
+    assert.equal(new URL(svc.calls.find((c) => c.url.startsWith('/api/jstage')).url, 'https://x').searchParams.get('text'), '女子教育 台湾');
+    assert.deepEqual(r.evidence.filter((e) => e.lang === 'ja').map((e) => e.t), ['台湾における女子教育の展開', '日本統治初期台湾における纏足と女子学校体育に関する研究'], '沒有地名的那篇不要');
+  } finally { delete globalThis.RF_AI_TOKEN; }
+});
+
 test('J-STAGE：沒登入、ja 沒開、或不是東亞主題時都不查', async () => {
   const args = { ...buildQueries(['japanese colonial period', 'girls education'], 0), keywords: ['japanese colonial period', 'girls education'], keywordsZh: ZH, coreZh: 2, discipline: 'humanities' };
   let svc = jsSvc();

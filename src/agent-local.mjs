@@ -8,7 +8,7 @@
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
 import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref } from './searchLogic.mjs';
-import { SOURCES, routeFor, toJa } from './sources.mjs';
+import { SOURCES, routeFor, jstageTerms } from './sources.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -625,7 +625,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const coreEn = Array.isArray(core) && core.length ? core : (Array.isArray(keywords) ? keywords : []).slice(0, 2);
   const scopeEn = Array.isArray(scope) ? scope : [];
   const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, Math.min(3, Math.max(1, coreZh || 2)));
-  const jaKeys = [...new Set(zhKeys.map(toJa))];
+  const jaKeys = jstageTerms(zhKeys, Array.isArray(keywordsZh) ? keywordsZh.filter(hasZh) : []);
   const route = routeFor({ discipline, text: [routeText, ...(Array.isArray(keywordsZh) ? keywordsZh : []), ...(Array.isArray(keywords) ? keywords : [])].join(' ') });
   // J-STAGE 經由後端代查，要帶登入憑證；沒登入就不查
   let token = null;
@@ -666,10 +666,14 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     const inTitle = zhKeys.filter((k) => w.title.includes(k)).length;
     return zhKeys.every((k) => text.includes(k)) && inTitle ? zhKeys.length + inTitle : -1;
   };
-  // 日文（J-STAGE）：至少一半的主題詞出現在標題或摘要，而且至少一個出現在標題
+  // 日文（J-STAGE）：查詢詞（主題詞＋地名）都要出現在標題或摘要，而且至少一個出現在標題。
+  // 日文論文常換說法（女子教育／女子学校／女学校），所以地名有出現、而且主題詞的前兩個字出現在標題，也算候選（分數較低）；
+  // 之後有 AI 時仍會逐篇讀摘要判斷切不切題。
   const jaScore = (w) => {
-    const text = w.title + w.abstract, hit = jaKeys.filter((k) => text.includes(k)).length, inTitle = jaKeys.filter((k) => w.title.includes(k)).length;
-    return jaKeys.length && hit >= Math.ceil(jaKeys.length / 2) && inTitle ? hit + inTitle : -1;
+    const text = w.title + w.abstract, inTitle = jaKeys.filter((k) => w.title.includes(k)).length;
+    if (jaKeys.length && jaKeys.every((k) => text.includes(k)) && inTitle) return jaKeys.length + inTitle;
+    const [topic, place] = jaKeys;
+    return place && text.includes(place) && topic.length >= 2 && w.title.includes(topic.slice(0, 2)) ? 1 : -1;
   };
   // 同一篇論文有時會以不同編號出現兩次（預印本與正式版、不同資料庫），標題或 DOI 一樣的只留一篇
   const byTitle = (list) => { const seen = new Set(); return list.filter((w) => { const t = 't:' + w.title.toLowerCase().replace(/[^a-z0-9぀-ヿ一-鿿]/g, ''), d = w.doi ? 'd:' + w.doi.toLowerCase() : ''; if (seen.has(t) || (d && seen.has(d))) return false; seen.add(t); if (d) seen.add(d); return true; }); };
