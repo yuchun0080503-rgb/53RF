@@ -1355,6 +1355,9 @@ function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k=
  <h3>論證強度</h3>
  <div class="hl sm"><span>支持主張的證據</span><span class="st"><i class="dot ${sup.length>=3?"g":sup.length?"y":"r"}"></i>${sup.length} 筆（至少要 3 筆）</span></div>
  <div class="hl sm"><span>證據力高的研究</span><span class="st"><i class="dot ${high?"g":"r"}"></i>${high} 筆（回顧或實驗，至少要 1 筆）</span></div>
+ ${(()=>{/* 立場待確認的相關文獻：不計入論證強度，但要讓學生知道找到了，讀過原文後可以列為支持 */const u=S.ev.filter(e=>e.k==="u").length;if(!u)return"";
+  return `<div class="hl sm"><span>相關文獻（立場待確認，供參考）</span><span class="st"><i class="dot y"></i>${u} 筆（不計入論證強度）</span></div>`
+   +(sup.length<3?`<div class="box sm" style="margin:8px 0">已經找到 ${u} 篇跟主張相關的文獻，但摘要沒有寫出研究結果（或網路搜尋沒有取得摘要），AI 判斷不出是否支持，所以先不計入。請到「證據」頁的「立場待確認」打開原文閱讀，確認支持主張後按「讀過了，列為支持」，就會計入論證強度。<div class="acts"><button data-a="gotoev">前往證據頁看這 ${u} 篇</button></div></div>`:"")})()}
  ${S.rounds?`<h3>目前主張下可能有的潛在問題</h3>${issues.length?issues.map(x=>`<div class="box sm warn" style="margin:6px 0">${esc(x)}</div>`).join(""):`<p class="sm mute">從主張的寫法和目前的證據來看，沒有發現明顯的問題。</p>`}<div class="box sm" style="margin-top:12px">${ask}</div>`:""}
  ${ok?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}論證的證據已足夠</b><div class="mute" style="margin-top:4px">支持主張 ${sup.length} 筆，其中證據力高 ${high} 筆${uv?`；有 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
@@ -1718,7 +1721,10 @@ const zhMore=()=>{/* 中文資料庫多半沒有開放 API，這裡把關鍵字�
  if(!zl.length)return dbLine();
  return dbLine()+`<div class="sm mute" style="margin-top:10px">${courseOfP(p)?.zhLinks?"老師指定的中文資料庫，用同樣的關鍵字到這些地方找：":"用同樣的關鍵字到這些地方找："}<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${zl.map(x=>L[x]).join("")}</div><div style="margin-top:4px">關鍵字：${esc(k)}。${zl.includes("ndltd")?"點「臺灣博碩士論文」會先複製關鍵字，到它的搜尋框貼上就好。":""}找到的文獻可以用文字工具加到畫布上。</div></div>`};
 // 這份研究搜尋時查了哪些資料庫（老師指定的，或依領域自動選的）
+// 「這次查了」：搜尋過就列實際查到資料的資料庫（S.dbs，每輪搜尋結果的 dbNames 合起來，包含依學科自動加查、J-STAGE、中文網路搜尋）；
+// 還沒搜尋時列預定要查的（OpenAlex＋老師指定或依領域自動選的）
 const dbLine=()=>{if(!window.RFSRC)return"";const ks=srcOf(p),c=courseOfP(p),by=c&&Array.isArray(c.sources)?"老師指定":"依研究領域自動選";
+ if(S.rounds&&(S.dbs||[]).length)return `<div class="sm mute" style="margin-top:14px">這次查了：${S.dbs.map(esc).join("、")}${c&&Array.isArray(c.sources)?"（加查的資料庫由老師指定）":""}</div>`;
  return `<div class="sm mute" style="margin-top:14px">這次查了：OpenAlex（跨領域）${ks.map(k=>"、"+esc(RFSRC.SOURCES[k].name)+"（"+esc(RFSRC.SOURCES[k].field)+"）").join("")}${ks.length?"・"+by:""}</div>`};
 // 例證的中文說明：模型整理的摘要（zh）優先，其次是模型判讀時寫的一句主要發現
 // 之前存下來的摘要如果是別的語言（例如韓文），當作沒有，重新產生
@@ -1886,7 +1892,7 @@ async function actLive(a,w){
   job=async()=>{for(;;){const n=S.rounds;busy=roundLabel(n);renderPane();
    // sources：老師勾選或依領域自動挑的加查資料庫（srcOf）；sourcesLocked：老師有勾選時只查老師勾的，不再依學科自動加查
    const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p),sourcesLocked:Array.isArray(courseOfP(p)?.sources)});
-   S.qs.push(r.queries);S.rounds++;S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
+   S.qs.push(r.queries);S.rounds++;S.dbs=[...new Set([...(S.dbs||[]),...(r.dbNames||[])])];S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.filter(e=>e.k==="c").length,nu=r.evidence.filter(e=>e.k==="u").length,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
    const off=((r.dbNames||[]).length?`本輪查詢的資料庫：${r.dbNames.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");
