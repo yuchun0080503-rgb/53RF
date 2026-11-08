@@ -1675,9 +1675,9 @@ const zhBusy=new Set();
 // 重點整理（取代原本 80 字的中文摘要）：研究問題、對象與方法、主要發現、限制、對你們報告的用處。
 // 有 AI 時由 Claude 依摘要整理（RFAI.keyPoints），存在 e.kp；中英日文獻都整理。沒有 AI 時英文摘要退回機器翻譯（e.zh）。
 // 舊專案已經存的中文摘要（e.zh）照樣顯示；有 AI 時背景會再補上重點整理。
-const KP_N={question:"研究問題",method:"對象與方法",process:"研究經過",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
-// 舊的重點整理沒有「研究經過」：有 AI 時重新整理一次（失敗就沿用舊的）
-const kpStale=e=>!!e.kp&&!("process" in e.kp)&&AI();
+const KP_N={takeaway:"重點",question:"研究問題",method:"對象與方法",process:"研究經過",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
+// 舊的重點整理沒有「重點」或「研究經過」：有 AI 時重新整理一次（失敗就沿用舊的）
+const kpStale=e=>!!e.kp&&!("takeaway" in e.kp&&"process" in e.kp)&&AI();
 const kpNeed=e=>!e.kp||kpStale(e);
 const kpClaim=()=>S.claim||S.rq||"";
 function kpHTML(e){
@@ -1838,10 +1838,11 @@ const cvClean=x=>{const end=/[。！？；]$/.test(x)?x.slice(-1):"";const body=
 const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(Boolean).map(cvClean).filter(Boolean).join("");
 const cvCut=(s,n)=>s.length>n?s.slice(0,n-1)+"…":s;
 const evSummary=e=>{const kp=e.kp?(window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp):null;
- // 中英文文獻同一個格式：研究問題、對象與方法、研究經過（怎麼分組、各組做了什麼、多久、怎麼測量）、主要發現；摘要沒寫的段落不顯示
- const q=kp?cvSents(kp.question):"",who=kp?cvSents(kp.method):"",how=kp?cvSents(kp.process):"";
+ // 中英文文獻同一個格式。結論放前面（學生反映結論被埋在背景與過程後面，讀完不知道能拿什麼放進報告）：
+ // 重點（一句可以直接引用的研究結論）→ 研究問題 → 主要發現 → 對象與方法 → 研究經過（後兩段寫短一點）；摘要沒寫的段落不顯示
+ const key=kp?cvSents(kp.takeaway):"",q=kp?cvSents(kp.question):"",who=kp?cvSents(kp.method):"",how=kp?cvSents(kp.process):"";
  const found=kp?cvSents(kp.findings):cvSents(e.ai&&!e.unc?e.f:"")||cvSents(!zhBad(e)&&e.zh?e.zh:"")||(e.lang==="zh"?cvSents(e.ab||e.f):"");
- return [q&&"研究問題："+cvCut(q,120),who&&"對象與方法："+cvCut(who,160),how&&"研究經過："+cvCut(how,320),found&&"主要發現："+cvCut(found,320)].filter(Boolean).join("\n")};
+ return [key&&"重點："+cvCut(key,100),q&&"研究問題："+cvCut(q,120),found&&"主要發現："+cvCut(found,320),who&&"對象與方法："+cvCut(who,100),how&&"研究經過："+cvCut(how,200)].filter(Boolean).join("\n")};
 async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
  const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
  const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);

@@ -177,6 +177,9 @@ test('keyPoints：五個欄位的中文重點整理，帶入學生的主張；�
   // 研究經過：學生反映看不出研究怎麼進行、實驗組跟對照組差在哪
   assert.ok(KP_FIELDS.includes('process'));
   assert.match(f.calls[0].system, /process：研究經過.*實驗組做了什麼、對照組做了什麼/);
+  // 重點：一句可以直接引用的研究結論，不寫對報告的用處
+  assert.equal(KP_FIELDS[0], 'takeaway');
+  assert.match(f.calls[0].system, /takeaway：重點.*可以直接引用.*不要寫對學生報告的用處/);
   assert.deepEqual(f.calls[0].schema.required, KP_FIELDS);
   assert.equal(await keyPoints({ title: 't', abstract: '太短' }, f), null);
   await assert.rejects(keyPoints({ title: 't', abstract: abs }, fake({ ...reply, findings: 'Math scores improved significantly in the experimental group.', use: 'Supports the claim.' })), /中文/);

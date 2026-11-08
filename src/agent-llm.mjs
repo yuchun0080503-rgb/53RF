@@ -318,7 +318,9 @@ export async function summarizeZh(title, abstract, fetchImpl) {
  * @returns {Promise<{question:string, method:string, findings:string, limits:string, use:string}|null>} 摘要太短時回傳 null
  */
 // process（研究經過）：學生反映只有「對象與方法」一句看不出研究怎麼進行、實驗組跟對照組差在哪，所以另外依時間順序寫出經過
-export const KP_FIELDS = ['question', 'method', 'process', 'findings', 'limits', 'use'];
+// takeaway（重點）：學生反映證據卡讀完不知道能拿什麼放進報告——結論被放在背景與過程後面。
+// 另外寫一句可以直接引用的研究結論，放在畫布卡片最上面（只寫研究發現，不寫對報告的用處）
+export const KP_FIELDS = ['takeaway', 'question', 'method', 'process', 'findings', 'limits', 'use'];
 
 // 模型偶爾會把下一個欄位連同標記寫進前一個欄位（預覽網站實際出現過：
 // findings 的結尾是「…平均值。</findings>\n<parameter name="limits">研究範圍限於日本…」）。
@@ -346,6 +348,9 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
       '讓學生不用讀原文就能判斷這篇對報告有沒有用。只能根據摘要，不要加入摘要沒有的內容；摘要沒寫的欄位就寫「摘要沒有說明」。\n' +
       '直接寫研究的內容，不要在句子裡寫「摘要指出」「摘要截斷」「摘要未完整說明」這類關於摘要本身的話。\n' +
       '各欄位：\n' +
+      'takeaway：重點，一句話（50 字以內）寫出這篇研究最主要、可以直接引用的發現或結論，就像報告引用這篇文獻時會寫的那句話' +
+      '（例如「國民法官參與審判的模擬案件中，判決的罪名與刑度普遍比職業法官輕」）。只寫研究發現了什麼，不要寫對學生報告的用處、建議或評論；' +
+      '摘要沒有寫出任何發現或結論就寫「摘要沒有說明」。\n' +
       'question：研究問題，這篇想回答什麼（一句）。\n' +
       'method：對象與方法，誰、多少人、在哪裡、怎麼研究（問卷、實驗、訪談、文獻分析…），一到兩句。\n' +
       'process：研究經過，依時間順序說明研究怎麼進行，讓沒讀過原文的人看得懂結果是怎麼來的：研究對象怎麼分組、各組分別接受什麼' +
@@ -359,7 +364,7 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
     schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
     maxTokens: 1300, timeout: 90000,
   }, fetchImpl);
-  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' || k === 'process' ? 320 : 160)]));
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' || k === 'process' ? 320 : k === 'takeaway' ? 100 : 160)]));
   // 小模型偶爾會寫成別的語言：主要發現與用處合起來不是以繁體中文為主就不採用，呼叫端會再試一次或改用翻譯
   if (!isZhText(kp.findings + kp.use) || !kp.findings) throw new Error('模型沒有用中文寫重點整理');
   return kp;
