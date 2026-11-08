@@ -1675,7 +1675,10 @@ const zhBusy=new Set();
 // 重點整理（取代原本 80 字的中文摘要）：研究問題、對象與方法、主要發現、限制、對你們報告的用處。
 // 有 AI 時由 Claude 依摘要整理（RFAI.keyPoints），存在 e.kp；中英日文獻都整理。沒有 AI 時英文摘要退回機器翻譯（e.zh）。
 // 舊專案已經存的中文摘要（e.zh）照樣顯示；有 AI 時背景會再補上重點整理。
-const KP_N={question:"研究問題",method:"對象與方法",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
+const KP_N={question:"研究問題",method:"對象與方法",process:"研究經過",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
+// 舊的重點整理沒有「研究經過」：有 AI 時重新整理一次（失敗就沿用舊的）
+const kpStale=e=>!!e.kp&&!("process" in e.kp)&&AI();
+const kpNeed=e=>!e.kp||kpStale(e);
 const kpClaim=()=>S.claim||S.rq||"";
 function kpHTML(e){
  // 已經存下來的重點整理也在顯示時清掉模型誤寫的欄位標記（見 agent-llm.mjs 的 fixLeakedFields）
@@ -1688,7 +1691,7 @@ function kpHTML(e){
  if(zhBusy.has(e.id)||(AI()&&!e.zhx))return `<p class="mute">重點整理產生中…</p>`;
  return e.lang==="zh"?"":`<p class="mute">無法產生重點整理，請開啟原始來源閱讀。</p>`}
 async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id===id),e0=e()[0];
- if(!e0||e0.kp||zhBusy.has(id)||!LIVE())return;
+ if(!e0||!kpNeed(e0)||zhBusy.has(id)||!LIVE())return;
  const text=e0.ab||e0.fo||e0.f;if(!text)return;
  if(!AI()&&((e0.zh&&!zhBad(e0))||e0.lang==="zh"))return; // 沒有 AI：只替英文摘要做機器翻譯
  zhBusy.add(id);
@@ -1704,7 +1707,7 @@ let zhRun=false;
 // zhTried：這次開網頁後已經試過的。之前失敗標記過 zhx 的，有 AI 時這次會再試一次
 const zhTried=new Set();
 async function zhFill(){if(zhRun||!LIVE()||!p||!canEdit())return;zhRun=true;const proj=p;
- try{for(const id of [...S.ev,...(S.saved||[])].filter(e=>!e.kp&&!zhTried.has(e.id)&&(AI()||((!e.zh||zhBad(e))&&!e.zhx&&e.lang!=="zh"))).map(e=>e.id)){zhTried.add(id);if(p!==proj)return;await zhFor(id);
+ try{for(const id of [...S.ev,...(S.saved||[])].filter(e=>kpNeed(e)&&!zhTried.has(e.id)&&(AI()||((!e.zh||zhBad(e))&&!e.zhx&&e.lang!=="zh"))).map(e=>e.id)){zhTried.add(id);if(p!==proj)return;await zhFor(id);
    const e=[...S.ev,...(S.saved||[])].find(x=>x.id===id);if(e&&!e.kp&&(!e.zh||zhBad(e))){e.zhx=1;document.querySelectorAll('[data-kp="'+CSS.escape(String(id))+'"]').forEach(n=>{n.innerHTML=kpHTML(e)})} // 產生失敗的這次不再重試
    if(!AI())await new Promise(r=>setTimeout(r,400))}}
  finally{zhRun=false}}
@@ -1821,8 +1824,17 @@ function act(a,k){const w=U[ME].n,L=p.LV;
 // 證據卡：標題（年份）＋中文摘要＋可以點開的來源連結。完整網址存在 url，卡片上只顯示一小段（ul）。
 // 中文摘要沒有的話，先請本機模型整理（沒有模型就用機器翻譯）；模型只能根據資料庫給的摘要整理——資料庫沒有摘要的文獻不會編造內容，會直接寫明請讀原文。
 const shortUrl=u=>{try{const x=new URL(u),t=(x.host.replace(/^www\./,"")+x.pathname).replace(/\/$/,"");return t.length>30?t.slice(0,29)+"…":t}catch(err){return"來源連結"}};
-const evSummary=e=>{const s=evZh(e)||(e.lang==="zh"||!LIVE()?e.ab||e.f:"");
- return s?(s.length>220?s.slice(0,219)+"…":s)+(e.abs?"（原文摘要取自 "+e.abs+"）":""):(e.ab||e.f)?"（無法產生中文摘要，請開啟來源閱讀原文。）":"（資料庫沒有提供這篇的摘要，請開啟來源閱讀原文。）"};
+// 畫布卡片寫這篇研究的來龍去脈，給小組討論用：研究問題、對象與方法、主要發現（取自重點整理）。
+// 不放「對報告的用處」，也不放「摘要沒有寫出研究結果」「請閱讀原文」這類說明（那些留在右側欄的證據頁）。
+// 都整理不出來時就不寫內容，卡片只有標題與來源連結。
+const CV_META=/摘要(沒有|沒|未|只|並未|僅)|需要閱讀原文|請閱讀原文|請開啟|無法判斷|無法產生/;
+const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(x=>x&&!CV_META.test(x)).join("");
+const cvCut=(s,n)=>s.length>n?s.slice(0,n-1)+"…":s;
+const evSummary=e=>{const kp=e.kp?(window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp):null;
+ // 研究經過（怎麼分組、各組做了什麼、多久、怎麼測量）優先；舊的重點整理沒有這欄時用「對象與方法」
+ const q=kp?cvSents(kp.question):"",how=kp?cvSents(kp.process)||cvSents(kp.method):"";
+ const found=kp?cvSents(kp.findings):cvSents(e.ai&&!e.unc?e.f:"")||cvSents(!zhBad(e)&&e.zh?e.zh:"")||(e.lang==="zh"?cvSents(e.ab||e.f):"");
+ return [q&&"研究問題："+cvCut(q,120),how&&(kp&&cvSents(kp.process)?"研究經過：":"對象與方法：")+cvCut(how,320),found&&"主要發現："+cvCut(found,320)].filter(Boolean).join("\n")};
 async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
  const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
  const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);
@@ -1832,10 +1844,10 @@ async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S
   setStat("OpenAlex 沒有這篇的摘要，向 Semantic Scholar 查詢中…","y");
   const ab=await RFAGENT.fetchAbstractByDoi(e.url);if(p!==proj)return;
   if(ab){[...S.ev,...(S.saved||[])].filter(x=>x.id===e.id).forEach(x=>{x.ab=ab;x.abs="Semantic Scholar"});saveS()}}
- if(LIVE()&&!e.kp&&(AI()||((!e.zh||zhBad(e))&&e.lang!=="zh"))&&(e.ab||e.fo||e.f)){setStat("整理重點中…","y");await zhFor(e.id);if(p!==proj)return}
+ if(LIVE()&&kpNeed(e)&&(AI()||((!e.zh||zhBad(e))&&e.lang!=="zh"))&&(e.ab||e.fo||e.f)){setStat("整理重點中…","y");await zhFor(e.id);if(p!==proj)return}
  let card=p.objs.find(isCard);
  if(!card){const b=claim?bbox(claim):null,tops=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).map(l=>getO(l.b)).filter(Boolean).map(o=>{const q=bbox(o);return q.y+q.h}):[];
-  card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?(tops.length?Math.max(...tops)+31:b.y+19):20+p.objs.length*6,text:head+"\n"+evSummary(e),ml:true,eid:e.id,...(/^https:\/\//.test(e.url||"")?{url:e.url,ul:shortUrl(e.url)}:{}),tag:"evidence",stage:"證據"});p.objs.push(card)}
+  card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?(tops.length?Math.max(...tops)+31:b.y+19):20+p.objs.length*6,text:[head,evSummary(e)].filter(Boolean).join("\n"),ml:true,eid:e.id,...(/^https:\/\//.test(e.url||"")?{url:e.url,ul:shortUrl(e.url)}:{}),tag:"evidence",stage:"證據"});p.objs.push(card)}
  if(claim)p.objs.push(mkO({type:"link",by:ME,a:claim.id,b:card.id}));
  op(claim?"將 Evidence Card 加入畫布並連到主張":"將 Evidence Card 加入畫布");log(w,claim?"確認並加入 Evidence Card，用來支撐主張："+objLabel(claim):"確認並加入 Evidence Card。");
  setStat("已加入畫布");renderProj();renderPane()}

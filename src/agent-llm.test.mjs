@@ -174,6 +174,9 @@ test('keyPoints：五個欄位的中文重點整理，帶入學生的主張；�
   assert.equal(r.findings, reply.findings);
   assert.match(f.calls[0].user, /學生的主張：翻轉教室提升國中數學成就/);
   assert.match(f.calls[0].system, /只能根據摘要/);
+  // 研究經過：學生反映看不出研究怎麼進行、實驗組跟對照組差在哪
+  assert.ok(KP_FIELDS.includes('process'));
+  assert.match(f.calls[0].system, /process：研究經過.*實驗組做了什麼、對照組做了什麼/);
   assert.deepEqual(f.calls[0].schema.required, KP_FIELDS);
   assert.equal(await keyPoints({ title: 't', abstract: '太短' }, f), null);
   await assert.rejects(keyPoints({ title: 't', abstract: abs }, fake({ ...reply, findings: 'Math scores improved significantly in the experimental group.', use: 'Supports the claim.' })), /中文/);

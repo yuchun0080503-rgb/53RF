@@ -317,7 +317,8 @@ export async function summarizeZh(title, abstract, fetchImpl) {
  * @param {{title:string, abstract:string, claim?:string}} o claim：學生的主張，用來寫「對報告的用處」
  * @returns {Promise<{question:string, method:string, findings:string, limits:string, use:string}|null>} 摘要太短時回傳 null
  */
-export const KP_FIELDS = ['question', 'method', 'findings', 'limits', 'use'];
+// process（研究經過）：學生反映只有「對象與方法」一句看不出研究怎麼進行、實驗組跟對照組差在哪，所以另外依時間順序寫出經過
+export const KP_FIELDS = ['question', 'method', 'process', 'findings', 'limits', 'use'];
 
 // 模型偶爾會把下一個欄位連同標記寫進前一個欄位（預覽網站實際出現過：
 // findings 的結尾是「…平均值。</findings>\n<parameter name="limits">研究範圍限於日本…」）。
@@ -346,15 +347,18 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
       '各欄位：\n' +
       'question：研究問題，這篇想回答什麼（一句）。\n' +
       'method：對象與方法，誰、多少人、在哪裡、怎麼研究（問卷、實驗、訪談、文獻分析…），一到兩句。\n' +
+      'process：研究經過，依時間順序說明研究怎麼進行，讓沒讀過原文的人看得懂結果是怎麼來的：研究對象怎麼分組、各組分別接受什麼' +
+      '（例如實驗組做了什麼、對照組做了什麼、兩組差在哪）、進行多久、用什麼工具或資料測量、怎麼比較或分析。' +
+      '不是實驗的研究就說明資料從哪裡來、怎麼蒐集、怎麼分析。兩到四句；摘要沒寫的步驟就略過，不要自己補；摘要完全沒寫過程就寫「摘要沒有說明」。\n' +
       'findings：主要發現，兩到三句，保留摘要裡的關鍵數據；摘要只寫目的沒寫結果就寫「摘要沒有寫出研究結果」。\n' +
       'limits：限制或適用範圍（例如只研究某個國家、某個年齡層、樣本小），一句；摘要沒寫就寫「摘要沒有說明」。\n' +
       'use：對照學生的主張，說明這篇可以支持主張的哪一部分、哪裡不適用，一到兩句；沒有提供主張時寫這篇適合用在哪類報告。\n' +
-      '全部合起來 200 到 300 字。',
+      '全部合起來 300 到 450 字。',
     user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
     schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
-    maxTokens: 900, timeout: 90000,
+    maxTokens: 1300, timeout: 90000,
   }, fetchImpl);
-  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' ? 260 : 160)]));
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' || k === 'process' ? 320 : 160)]));
   // 小模型偶爾會寫成別的語言：主要發現與用處合起來不是以繁體中文為主就不採用，呼叫端會再試一次或改用翻譯
   if (!isZhText(kp.findings + kp.use) || !kp.findings) throw new Error('模型沒有用中文寫重點整理');
   return kp;
