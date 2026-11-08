@@ -1827,8 +1827,15 @@ const shortUrl=u=>{try{const x=new URL(u),t=(x.host.replace(/^www\./,"")+x.pathn
 // 畫布卡片寫這篇研究的來龍去脈，給小組討論用：研究問題、對象與方法、主要發現（取自重點整理）。
 // 不放「對報告的用處」，也不放「摘要沒有寫出研究結果」「請閱讀原文」這類說明（那些留在右側欄的證據頁）。
 // 都整理不出來時就不寫內容，卡片只有標題與來源連結。
-const CV_META=/摘要(沒有|沒|未|只|並未|僅)|需要閱讀原文|請閱讀原文|請開啟|無法判斷|無法產生/;
-const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(x=>x&&!CV_META.test(x)).join("");
+// 關於「摘要本身」的說明（摘要沒寫、截斷、未說明…）不放進畫布：整句是說明就整句拿掉，
+// 句子後半段接著說明（「…兩種方案，但摘要截斷，未完整說明具體內容。」）就只拿掉那幾個分句；開頭的「摘要指出，」也拿掉
+const CV_META=/摘要(沒有|沒|未|只|並未|僅|截斷|中斷|不完整|被截)|截斷|未完整|未說明|沒有說明|未提及|未交代|未詳述|需要閱讀原文|請閱讀原文|請開啟|無法判斷|無法產生/;
+const cvClean=x=>{const end=/[。！？；]$/.test(x)?x.slice(-1):"";const body=end?x.slice(0,-1):x;
+ const kept=body.split(/(?<=[，、])/).filter(c=>!CV_META.test(c)).join("").replace(/^(根據摘要|本?摘要)(指出|提到|說明|顯示)[，：:]?/,"").replace(/[，、]$/,"");
+ if(!kept)return"";
+ // 拿掉後半段時，留下的部分常以「但」「然而」結尾的轉折開頭殘留，一併去掉
+ return kept.replace(/[，、]?(但|然而|不過|惟)$/,"")+(end||"。")};
+const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(Boolean).map(cvClean).filter(Boolean).join("");
 const cvCut=(s,n)=>s.length>n?s.slice(0,n-1)+"…":s;
 const evSummary=e=>{const kp=e.kp?(window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp):null;
  // 中英文文獻同一個格式：研究問題、對象與方法、研究經過（怎麼分組、各組做了什麼、多久、怎麼測量）、主要發現；摘要沒寫的段落不顯示
