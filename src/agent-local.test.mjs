@@ -336,3 +336,43 @@ test('老師勾選的領域資料庫會加查，結果一樣要通過主題詞�
   await searchEvidence({ queries: ['"generative AI" AND "learning motivation"'], kind: 's', keywords: ['generative AI', 'learning motivation'], core: ['generative AI', 'learning motivation'], scope: [] }, fake);
   assert.ok(!urls.some((u) => u.includes('eric')));
 });
+
+import { outlineEvidence, ruleOutline, outlineRefs, outlineToText, CONCLUSION_PROMPTS } from './agent-local.mjs';
+
+const OUT_EV = [
+  { id: 'u1', k: 'u', t: '立場待確認的研究', y: 2022 },
+  { id: 'c1', k: 'c', t: '限制研究', y: 2021, au: 'Lee, K.', lv: '高', url: 'https://doi.org/10.1/c1', kp: { takeaway: '效果只在短期出現。' } },
+  { id: 's1', k: 's', t: '支持研究（低）', y: 2020, au: 'Wang, A., Chen, B.', lv: '低', url: 'javascript:alert(1)' },
+  { id: 's2', k: 's', t: '支持研究（高）', y: 2023, au: '林小明', vn: '教育研究集刊', lv: '高', url: 'https://example.org/s2' },
+];
+
+test('outlineEvidence：不放立場待確認；支持在前、證據力高在前並編號；只留 https 網址', () => {
+  const it = outlineEvidence(OUT_EV);
+  assert.deepEqual(it.map((x) => x.t), ['支持研究（高）', '支持研究（低）', '限制研究']);
+  assert.deepEqual(it.map((x) => x.n), [1, 2, 3]);
+  assert.equal(it[1].url, '');
+  assert.equal(it[2].k, 'c');
+  assert.deepEqual(outlineEvidence(null), []);
+});
+
+test('ruleOutline：題目、背景、主張、各篇支持證據、限制、結論頁只列問題', () => {
+  const items = outlineEvidence(OUT_EV);
+  const { slides } = ruleOutline({ topic: '翻轉教室', question: '翻轉教室能提升學習成效嗎？', claim: '翻轉教室能提升成效', points: ['學生課前看影片', ''], items });
+  assert.equal(slides[0].title, '翻轉教室');
+  assert.ok(slides.some((s) => s.title === '我們的主張'));
+  assert.equal(slides.filter((s) => s.title.startsWith('支持證據')).length, 2);
+  assert.deepEqual(slides.find((s) => s.title === '限制與反面觀點').cite, [3]);
+  assert.deepEqual(slides.at(-1).bullets, CONCLUSION_PROMPTS);
+});
+
+test('outlineRefs／outlineToText：參考文獻只列有引用的，純文字版含每頁重點與參考文獻', () => {
+  const items = outlineEvidence(OUT_EV);
+  const slides = [{ title: 'A', bullets: ['重點一'], cite: [3, 1] }, { title: 'B', bullets: ['重點二'], cite: [] }];
+  const refs = outlineRefs(items, slides);
+  assert.equal(refs.length, 2);
+  assert.match(refs[0], /^\[1\] 林小明（2023）。支持研究（高）。教育研究集刊。https:\/\/example.org\/s2$/);
+  assert.match(refs[1], /^\[3\] Lee, K.（2021）/);
+  const txt = outlineToText({ topic: '翻轉教室', slides, refs });
+  assert.match(txt, /第 1 頁　A\n・重點一\n　引用：\[3\]\[1\]/);
+  assert.match(txt, /第 3 頁　參考文獻\n\[1\]/);
+});

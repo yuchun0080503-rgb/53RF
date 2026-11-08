@@ -300,3 +300,23 @@ test('summarizeZh：韓文或英文的摘要不採用', async () => {
   const ko = fake({ zh: '연구 대상은 500명의 대학생이며 수면의 질이 낮았다' });
   await assert.rejects(summarizeZh('t', ab, ko), /中文/);
 });
+
+import { slideOutline } from './agent-llm.mjs';
+
+test('slideOutline：丟掉不存在的引用編號與空白頁；沒有證據或不是中文就報錯', async () => {
+  const items = [{ n: 1, k: 's', t: '研究一', y: 2023, au: '林', point: '實驗組成績較高。' }, { n: 2, k: 'c', t: '研究二', y: 2021, au: 'Lee', point: '效果只在短期。' }];
+  const f = fake({ slides: [
+    { title: '翻轉教室與學習成效', bullets: ['研究問題：翻轉教室能提升成效嗎'], cite: [] },
+    { title: '支持證據', bullets: ['實驗組成績較高'], cite: [1, 9, 1] },
+    { title: '空白頁', bullets: [], cite: [] },
+    { title: '限制與反面觀點', bullets: ['效果只在短期出現'], cite: [2] },
+    { title: '結論（請小組撰寫）', bullets: ['證據是否足以支持主張？'], cite: [] },
+  ] });
+  const { slides } = await slideOutline({ topic: '翻轉教室', question: '能提升成效嗎', claim: '能', points: [], items }, f);
+  assert.equal(slides.length, 4);
+  assert.deepEqual(slides[1].cite, [1]);
+  assert.match(f.calls[0].user || JSON.stringify(f.calls[0]), /\[1\]/);
+  await assert.rejects(slideOutline({ items: [] }, f), /還沒有可以引用的證據/);
+  const en = fake({ slides: [1, 2, 3].map((i) => ({ title: `Slide ${i} about flipped classrooms`, bullets: ['Students did better in the experimental group'], cite: [] })) });
+  await assert.rejects(slideOutline({ items }, en), /沒有寫出可用的大綱/);
+});
