@@ -1821,16 +1821,16 @@ function act(a,k){const w=U[ME].n,L=p.LV;
 // 證據卡：標題（年份）＋中文摘要＋可以點開的來源連結。完整網址存在 url，卡片上只顯示一小段（ul）。
 // 中文摘要沒有的話，先請本機模型整理（沒有模型就用機器翻譯）；模型只能根據資料庫給的摘要整理——資料庫沒有摘要的文獻不會編造內容，會直接寫明請讀原文。
 const shortUrl=u=>{try{const x=new URL(u),t=(x.host.replace(/^www\./,"")+x.pathname).replace(/\/$/,"");return t.length>30?t.slice(0,29)+"…":t}catch(err){return"來源連結"}};
-// 畫布卡片只寫「這篇研究做了什麼、發現了什麼」，給小組討論用：
+// 畫布卡片寫這篇研究的來龍去脈，給小組討論用：研究問題、對象與方法、主要發現（取自重點整理）。
 // 不放「對報告的用處」，也不放「摘要沒有寫出研究結果」「請閱讀原文」這類說明（那些留在右側欄的證據頁）。
-// 兩樣都整理不出來時就不寫內容，卡片只有標題與來源連結。
+// 都整理不出來時就不寫內容，卡片只有標題與來源連結。
 const CV_META=/摘要(沒有|沒|未|只|並未|僅)|需要閱讀原文|請閱讀原文|請開啟|無法判斷|無法產生/;
 const cvSents=s=>String(s||"").replace(/（[^）]*整理[^）]*）$|（機器翻譯[^）]*）$/,"").split(/(?<=[。！？；])/).map(x=>x.trim()).filter(x=>x&&!CV_META.test(x)).join("");
 const cvCut=(s,n)=>s.length>n?s.slice(0,n-1)+"…":s;
 const evSummary=e=>{const kp=e.kp?(window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp):null;
- const did=kp?cvSents(kp.method)||cvSents(kp.question):"";
+ const q=kp?cvSents(kp.question):"",how=kp?cvSents(kp.method):"";
  const found=kp?cvSents(kp.findings):cvSents(e.ai&&!e.unc?e.f:"")||cvSents(!zhBad(e)&&e.zh?e.zh:"")||(e.lang==="zh"?cvSents(e.ab||e.f):"");
- return [did&&"研究："+cvCut(did,80),found&&"發現："+cvCut(found,140)].filter(Boolean).join("\n")};
+ return [q&&"研究問題："+cvCut(q,120),how&&"對象與方法："+cvCut(how,120),found&&"主要發現："+cvCut(found,260)].filter(Boolean).join("\n")};
 async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S.ev[+k];if(!e||!canEdit())return;
  const proj=p,w=U[ME].n,sel=document.querySelector(`[data-ec="${k}"]`),claim=sel&&sel.value?getO(sel.value):null,head=`〔證據〕${e.t}（${e.y}）`;
  const isCard=o=>o.tag==="evidence"&&(o.eid===e.id||o.text.split("\n")[0]===head);
