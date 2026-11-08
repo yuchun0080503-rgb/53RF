@@ -42,6 +42,13 @@
         }
       },
       {
+        "source": "/api/openalex",
+        "function": {
+          "functionId": "oaproxy",
+          "region": "asia-east1"
+        }
+      },
+      {
         "source": "/",
         "destination": "/researchflow.html"
       }

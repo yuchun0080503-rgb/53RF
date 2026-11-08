@@ -7,7 +7,7 @@
 //   - 證據分類：依摘要裡的正向／負向用語做「初步分類」，一律標示為待小組確認，學生可以改列
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
-import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
+import { clampQueries, openAlexUrl, openAlexInit, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -594,7 +594,7 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
     d: kws.length && matched >= Math.ceil(kws.length / 2) ? '直接' : '間接',
     v: Boolean(work.doi),
     auto: true, // 規則式初步分類，尚未經小組確認
-    _ab: String(work.abstract || '').slice(0, 1200), // 完整一點的摘要：只給本機模型判讀用，判讀完就丟掉，不會存進資料庫
+    _ab: String(work.abstract || '').slice(0, 2400), // 完整一點的摘要：只給本機模型判讀用，判讀完就丟掉，不會存進資料庫
   };
 }
 
@@ -606,7 +606,10 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
   const run = async (q, opts) => {
-    const res = await fetchImpl(openAlexUrl(q, opts));
+    const url = openAlexUrl(q, opts);
+    let res = await fetchImpl(url, await openAlexInit(url));
+    // 後端代理還沒部署或暫時壞掉（404／5xx、401）：改回直接連 OpenAlex，搜尋不會因為代理而整個失敗
+    if (url.startsWith('/') && !res.ok && res.status !== 429) res = await fetchImpl(openAlexUrl(q, { ...opts, direct: true }));
     if (!res.ok) throw new Error(`OpenAlex HTTP ${res.status}`);
     const json = await res.json();
     return (Array.isArray(json.results) ? json.results : []).map((w) => normalizeWork(w, q)).filter(Boolean);

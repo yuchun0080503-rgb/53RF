@@ -64,9 +64,32 @@ let llm = null, ai = null, model = '';
 if (MODE === 'claude') {
   let key = process.env.ANTHROPIC_API_KEY || '';
   try { key ||= readFileSync(new URL('../../../ResearchFlow/Claude金鑰.txt', import.meta.url), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).pop() || ''; } catch { /* 沒有檔案 */ }
-  if (!key) { console.error('找不到 Claude 金鑰：請設定 ANTHROPIC_API_KEY，或把金鑰放在 ResearchFlow/Claude金鑰.txt'); process.exit(1); }
+  // 沒有金鑰時：改用正式網站的 Claude 中繼站（跟網站完全同一條路），登入憑證放在 out/.token（只在這台電腦、不進 git；約 1 小時過期，Claude 會在評測途中更新）
+  const tokenFile = new URL('out/.token', here);
+  let viaSite = false;
+  if (!key) {
+    try { viaSite = !!readFileSync(tokenFile, 'utf8').trim(); } catch { /* 沒有 */ }
+    if (!viaSite) { console.error('找不到 Claude 金鑰，也沒有網站登入憑證（tools/eval/out/.token）'); process.exit(1); }
+  }
+  if (viaSite) {
+    globalThis.RF_AI_ENDPOINT = 'https://researchflow-3dd2c.web.app/api/ai';
+    globalThis.RF_AI_TOKEN = async () => readFileSync(tokenFile, 'utf8').trim();
+    // 網站的中繼站有時暫時忙碌（429／5xx）：稍等重試
+    const wrapped0 = globalThis.fetch;
+    globalThis.fetch = async (url, opts = {}) => {
+      if (!String(url).includes('/api/ai')) return wrapped0(url, opts);
+      for (let i = 0; i < 3; i++) {
+        const o = { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + readFileSync(tokenFile, 'utf8').trim() } };
+        const r = await wrapped0(url, o);
+        if (r.status === 429 || r.status >= 500) { await new Promise((ok) => setTimeout(ok, 3000 * (i + 1))); continue; }
+        return r;
+      }
+      return wrapped0(url, opts);
+    };
+  }
   const { createRequire } = await import('node:module');
   const proxy = createRequire(import.meta.url)('../../functions/proxy.js');
+  if (!viaSite) {
   globalThis.RF_AI_ENDPOINT = 'https://eval.local/api/ai';
   globalThis.RF_AI_TOKEN = async () => 'eval';
   const wrapped = globalThis.fetch;
@@ -83,6 +106,7 @@ if (MODE === 'claude') {
     }
     return new Response('Claude 暫時沒有回應（重試 3 次）', { status: 502 });
   };
+  }
 }
 if (MODE === 'claude') {
   llm = await import('../../src/llm.mjs'); ai = await import('../../src/agent-llm.mjs');
@@ -171,7 +195,7 @@ for (const c of cases) {
       });
       for (const e of got.evidence) if (!evidence.some((x) => x.id === e.id)) evidence.push({ ...e, round: round + 1 });
       excludeIds = evidence.map((e) => e.id);
-      const sup = evidence.filter((e) => e.k === 's').length, con = evidence.length - sup;
+      const sup = evidence.filter((e) => e.k === 's').length, con = evidence.filter((e) => e.k === 'c').length;
       if (sup >= 1 && con >= 1 && evidence.length >= 3) break;
       const gap = sup === 0 ? '還沒有支持的證據' : con === 0 ? '還沒有反向或限制的證據' : '證據太少';
       await step(trace, `第 ${round + 1} 輪反思`, async () => {
@@ -179,12 +203,12 @@ for (const c of cases) {
         coreCount = r.coreCount; return r.reason;
       });
     }
-    row.sup = evidence.filter((e) => e.k === 's').length; row.con = evidence.length - row.sup; row.total = evidence.length;
+    row.sup = evidence.filter((e) => e.k === 's').length; row.con = evidence.filter((e) => e.k === 'c').length; row.unc = evidence.filter((e) => e.k === 'u').length; row.total = evidence.length;
     row.success = row.sup >= 1 && row.con >= 1 && row.total >= 3;
     row.needHuman = !row.success; // 3 輪用完還不夠：依設計交給小組決定（例外的人工介入）
     const rel = evidence.map((e) => (c.refTerms || []).some((t) => hit(e.t, t) || hit(e._ab || e.f, t)));
     row.autoRel = evidence.length ? rel.filter(Boolean).length / evidence.length : 0;
-    evidence.forEach((e, i) => review.push([c.id, e.round, e.t, e.doi || e.u || '', e.k === 's' ? '支持' : '反向/限制', rel[i] ? 1 : 0, '']));
+    evidence.forEach((e, i) => review.push([c.id, e.round, e.t, e.doi || e.u || '', e.k === 's' ? '支持' : e.k === 'u' ? '立場待確認' : '反向/限制', rel[i] ? 1 : 0, '']));
   } catch (err) { row.aborted = true; row.error = String(err?.message || err).slice(0, 160); }
   row.ms = Math.round(performance.now() - t0);
   row.calls = calls.length; row.callsOk = calls.filter((x) => x.ok).length; row.retries = calls.filter((x) => x.retry).length;

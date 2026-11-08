@@ -6,7 +6,7 @@
 
 const MAX_QUERIES = 3;
 const MAX_QUERY_LEN = 120;
-const MAX_ABSTRACT_LEN = 1200;
+const MAX_ABSTRACT_LEN = 2400; // 要包含摘要最後的研究結果（見 agent-llm.mjs JUDGE_ABSTRACT_LEN）
 export const PER_QUERY = 5;
 
 export function clampQueries(queries, maxLen = MAX_QUERY_LEN) {
@@ -20,7 +20,7 @@ export function clampQueries(queries, maxLen = MAX_QUERY_LEN) {
 
 // tiab：query 是布林查詢，只比對標題與摘要（比全文搜尋精準得多）。
 // lang：只找某個語言的文獻（例如 'zh'）。OpenAlex 的搜尋本身不限語言，中文關鍵字可以直接查到中文期刊論文。
-export function openAlexUrl(query, { fromYear = 2020, perPage = PER_QUERY, mailto = '', lang = '', tiab = false, apiKey } = {}) {
+export function openAlexUrl(query, { fromYear = 2020, perPage = PER_QUERY, mailto = '', lang = '', tiab = false, apiKey, direct = false } = {}) {
   const params = new URLSearchParams({
     ...(tiab ? {} : { search: query }),
     filter: `from_publication_date:${fromYear}-01-01,has_abstract:true,type:article${lang ? `,language:${lang}` : ''}${tiab ? `,title_and_abstract.search:${query.replace(/,/g, ' ')}` : ''}`,
@@ -31,7 +31,16 @@ export function openAlexUrl(query, { fromYear = 2020, perPage = PER_QUERY, mailt
   // OpenAlex 免費金鑰（每日額度約 10 倍）：只在伺服器端或本機工具設定 globalThis.RF_OPENALEX_KEY，不寫進網頁
   const key = apiKey ?? globalThis.RF_OPENALEX_KEY;
   if (key) params.set('api_key', key);
+  // 網站上線時設定 globalThis.RF_OA_ENDPOINT='/api/openalex'：改走後端代理，由後端加上金鑰（見 functions/openalex.js）
+  const relay = globalThis.RF_OA_ENDPOINT;
+  if (relay && !key && !direct) return `${relay}?${params}`;
   return `https://api.openalex.org/works?${params}`;
+}
+
+// 走後端代理時要附上登入憑證（跟 AI 代理共用 RF_AI_TOKEN）；直接連 OpenAlex 不用
+export async function openAlexInit(url) {
+  if (!String(url).startsWith('/')) return undefined;
+  try { const t = typeof globalThis.RF_AI_TOKEN === 'function' ? await globalThis.RF_AI_TOKEN() : null; return t ? { headers: { Authorization: `Bearer ${t}` } } : undefined; } catch { return undefined; }
 }
 
 // OpenAlex 的摘要是「倒排索引」{word: [位置, ...]}，要自己還原成一般文字。
@@ -71,12 +80,17 @@ export function normalizeWork(w, query) {
 }
 
 // 多條查詢的結果合併：同一篇只留第一次出現的，並排除前幾輪已經在 Evidence Map 裡的文獻。
+// 同一篇論文從不同資料庫找到時 id 不一樣（OpenAlex 是 W 開頭、Crossref 是 DOI），所以 DOI 也要比對（不分大小寫）
+const doiKey = (d) => (typeof d === 'string' && /doi\.org\//i.test(d) ? 'doi:' + d.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase() : '');
 export function dedupeWorks(works, excludeIds = []) {
-  const seen = new Set(Array.isArray(excludeIds) ? excludeIds : []);
+  const ex = Array.isArray(excludeIds) ? excludeIds : [];
+  const seen = new Set([...ex, ...ex.map(doiKey).filter(Boolean)]);
   const out = [];
   for (const w of works) {
-    if (!w || seen.has(w.id)) continue;
-    seen.add(w.id);
+    if (!w) continue;
+    const d = doiKey(w.doi) || doiKey(w.id);
+    if (seen.has(w.id) || (d && seen.has(d))) continue;
+    seen.add(w.id); if (d) seen.add(d);
     out.push(w);
   }
   return out;

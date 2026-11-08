@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampQueries, openAlexUrl, abstractFromInvertedIndex, normalizeWork, dedupeWorks } from './searchLogic.mjs';
+import { clampQueries, openAlexUrl, openAlexInit, abstractFromInvertedIndex, normalizeWork, dedupeWorks } from './searchLogic.mjs';
 
 test('clampQueries：去掉空字串與重複（不分大小寫），最多 3 條、每條最多 120 字', () => {
   const out = clampQueries(['AI  dependency', 'ai dependency', '', null, 'b', 'c', 'd', 'x'.repeat(500)]);
@@ -105,4 +105,24 @@ test('領域資料庫：回應整理成同一種格式，沒摘要或太舊的�
   assert.equal(pmc.length, 1); assert.equal(pmc[0].title, 'Sleep and GPA'); assert.equal(pmc[0].url, 'https://europepmc.org/article/MED/42'); assert.deepEqual(pmc[0].authors, ['Li X', 'Wang Y']);
   const doaj = normalizeSource('doaj', { results: [{ id: 'd1', bibjson: { title: 'T', year: '2024', abstract: 'A', identifier: [{ type: 'doi', id: '10.2/y' }], journal: { title: 'J' }, author: [{ name: 'N' }] } }] }, 'q');
   assert.equal(doaj[0].doi, 'https://doi.org/10.2/y');
+});
+
+test('RF_OA_ENDPOINT 設定時 OpenAlex 改走後端代理，網址不含金鑰', async () => {
+  globalThis.RF_OA_ENDPOINT = '/api/openalex';
+  try {
+    const u = openAlexUrl('mindfulness');
+    assert.match(u, /^\/api\/openalex\?/); assert.doesNotMatch(u, /api_key/);
+    globalThis.RF_AI_TOKEN = async () => 'tk';
+    assert.deepEqual(await openAlexInit(u), { headers: { Authorization: 'Bearer tk' } });
+    assert.equal(await openAlexInit('https://api.openalex.org/works?x'), undefined);
+    assert.match(openAlexUrl('mindfulness', { direct: true }), /^https:\/\/api\.openalex\.org/);
+  } finally { delete globalThis.RF_OA_ENDPOINT; delete globalThis.RF_AI_TOKEN; }
+});
+
+test('dedupeWorks 用 DOI 比對：OpenAlex 和 Crossref 找到同一篇只留一篇，也能排除已經有的 DOI', () => {
+  const a = { id: 'https://openalex.org/W1', doi: 'https://doi.org/10.1/ABC' };
+  const b = { id: 'https://doi.org/10.1/abc', doi: 'https://doi.org/10.1/abc' };
+  assert.equal(dedupeWorks([a, b]).length, 1);
+  assert.equal(dedupeWorks([b], ['https://doi.org/10.1/ABC']).length, 0);
+  assert.equal(dedupeWorks([{ id: 'ERIC:EJ1', doi: '' }, { id: 'ERIC:EJ2', doi: '' }]).length, 2);
 });

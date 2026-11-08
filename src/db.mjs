@@ -27,6 +27,7 @@ export const db = getFirestore(app);
 
 // AI 後端（functions/index.js，經由 Hosting 的 /api/ai）：llm.mjs 用這兩個全域值呼叫，沒登入時 token 是 null，AI 會退回規則式。
 globalThis.RF_AI_ENDPOINT = '/api/ai';
+globalThis.RF_OA_ENDPOINT = '/api/openalex'; // OpenAlex 改走後端代理（後端加金鑰）；代理壞掉時 agent-local 會自動改回直接連
 globalThis.RF_AI_TOKEN = async () => (auth.currentUser ? auth.currentUser.getIdToken() : null);
 
 // ---------------- Agent（在瀏覽器裡執行，不需要金鑰、不需要後端）----------------
