@@ -65,7 +65,8 @@ export async function chatJSON({ system, user, images, schema, maxTokens = 900, 
     res = await fetchImpl(endpoint(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await getToken()) },
-      body: JSON.stringify({ tier, system, user, schema, maxTokens, ...(tier === 'ink' ? { images } : {}) }),
+      // projectId：後端用它在伺服器上再查一次這份研究的 AI 權限與你的角色（網站設定 globalThis.RF_AI_PROJECT）
+      body: JSON.stringify({ tier, system, user, schema, maxTokens, projectId: String((typeof globalThis.RF_AI_PROJECT === 'function' ? globalThis.RF_AI_PROJECT() : globalThis.RF_AI_PROJECT) || ''), ...(tier === 'ink' ? { images } : {}) }),
       signal: ctl.signal,
     });
   } catch (err) {

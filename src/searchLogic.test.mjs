@@ -76,3 +76,33 @@ test('normalizeCrossref：整理成跟 OpenAlex 一樣的格式，摘要的 XML 
   assert.equal(normalizeCrossref({ ...item, abstract: '' }, 'q'), null);
   assert.equal(normalizeCrossref({ title: ['x'], abstract: 'y' }, 'q'), null);
 });
+
+// ---- 各領域資料庫 ----
+import { SOURCES, pickSources, sourceUrl, normalizeSource } from './searchLogic.mjs';
+
+test('領域資料庫：老師勾選優先，沒勾時依領域自動挑', () => {
+  assert.deepEqual(pickSources({ teacher: ['eric', 'xxx'] }), ['eric']);
+  assert.deepEqual(pickSources({ teacher: [] , field: '教育' }), []);
+  assert.deepEqual(pickSources({ field: '教育科技' }), ['eric']);
+  assert.deepEqual(pickSources({ course: '心理學研究法' }), ['europepmc']);
+  assert.deepEqual(pickSources({ field: '電機' }), []);
+});
+test('領域資料庫：查詢網址帶入年份與摘要條件', () => {
+  assert.match(sourceUrl('europepmc', '"a" AND b'), /PUB_YEAR%3A%5B2020%20TO%203000%5D%20AND%20HAS_ABSTRACT%3Ay/);
+  assert.match(sourceUrl('eric', 'x'), /^https:\/\/api\.ies\.ed\.gov\/eric\/\?search=x&format=json/);
+  assert.match(sourceUrl('doaj', 'x'), /^https:\/\/doaj\.org\/api\/search\/articles\//);
+  assert.throws(() => sourceUrl('nope', 'x'));
+});
+test('領域資料庫：回應整理成同一種格式，沒摘要或太舊的丟掉', () => {
+  const eric = normalizeSource('eric', { response: { docs: [
+    { id: 'EJ1', title: 'GenAI and engagement', author: ['A', 'B'], publicationdateyear: 2025, description: 'We found <b>higher</b> engagement.', url: 'http://dx.doi.org/10.1/x', peerreviewed: 'T', source: 'BERJ' },
+    { id: 'ED2', title: 'Report', publicationdateyear: 2025, description: 'x', peerreviewed: 'F', publicationtype: ['Reports'] },
+    { id: 'EJ3', title: 'Old', publicationdateyear: 2010, description: 'x', peerreviewed: 'T' },
+  ] } }, 'q');
+  assert.equal(eric.length, 1);
+  assert.equal(eric[0].id, 'https://doi.org/10.1/x'); assert.equal(eric[0].src, SOURCES.eric.name); assert.equal(eric[0].abstract, 'We found higher engagement.');
+  const pmc = normalizeSource('europepmc', { resultList: { result: [{ id: '42', source: 'MED', title: 'Sleep and GPA.', pubYear: '2026', authorString: 'Li X, Wang Y', journalInfo: { journal: { title: 'Sleep' } }, abstractText: 'Abstract text' }, { id: '43', source: 'MED', title: 'No abstract', pubYear: '2026' }] } }, 'q');
+  assert.equal(pmc.length, 1); assert.equal(pmc[0].title, 'Sleep and GPA'); assert.equal(pmc[0].url, 'https://europepmc.org/article/MED/42'); assert.deepEqual(pmc[0].authors, ['Li X', 'Wang Y']);
+  const doaj = normalizeSource('doaj', { results: [{ id: 'd1', bibjson: { title: 'T', year: '2024', abstract: 'A', identifier: [{ type: 'doi', id: '10.2/y' }], journal: { title: 'J' }, author: [{ name: 'N' }] } }] }, 'q');
+  assert.equal(doaj[0].doi, 'https://doi.org/10.2/y');
+});

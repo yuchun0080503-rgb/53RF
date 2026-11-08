@@ -7,7 +7,7 @@
 //   - 證據分類：依摘要裡的正向／負向用語做「初步分類」，一律標示為待小組確認，學生可以改列
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
-import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref } from './searchLogic.mjs';
+import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -601,7 +601,8 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
 // queries／core／scope：buildQueries 的輸出（英文，國際文獻）；zhQueries／keywordsZh：中文查詢與中文關鍵字（中文文獻）。
 // 兩邊至少要有一邊。流程：查詢（只比對標題與摘要）→ 丟掉沒有提到全部主題詞的 → 依相關度排序 → 每一輪最多 10 篇（中文最多 4 篇）。
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10 }, fetchImpl = fetch) {
+// sources：除了 OpenAlex 之外要加查的領域資料庫（searchLogic.SOURCES 的代號，例如 ['eric','europepmc']），由老師在課程設定勾選或依領域自動挑
+export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, sources = [] }, fetchImpl = fetch) {
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
   const run = async (q, opts) => {
@@ -637,6 +638,18 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
       if (value) { fallback = true; jobs.push({ zh: false, q }); settled.push({ ok: true, value }); }
     }
   }
+  // 領域資料庫：用這一輪的第一條英文查詢加查（每個資料庫一次）
+  const extra = (Array.isArray(sources) ? sources : []).filter((k) => k in SOURCES);
+  if (en.length) {
+    for (const key of extra) {
+      await wait(300);
+      const value = await fetchImpl(sourceUrl(key, en[0])).then(async (res) => {
+        if (!res.ok) throw new Error(`${key} HTTP ${res.status}`);
+        return normalizeSource(key, await res.json(), en[0]);
+      }).then((v) => v, () => null);
+      jobs.push({ zh: false, q: en[0], src: key }); settled.push({ ok: !!value, value: value || [] });
+    }
+  }
   if (settled.every((s) => !s.ok)) throw new Error('無法連線到文獻資料庫（OpenAlex 與 Crossref 都沒有回應），請檢查網路後再試。');
   // 中文：OpenAlex 對中文的比對很寬鬆，所以自己再檢查一次——每個中文主題詞都要出現在標題或摘要，
   // 而且至少有一個出現在標題（只在摘要裡順帶提到的通常不是在研究這個主題）；含日文假名的不要。
@@ -660,7 +673,10 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     ...enPick.map(({ w, r }) => ({ ...classifyWork(w, kind, [...coreEn, ...scopeEn], claimNeg), src: w.src || 'OpenAlex', sc: `主題詞 ${r.coreHit}／${coreEn.length}（標題 ${r.inTitle}）`, d: r.inTitle === coreEn.length ? '直接' : '間接', rel: r.inTitle === coreEn.length ? '高' : '中' })),
     ...zhPick.map(({ w }) => ({ ...classifyWork(w, kind, zhKeys, claimNeg), rel: zhKeys.every((k) => w.title.includes(k)) ? '高' : '中' })),
   ];
-  return { evidence, queries: [...en, ...zh], scanned: evidence.length, fallback, dropped: pool(false).length - enRanked.length + pool(true).length - zhRanked.length };
+  // 每個資料庫各查到幾篇（給畫面與評測看：老師勾的資料庫有沒有真的派上用場）
+  const bySource = {};
+  for (const e of evidence) bySource[e.src || 'OpenAlex'] = (bySource[e.src || 'OpenAlex'] || 0) + 1;
+  return { evidence, queries: [...en, ...zh], scanned: evidence.length, fallback, sources: extra, bySource, failedSources: extra.filter((k) => { const i = jobs.findIndex((j) => j.src === k); return i >= 0 && !settled[i].ok; }), dropped: pool(false).length - enRanked.length + pool(true).length - zhRanked.length };
 }
 
 // ---------------- 證據摘要（Level 3）----------------

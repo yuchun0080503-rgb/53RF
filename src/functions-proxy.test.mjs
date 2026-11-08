@@ -66,3 +66,24 @@ test('handle：登入後轉給 Claude（帶金鑰與版本），回傳 {data, mo
   assert.equal(res.code, 502); assert.match(res.body.error, /529/);
   res = mkRes(); await handle(mkReq(ok), res, deps({ fetchImpl: async () => { throw new Error('ECONNRESET'); } })); assert.equal(res.code, 502);
 });
+
+// ---- 伺服器端的使用檢查（AI 權限、成員、全站每日上限）----
+const { makeCheck } = proxy;
+const access = (a) => async () => a;
+test('makeCheck：要是這份研究的 owner／editor，AI Level ≥ 1，全站沒超過上限', async () => {
+  const c = (a, n = 1) => makeCheck({ getAccess: access(a), countToday: async () => n, sitePerDay: 2000 });
+  assert.equal(await c({ role: 'editor', aiLevel: 2 })({ uid: 'u', body: { projectId: 'p1' } }), null);
+  assert.equal((await c({ role: 'editor', aiLevel: 2 })({ uid: 'u', body: {} })).status, 400);
+  assert.equal((await c(null)({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
+  assert.equal((await c({ role: 'teacher', aiLevel: 3 })({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
+  assert.equal((await c({ role: 'owner', aiLevel: 0 })({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
+  assert.equal((await c({ role: 'owner', aiLevel: 2 }, 2001)({ uid: 'u', body: { projectId: 'p1' } })).status, 429);
+});
+test('handle：檢查沒過就不呼叫 Claude；通過後記錄 token 用量', async () => {
+  let called = 0, usage = null;
+  const f = async () => { called++; return { ok: true, json: async () => ({ content: [{ type: 'tool_use', name: 'answer', input: { en: 'x' } }], usage: { input_tokens: 10, output_tokens: 2 } }) }; };
+  let res = mkRes(); await handle(mkReq({ ...ok, projectId: 'p1' }), res, deps({ fetchImpl: f, check: async () => ({ status: 429, message: '額度用完' }) }));
+  assert.equal(res.code, 429); assert.equal(called, 0);
+  res = mkRes(); await handle(mkReq({ ...ok, projectId: 'p1' }), res, deps({ fetchImpl: f, verify: async () => ({ uid: 'u1' }), check: async ({ uid }) => (uid === 'u1' ? null : { status: 403 }), onUsage: async (u) => { usage = u; } }));
+  assert.equal(res.code, 200); assert.equal(called, 1); assert.deepEqual(usage, { input_tokens: 10, output_tokens: 2 });
+});

@@ -34,21 +34,26 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '4. synonyms 給 1 到 3 個意思幾乎相同的英文學術用語，第一個放最常用的。不要放意思更廣的詞（例如不要把 decision making 當成 critical thinking 的同義詞）。\n' +
       '5. zh 用學生原本的中文說法（繁體）。不要列「影響」「研究」「能力」這類太籠統的詞。\n' +
       '6. focus 用一句繁體中文說明這次要查證的重點。\n' +
-      '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。',
+      '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。\n' +
+      '8. 觀點詞（role=aspect）0 到 4 個：畫布上其他內容提到、但不是主題詞的具體概念（例如要比較的條件、可能的原因或機制、子問題），每個概念一個。不要漏掉學生寫下的概念（例如畫布寫了「通勤時間」「搭公車」，就要有 commuting time、public transportation）。\n' +
+      '9. 概念在學術界有固定名稱時（理論、效應、量表、現象的正式名稱），en 或 synonyms 要用那個名稱：例如「只看到跟自己想法一樣的意見」是 echo chamber，「一直反覆想同一件不開心的事」是 rumination，「住的地方附近買不到新鮮食物」是 food desert。\n' +
+      '10. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
       type: 'object', required: ['focus', 'keywords'],
       properties: {
         focus: str,
         keywords: {
-          type: 'array', minItems: 2, maxItems: 5,
-          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
+          type: 'array', minItems: 2, maxItems: 9,
+          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
         },
       },
     },
-    maxTokens: 500,
+    maxTokens: 900,
   }, fetchImpl);
-  const keywords = normKeywords(out.keywords);
+  // 主題詞 → 範圍詞 → 觀點詞：搜尋只用前面的主題詞＋第一個範圍詞，觀點詞給學生看、之後換方向時用，不會讓查詢條件變嚴
+  const order = { core: 0, scope: 1, aspect: 2 };
+  const keywords = normKeywords(out.keywords).sort((a, b) => order[a.role] - order[b.role]);
   if (keywords.filter((k) => k.role === 'core').length < 1) throw new Error('模型沒有給出主題詞');
   return { focus: clip(out.focus, 120), keywords };
 }
@@ -62,7 +67,7 @@ function normKeywords(list) {
     return en.length > 1 ? en.map((e, i) => ({ ...k, en: e, zh: zh[i] || '', synonyms: i === en.length - 1 ? k.synonyms : [] })) : [k];
   });
   const keywords = split
-    .map((k) => ({ zh: clip(k.zh, 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' ? 'scope' : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    .map((k) => ({ zh: clip(k.zh, 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
   return keywords;
 }

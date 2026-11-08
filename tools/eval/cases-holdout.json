@@ -1,0 +1,225 @@
+{
+ "note": "保留題（holdout）：2026/11/08 為了檢查關鍵字提示詞的改進是否只對原本 20 題有效而另外寫的 20 題；寫題目時沒有看過模型的輸出，提示詞的範例也刻意避開這些題目的概念。",
+ "samples": [
+  {
+   "id": "h01",
+   "canvas": "宿舍室友作息不同會影響睡眠？\n噪音\n換宿舍有用嗎",
+   "refTerms": [
+    "roommates",
+    "sleep quality",
+    "noise",
+    "dormitory",
+    "college students"
+   ]
+  },
+  {
+   "id": "h02",
+   "canvas": "大家都買我也跟著買？\n網紅推薦\n衝動購物",
+   "refTerms": [
+    "conformity",
+    "influencer marketing",
+    "impulse buying",
+    "consumer behavior",
+    "young adults"
+   ]
+  },
+  {
+   "id": "h03",
+   "canvas": "護理師輪班會讓身體變差？\n夜班\n職業倦怠",
+   "refTerms": [
+    "shift work",
+    "night shift",
+    "nurses",
+    "burnout",
+    "health"
+   ]
+  },
+  {
+   "id": "h04",
+   "canvas": "學習障礙學生用平板學習有幫助嗎\n輔助科技\n注意力",
+   "refTerms": [
+    "learning disabilities",
+    "tablets",
+    "assistive technology",
+    "attention",
+    "students"
+   ]
+  },
+  {
+   "id": "h05",
+   "canvas": "老人用LINE跟家人聯絡會比較不孤單？\n數位落差\n視訊",
+   "refTerms": [
+    "older adults",
+    "loneliness",
+    "digital divide",
+    "video calls",
+    "social connectedness"
+   ]
+  },
+  {
+   "id": "h06",
+   "canvas": "同儕壓力讓青少年抽電子菸？\n好奇\n廣告",
+   "refTerms": [
+    "peer pressure",
+    "adolescents",
+    "e-cigarettes",
+    "vaping",
+    "advertising"
+   ]
+  },
+  {
+   "id": "h07",
+   "canvas": "網路霸凌對心理健康的影響\n匿名\n旁觀者",
+   "refTerms": [
+    "cyberbullying",
+    "mental health",
+    "anonymity",
+    "bystanders",
+    "adolescents"
+   ]
+  },
+  {
+   "id": "h08",
+   "canvas": "多益分數高的人工作比較好找？\n英語能力\n雇主怎麼看",
+   "refTerms": [
+    "English proficiency",
+    "employability",
+    "TOEIC",
+    "employers",
+    "graduates"
+   ]
+  },
+  {
+   "id": "h09",
+   "canvas": "讀書時開著手機通知會分心？\n多工\n專注",
+   "refTerms": [
+    "smartphone notifications",
+    "distraction",
+    "multitasking",
+    "attention",
+    "students"
+   ]
+  },
+  {
+   "id": "h10",
+   "canvas": "運動員受傷後的心理壓力\n復健\n社會支持",
+   "refTerms": [
+    "sports injury",
+    "athletes",
+    "psychological stress",
+    "rehabilitation",
+    "social support"
+   ]
+  },
+  {
+   "id": "h11",
+   "canvas": "吃素對健康比較好嗎\n營養不足\n心血管",
+   "refTerms": [
+    "vegetarian diet",
+    "health",
+    "nutrient deficiency",
+    "cardiovascular disease",
+    "adults"
+   ]
+  },
+  {
+   "id": "h12",
+   "canvas": "數學考不好就覺得努力也沒用\n數學焦慮\n老師的回饋",
+   "refTerms": [
+    "learned helplessness",
+    "math anxiety",
+    "teacher feedback",
+    "students",
+    "motivation"
+   ]
+  },
+  {
+   "id": "h13",
+   "canvas": "獎學金能不能提升學業表現\n經濟弱勢學生\n動機",
+   "refTerms": [
+    "scholarships",
+    "academic performance",
+    "low-income students",
+    "motivation",
+    "higher education"
+   ]
+  },
+  {
+   "id": "h14",
+   "canvas": "玩暴力電玩會更有攻擊性？\n兒童\n長期影響",
+   "refTerms": [
+    "violent video games",
+    "aggression",
+    "children",
+    "longitudinal",
+    "media violence"
+   ]
+  },
+  {
+   "id": "h15",
+   "canvas": "遠距工作效率比較高嗎\n工作生活平衡\n孤立感",
+   "refTerms": [
+    "remote work",
+    "productivity",
+    "work-life balance",
+    "isolation",
+    "employees"
+   ]
+  },
+  {
+   "id": "h16",
+   "canvas": "失眠做認知行為治療有效嗎\n吃藥 vs 不吃藥",
+   "refTerms": [
+    "insomnia",
+    "cognitive behavioral therapy",
+    "CBT-I",
+    "sleep medication",
+    "adults"
+   ]
+  },
+  {
+   "id": "h17",
+   "canvas": "大學生打電動成癮\n逃避現實\n孤獨",
+   "refTerms": [
+    "gaming disorder",
+    "college students",
+    "escapism",
+    "loneliness",
+    "internet gaming"
+   ]
+  },
+  {
+   "id": "h18",
+   "canvas": "戶外教學能提升學習興趣嗎\n環境教育\n國小",
+   "refTerms": [
+    "outdoor education",
+    "learning interest",
+    "environmental education",
+    "primary school",
+    "experiential learning"
+   ]
+  },
+  {
+   "id": "h19",
+   "canvas": "父母離婚對孩子學業的影響\n單親家庭\n心理韌性",
+   "refTerms": [
+    "parental divorce",
+    "children",
+    "academic achievement",
+    "single-parent families",
+    "resilience"
+   ]
+  },
+  {
+   "id": "h20",
+   "canvas": "寫感恩日記能提升幸福感？\n要持續多久\n大學生",
+   "refTerms": [
+    "gratitude journaling",
+    "well-being",
+    "positive psychology",
+    "intervention",
+    "college students"
+   ]
+  }
+ ]
+}
