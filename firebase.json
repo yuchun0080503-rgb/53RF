@@ -42,6 +42,13 @@
         }
       },
       {
+        "source": "/api/jstage",
+        "function": {
+          "functionId": "jstage",
+          "region": "asia-east1"
+        }
+      },
+      {
         "source": "/",
         "destination": "/researchflow.html"
       }

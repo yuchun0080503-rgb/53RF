@@ -8,11 +8,20 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { handle } = require('./proxy');
+const jstage = require('./jstage');
 
 admin.initializeApp();
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const verify = (t) => admin.auth().verifyIdToken(t);
 
 exports.ai = onRequest(
   { region: 'asia-east1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, maxInstances: 5, memory: '256MiB' },
-  (req, res) => handle(req, res, { verify: (t) => admin.auth().verifyIdToken(t), apiKey: () => ANTHROPIC_API_KEY.value() }),
+  (req, res) => handle(req, res, { verify, apiKey: () => ANTHROPIC_API_KEY.value() }),
+);
+
+// J-STAGE 代查（/api/jstage）：不呼叫 Claude、不需要金鑰；只給登入的使用者用，避免被當成公開的爬蟲跳板。
+// 一次最多讀 8 篇文章頁，通常 5～10 秒。
+exports.jstage = onRequest(
+  { region: 'asia-east1', timeoutSeconds: 60, maxInstances: 3, memory: '256MiB' },
+  (req, res) => jstage.handle(req, res, { verify }),
 );

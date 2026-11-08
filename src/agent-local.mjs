@@ -8,6 +8,7 @@
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
 import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref } from './searchLogic.mjs';
+import { SOURCES, routeFor, toJa } from './sources.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -485,10 +486,11 @@ export async function searchRelaxed({ keywords, coreCount = 2, round, mode, minH
   let out = null, n = start, queries = [];
   for (; n >= Math.min(2, start); n--) {
     const plan = buildQueries(keywords, round, mode, n);
-    const got = await searchEvidence({ ...rest, ...plan, keywords, limit }, fetchImpl);
+    // J-STAGE（要讀文章頁，比較慢）只在第 1 輪的第一次查詢時查：之後的輪次與放寬只會找到同一批文獻
+    const got = await searchEvidence({ ...rest, ...plan, keywords, limit, ja: round === 0 && n === start }, fetchImpl);
     queries = [...queries, ...got.queries.filter((q) => !queries.includes(q))];
     // 放寬後找到的也併進來，但嚴格條件找到的排前面
-    out = out ? { ...got, evidence: [...out.evidence, ...got.evidence.filter((e) => !out.evidence.some((x) => x.id === e.id)).map((e) => ({ ...e, rel: '中' }))], dropped: out.dropped + got.dropped, fallback: out.fallback || got.fallback } : got;
+    out = out ? { ...got, evidence: [...out.evidence, ...got.evidence.filter((e) => !out.evidence.some((x) => x.id === e.id)).map((e) => ({ ...e, rel: '中' }))], dropped: out.dropped + got.dropped, fallback: out.fallback || got.fallback, sources: [...new Set([...out.sources, ...got.sources])] } : got;
     if (out.evidence.filter((e) => e.lang !== 'zh').length >= minHits) break;
   }
   const kept = Math.max(n, Math.min(2, start));
@@ -599,68 +601,95 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
 }
 
 // queries／core／scope：buildQueries 的輸出（英文，國際文獻）；zhQueries／keywordsZh：中文查詢與中文關鍵字（中文文獻）。
-// 兩邊至少要有一邊。流程：查詢（只比對標題與摘要）→ 丟掉沒有提到全部主題詞的 → 依相關度排序 → 每一輪最多 10 篇（中文最多 4 篇）。
+// 兩邊至少要有一邊。流程：查詢（只比對標題與摘要）→ 丟掉沒有提到全部主題詞的 → 依相關度排序 → 每一輪最多 10 篇（中文最多 4 篇、日文最多 2 篇）。
+// discipline：學科（見 sources.mjs 的 DISCIPLINES；空的就從 routeText 與關鍵字判斷），決定 OpenAlex 之外還查哪些資料庫。
+// ja：這次要不要查 J-STAGE（只有東亞主題、已登入時才會真的查；見 sources.mjs 的 routeFor）。
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10 }, fetchImpl = fetch) {
+const SRC_NAME = { openalex: 'OpenAlex', crossref: 'Crossref', ...Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, s.name])) };
+export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, discipline = '', routeText = '', ja = false }, fetchImpl = fetch) {
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
+  const getJson = async (url, name, init) => {
+    const res = await (init ? fetchImpl(url, init) : fetchImpl(url));
+    if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
+    return res.json();
+  };
   const run = async (q, opts) => {
-    const res = await fetchImpl(openAlexUrl(q, opts));
-    if (!res.ok) throw new Error(`OpenAlex HTTP ${res.status}`);
-    const json = await res.json();
+    const json = await getJson(openAlexUrl(q, opts), 'OpenAlex');
     return (Array.isArray(json.results) ? json.results : []).map((w) => normalizeWork(w, q)).filter(Boolean);
+  };
+  const runSrc = async (key, q, init) => {
+    const s = SOURCES[key], list = s.list(await getJson(s.url(q), s.name, init));
+    return (Array.isArray(list) ? list : []).map((w) => s.norm(w, q)).filter(Boolean);
   };
   const coreEn = Array.isArray(core) && core.length ? core : (Array.isArray(keywords) ? keywords : []).slice(0, 2);
   const scopeEn = Array.isArray(scope) ? scope : [];
-  const jobs = [...en.map((q) => ({ zh: false, q, opts: { tiab: true, perPage: 15 } })), ...zh.map((q) => ({ zh: true, q, opts: { lang: 'zh', fromYear: 2015 } }))];
+  const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, Math.min(3, Math.max(1, coreZh || 2)));
+  const jaKeys = [...new Set(zhKeys.map(toJa))];
+  const route = routeFor({ discipline, text: [routeText, ...(Array.isArray(keywordsZh) ? keywordsZh : []), ...(Array.isArray(keywords) ? keywords : [])].join(' ') });
+  // J-STAGE 經由後端代查，要帶登入憑證；沒登入就不查
+  let token = null;
+  if (ja && route.jstage && jaKeys.length && typeof globalThis.RF_AI_TOKEN === 'function') { try { token = await globalThis.RF_AI_TOKEN(); } catch { token = null; } }
+  const jaText = jaKeys.slice(0, 2).join(' ');
+  // 學科專門的資料庫排在 OpenAlex 前面：它們找到的已經夠多時，OpenAlex 的英文查詢就不用查了（省下 OpenAlex 的每日額度）
+  const jobs = [
+    ...(en.length ? route.extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSrc(key, en[0]) })) : []),
+    ...(token ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => runSrc('jstage', jaText, { headers: { Authorization: `Bearer ${token}` } }) }] : []),
+    ...en.map((q) => ({ lang: 'en', src: 'openalex', q, go: () => run(q, { tiab: true, perPage: 15 }) })),
+    ...zh.map((q) => ({ lang: 'zh', src: 'openalex', q, go: () => run(q, { lang: 'zh', fromYear: 2015 }) })),
+  ];
   const wait = (ms) => pause(fetchImpl === fetch ? ms : 0);
-  // 一條一條查、中間稍微停一下：這是免費的公開服務，不要同時灌好幾個請求。
-  // OpenAlex 有每日額度，所以第一條英文查詢就找到夠多切題的文獻時，第二條就不查了。
+  // 一條一條查、中間稍微停一下：這些是免費的公開服務，不要同時灌好幾個請求。
   const settled = [];
-  let enough = false;
+  const enHits = () => dedupeWorks(settled.flatMap((s, i) => (jobs[i].lang === 'en' ? s.value : [])), excludeIds).filter((w) => relevance(w, coreEn, scopeEn).ok).length;
   for (const [i, job] of jobs.entries()) {
-    if (!job.zh && enough) { settled.push({ ok: true, value: [] }); continue; }
+    if (job.lang === 'en' && job.src === 'openalex' && enHits() >= 10) { settled.push({ ok: true, value: [], skipped: true }); continue; }
     if (i) await wait(350);
-    const result = await run(job.q, job.opts).then((value) => ({ ok: true, value }), () => ({ ok: false, value: [] }));
-    settled.push(result);
-    if (!job.zh && dedupeWorks(result.value, excludeIds).filter((w) => relevance(w, coreEn, scopeEn).ok).length >= 10) enough = true;
+    settled.push(await job.go().then((value) => ({ ok: true, value }), () => ({ ok: false, value: [] })));
   }
-  // 英文查詢全部失敗（多半是 OpenAlex 今天的額度用完了）→ 改查 Crossref
+  // OpenAlex 的英文查詢全部失敗（多半是今天的額度用完了）→ 改查 Crossref
   let fallback = false;
-  if (en.length && jobs.every((j, i) => j.zh || !settled[i].ok)) {
+  const oaEn = jobs.map((j, i) => [j, settled[i]]).filter(([j]) => j.lang === 'en' && j.src === 'openalex');
+  if (oaEn.length && oaEn.every(([, s]) => !s.ok)) {
     for (const [i, q] of en.slice(0, 2).entries()) {
       if (i) await wait(1100);
-      const value = await fetchImpl(crossrefUrl(q)).then(async (res) => {
-        if (!res.ok) throw new Error(`Crossref HTTP ${res.status}`);
-        return ((await res.json()).message?.items || []).map((it) => normalizeCrossref(it, q)).filter(Boolean);
-      }).then((v) => v, () => null);
-      if (value) { fallback = true; jobs.push({ zh: false, q }); settled.push({ ok: true, value }); }
+      const value = await getJson(crossrefUrl(q), 'Crossref').then((j) => (j.message?.items || []).map((it) => normalizeCrossref(it, q)).filter(Boolean), () => null);
+      if (value) { fallback = true; jobs.push({ lang: 'en', src: 'crossref', q }); settled.push({ ok: true, value }); }
     }
   }
-  if (settled.every((s) => !s.ok)) throw new Error('無法連線到文獻資料庫（OpenAlex 與 Crossref 都沒有回應），請檢查網路後再試。');
+  if (settled.every((s) => !s.ok)) throw new Error('無法連線到文獻資料庫（OpenAlex、Crossref 與其他資料庫都沒有回應），請檢查網路後再試。');
   // 中文：OpenAlex 對中文的比對很寬鬆，所以自己再檢查一次——每個中文主題詞都要出現在標題或摘要，
   // 而且至少有一個出現在標題（只在摘要裡順帶提到的通常不是在研究這個主題）；含日文假名的不要。
-  const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, Math.min(3, Math.max(1, coreZh || 2)));
   const zhScore = (w) => {
     const text = w.title + w.abstract;
     if (/[぀-ヿ]/.test(text) || !zhKeys.length) return -1;
     const inTitle = zhKeys.filter((k) => w.title.includes(k)).length;
     return zhKeys.every((k) => text.includes(k)) && inTitle ? zhKeys.length + inTitle : -1;
   };
-  // 同一篇論文有時會以不同編號出現兩次（預印本與正式版），標題一樣的只留一篇
-  const byTitle = (list) => { const seen = new Set(); return list.filter((w) => { const t = w.title.toLowerCase().replace(/[^a-z0-9一-鿿]/g, ''); return seen.has(t) ? false : seen.add(t); }); };
+  // 日文（J-STAGE）：至少一半的主題詞出現在標題或摘要，而且至少一個出現在標題
+  const jaScore = (w) => {
+    const text = w.title + w.abstract, hit = jaKeys.filter((k) => text.includes(k)).length, inTitle = jaKeys.filter((k) => w.title.includes(k)).length;
+    return jaKeys.length && hit >= Math.ceil(jaKeys.length / 2) && inTitle ? hit + inTitle : -1;
+  };
+  // 同一篇論文有時會以不同編號出現兩次（預印本與正式版、不同資料庫），標題或 DOI 一樣的只留一篇
+  const byTitle = (list) => { const seen = new Set(); return list.filter((w) => { const t = 't:' + w.title.toLowerCase().replace(/[^a-z0-9぀-ヿ一-鿿]/g, ''), d = w.doi ? 'd:' + w.doi.toLowerCase() : ''; if (seen.has(t) || (d && seen.has(d))) return false; seen.add(t); if (d) seen.add(d); return true; }); };
   // 被撤稿的論文不要
-  const pool = (wantZh) => byTitle(dedupeWorks(settled.flatMap((s, i) => (jobs[i].zh === wantZh ? s.value : [])), excludeIds)).filter((w) => !/\bretracted\b|撤稿/i.test(w.title));
+  const pool = (lang) => byTitle(dedupeWorks(settled.flatMap((s, i) => (jobs[i].lang === lang ? s.value : [])), excludeIds)).filter((w) => !/\bretracted\b|撤稿/i.test(w.title));
   // 每一輪的第一條查詢最貼近這一輪要找的方向（例如統整性研究、負面結果），它找到的文獻排前面
   const bonus = (w) => (w.q === en[0] ? 1.5 : 0);
-  const enRanked = pool(false).map((w) => ({ w, r: relevance(w, coreEn, scopeEn) })).filter((x) => x.r.ok).sort((a, b) => b.r.score + bonus(b.w) - a.r.score - bonus(a.w));
-  const zhRanked = pool(true).map((w) => ({ w, n: zhScore(w) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
-  const zhPick = zhRanked.slice(0, 4), enPick = enRanked.slice(0, limit - zhPick.length);
+  const enRanked = pool('en').map((w) => ({ w, r: relevance(w, coreEn, scopeEn) })).filter((x) => x.r.ok).sort((a, b) => b.r.score + bonus(b.w) - a.r.score - bonus(a.w));
+  const zhRanked = pool('zh').map((w) => ({ w, n: zhScore(w) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+  const jaRanked = pool('ja').map((w) => ({ w, n: jaScore(w) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+  const zhPick = zhRanked.slice(0, 4), jaPick = jaRanked.slice(0, 2), enPick = enRanked.slice(0, limit - zhPick.length - jaPick.length);
   const evidence = [
     ...enPick.map(({ w, r }) => ({ ...classifyWork(w, kind, [...coreEn, ...scopeEn], claimNeg), src: w.src || 'OpenAlex', sc: `主題詞 ${r.coreHit}／${coreEn.length}（標題 ${r.inTitle}）`, d: r.inTitle === coreEn.length ? '直接' : '間接', rel: r.inTitle === coreEn.length ? '高' : '中' })),
     ...zhPick.map(({ w }) => ({ ...classifyWork(w, kind, zhKeys, claimNeg), rel: zhKeys.every((k) => w.title.includes(k)) ? '高' : '中' })),
+    // 日文文獻：lang 標成 ja，網站會照英文文獻的方式產生中文摘要
+    ...jaPick.map(({ w }) => ({ ...classifyWork(w, kind, jaKeys, claimNeg), lang: 'ja', src: 'J-STAGE', rel: jaKeys.every((k) => w.title.includes(k)) ? '高' : '中' })),
   ];
-  return { evidence, queries: [...en, ...zh], scanned: evidence.length, fallback, dropped: pool(false).length - enRanked.length + pool(true).length - zhRanked.length };
+  // 這次實際查到資料的資料庫（給紀錄與畫面顯示）
+  const sources = [...new Set(jobs.filter((j, i) => settled[i].ok && !settled[i].skipped).map((j) => SRC_NAME[j.src]))];
+  return { evidence, queries: [...en, ...zh, ...(token ? [jaText] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
 }
 
 // ---------------- 證據摘要（Level 3）----------------

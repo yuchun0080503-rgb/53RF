@@ -398,7 +398,7 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
    if(known&&known.en.toLowerCase()!==en){syn=[en,...syn];en=known.en}
    if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core"}});
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
-  S.kw=[...ks.map(k=>k.name),...mine];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.kwV=2;
+  S.kw=[...ks.map(k=>k.name),...mine];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
   aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
@@ -414,7 +414,7 @@ function kwSets(){const core=(S.kwCore||[]).filter(k=>S.kw.includes(k)),isCore=k
  const ordered=[...S.kw.filter(isCore).sort((a,b)=>rank(a)-rank(b)),...S.kw.filter(k=>!isCore(k))];
  const claim=S.claim||(rdItems().find(o=>o.tag==="claim")||{}).text||S.q0||"";
  return{keywords:ordered.map(en).filter(Boolean),keywordsZh:ordered.filter(hasZh),coreCount:Math.max(1,S.kw.filter(isCore).map(en).filter(Boolean).length),coreZh:Math.max(1,S.kw.filter(k=>isCore(k)&&hasZh(k)).length),
-  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張："),synonyms:S.kwSyn||{}}}
+  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張："),synonyms:S.kwSyn||{},discipline:S.disc||""}}
 function translateKw(k,manual){if(!window.RFAGENT||!hasZh(k)||kwBusy.has(k))return;kwBusy.add(k);
  const known=RFAGENT.keywordPairs(k).some(x=>x.zh===k),ctx=[p.name,S.claim||S.rq].filter(Boolean).join("；");
  const job=AI()&&!known?RFAI.translate(k,ctx).then(r=>({en:r.en,via:AIN(),syn:r.synonyms}),()=>RFAGENT.translateTerm(k)):RFAGENT.translateTerm(k);
@@ -1463,7 +1463,7 @@ async function actLive(a,w){
   // 查詢由小組確認過的關鍵字組成：第 1 輪找支持方向，第 2 輪起加上負面／限制用語找反向方向（見 agent-local.mjs 的 buildQueries）
   if(!S.kw.length){alert("請先回到上一步新增至少一個搜尋關鍵字。");return}
   const known=()=>[...S.ev,...(S.held||[])].map(e=>e.id).concat(S.gone||[]);
-  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料"}中…`:`第 ${n+1} 輪：搜尋 OpenAlex 學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
+  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料"}中…`:`第 ${n+1} 輪：搜尋學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
   label=roundLabel(S.rounds);
   // 反思迴圈（第 5 頁流程圖第 4 階段）：每一輪搜尋完，Agent 自己檢查證據缺口；還不夠、而且沒用完輪數預算時，
   // 自己檢討原因、調整關鍵字，接著搜下一輪，不用學生一輪一輪按。用完預算（預設 3 輪）就停下來，等小組決定要不要擴大範圍。
@@ -1471,7 +1471,7 @@ async function actLive(a,w){
    const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE()});
    S.qs.push(r.queries);S.rounds++;S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.length-ns,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
-   const off=((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
+   const off=((r.sources||[]).length?`本輪查詢的資料庫：${r.sources.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");
    if(MODE()==="claim"){S.msg=`本輪找到 ${ns} 篇支持主張的文獻（請到「證據」頁確認）。`+off+(enoughOf(p)?"論證的證據已達門檻。":"證據還不夠：支持主張的證據至少要 3 筆，而且其中要有回顧或實驗研究。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"");}else{
    S.msg=(r.scanned?`本輪找到 ${r.scanned} 篇切題的新文獻，初步分類為支持 ${ns} 篇、反向／限制 ${nc} 篇（請到「證據」頁確認分類）。`:"本輪沒有找到同時提到所有主題詞的新文獻。可以按「修改搜尋方向」減少主題詞，或換一個說法。")+off+(c<3?"反向證據仍不足（Evidence Imbalance）。":"反向證據已達 3 篇。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"")}

@@ -10,6 +10,7 @@
 // 模型只負責「理解與判斷」；搜尋仍然是查真實的學術資料庫，文獻不是模型編的。
 
 import { chatJSON } from './llm.mjs';
+import { DISCIPLINES, normDiscipline } from './sources.mjs';
 
 const str = { type: 'string' };
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -20,7 +21,7 @@ const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
  * @param {string} o.title 專案／報告名稱
  * @param {string} o.claim 要查證的主張或研究問題
  * @param {string[]} [o.notes] 畫布上的其他內容（當背景用）
- * @returns {Promise<{focus:string, keywords:{zh:string,en:string,role:'core'|'scope',synonyms:string[]}[]}>}
+ * @returns {Promise<{focus:string, discipline:string, keywords:{zh:string,en:string,role:'core'|'scope',synonyms:string[]}[]}>} discipline：見 sources.mjs 的 DISCIPLINES，模型沒給對時是空字串
  */
 export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   const out = await chatJSON({
@@ -34,12 +35,14 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '4. synonyms 給 1 到 3 個意思幾乎相同的英文學術用語，第一個放最常用的。不要放意思更廣的詞（例如不要把 decision making 當成 critical thinking 的同義詞）。\n' +
       '5. zh 用學生原本的中文說法（繁體）。不要列「影響」「研究」「能力」這類太籠統的詞。\n' +
       '6. focus 用一句繁體中文說明這次要查證的重點。\n' +
-      '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。',
+      '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。\n' +
+      '8. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
-      type: 'object', required: ['focus', 'keywords'],
+      type: 'object', required: ['focus', 'keywords', 'discipline'],
       properties: {
         focus: str,
+        discipline: { type: 'string', enum: DISCIPLINES },
         keywords: {
           type: 'array', minItems: 2, maxItems: 5,
           items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
@@ -50,7 +53,8 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   }, fetchImpl);
   const keywords = normKeywords(out.keywords);
   if (keywords.filter((k) => k.role === 'core').length < 1) throw new Error('模型沒有給出主題詞');
-  return { focus: clip(out.focus, 120), keywords };
+  // 學科給錯或沒給不算失敗：留空，搜尋時改用規則式判斷（sources.mjs 的 guessDiscipline）
+  return { focus: clip(out.focus, 120), keywords, discipline: normDiscipline(out.discipline) };
 }
 
 // planSearch／reflectSearch 共用：整理模型給的關鍵字

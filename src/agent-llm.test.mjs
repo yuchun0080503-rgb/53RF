@@ -54,6 +54,16 @@ test('planSearch：把寫在一起的概念拆開，丟掉不是英文的翻譯�
   await assert.rejects(planSearch({ title: 't', claim: 'c' }, none), /主題詞/);
 });
 
+test('planSearch：要求模型給學科（schema 限定 8 種），給錯或沒給就留空、不算失敗', async () => {
+  const kw = [{ zh: '翻轉教室', en: 'flipped classroom', role: 'core', synonyms: [] }];
+  const f = fake({ focus: 'x', discipline: 'education', keywords: kw });
+  assert.equal((await planSearch({ title: 't', claim: '翻轉教室提升數學成就' }, f)).discipline, 'education');
+  assert.deepEqual(f.calls[0].schema.properties.discipline.enum, ['humanities', 'law', 'social', 'education', 'business', 'stem', 'health', 'arts']);
+  assert.ok(f.calls[0].schema.required.includes('discipline'));
+  assert.equal((await planSearch({ title: 't', claim: 'c' }, fake({ focus: 'x', discipline: 'physics', keywords: kw }))).discipline, '');
+  assert.equal((await planSearch({ title: 't', claim: 'c' }, fake({ focus: 'x', keywords: kw }))).discipline, '');
+});
+
 test('translate：只接受英文結果', async () => {
   const f = fake({ en: 'Screen Time', synonyms: ['usage duration'] });
   assert.deepEqual(await translate('使用時間', '社群媒體', f), { en: 'screen time', synonyms: ['usage duration'] });
