@@ -10,6 +10,7 @@
 // 模型只負責「理解與判斷」；搜尋仍然是查真實的學術資料庫，文獻不是模型編的。
 
 import { chatJSON } from './llm.mjs';
+import { DISCIPLINES, normDiscipline } from './sources.mjs';
 
 const str = { type: 'string' };
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -20,16 +21,20 @@ const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
  * @param {string} o.title 專案／報告名稱
  * @param {string} o.claim 要查證的主張或研究問題
  * @param {string[]} [o.notes] 畫布上的其他內容（當背景用）
- * @returns {Promise<{focus:string, keywords:{zh:string,en:string,role:'core'|'scope',synonyms:string[]}[]}>}
+ * @returns {Promise<{focus:string, discipline:string, keywords:{zh:string,en:string,role:'core'|'scope',synonyms:string[]}[]}>} discipline：見 sources.mjs 的 DISCIPLINES，模型沒給對時是空字串
  */
 export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   const out = await chatJSON({
     system:
-      '你是協助學生查證文獻的研究助理，熟悉教育、心理、社會科學的學術用語。' +
+      '你是協助大學生查證文獻的研究助理，熟悉人文、歷史、法律、社會科學、教育、商管、理工、醫護、藝術設計各領域的學術用語。' +
       '任務：根據報告題目與學生要查證的主張，決定到學術資料庫要用哪些關鍵字。\n' +
       '規則：\n' +
-      '1. 主題詞（role=core）2 到 3 個：這個主張真正在談的「現象或工具」與「結果」。主張常常省略主詞，要從題目補上（題目是 AI，主張只寫「影響判斷能力」，主題詞就要有 AI）。\n' +
-      '2. 範圍詞（role=scope）1 到 2 個：研究對象或情境。題目或主張提到對象（學生、大學生、老人、青少年）就一定要列出來。\n' +
+      '1. 主題詞（role=core）2 到 3 個，必須同時包含主張裡的「原因」（現象、工具、介入、制度）與「結果」各至少一個。' +
+      '例如「日治時期臺灣的女子教育如何影響女性就業」：原因是女子教育（female education），結果是女性就業（female employment），兩個都要是主題詞。' +
+      '不可以用兩個意思相近的詞當兩個主題詞（例如 employment 和 female employment），近義詞放進 synonyms。' +
+      '主張常常省略主詞，要從題目補上（題目是 AI，主張只寫「影響判斷能力」，主題詞就要有 AI）。\n' +
+      '2. 範圍詞（role=scope）1 到 2 個：研究對象、時期或地點。題目或主張提到對象（學生、大學生、老人、青少年）就一定要列出來；' +
+      '時期與地點（日治時期臺灣、臺灣、歐盟）放在範圍詞，不要當主題詞——當主題詞會讓每篇文獻都必須提到它，幾乎找不到。\n' +
       '3. en 必須是英文論文標題實際會出現的學術用語（1 到 3 個英文單字），依「概念」翻譯，不要逐字翻。例如「自主判斷能力」是 independent thinking，不是 autonomy judgment ability。\n' +
       '4. synonyms 給 1 到 3 個意思幾乎相同的英文學術用語，第一個放最常用的。不要放意思更廣的詞（例如不要把 decision making 當成 critical thinking 的同義詞）。\n' +
       '5. zh 用學生原本的中文說法（繁體）。不要列「影響」「研究」「能力」這類太籠統的詞。\n' +
@@ -37,12 +42,14 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '7. 每一個關鍵字只放一個概念：「人工智慧」和「自主判斷能力」要分成兩個關鍵字，不可以用逗號或頓號寫在同一個裡面。\n' +
       '8. 觀點詞（role=aspect）0 到 4 個：畫布上其他內容提到、但不是主題詞的具體概念（例如要比較的條件、可能的原因或機制、子問題），每個概念一個。不要漏掉學生寫下的概念（例如畫布寫了「通勤時間」「搭公車」，就要有 commuting time、public transportation）。\n' +
       '9. 概念在學術界有固定名稱時（理論、效應、量表、現象的正式名稱），en 或 synonyms 要用那個名稱：例如「只看到跟自己想法一樣的意見」是 echo chamber，「一直反覆想同一件不開心的事」是 rumination，「住的地方附近買不到新鮮食物」是 food desert。\n' +
-      '10. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
+      '10. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。\n' +
+      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
-      type: 'object', required: ['focus', 'keywords'],
+      type: 'object', required: ['focus', 'keywords', 'discipline'],
       properties: {
         focus: str,
+        discipline: { type: 'string', enum: DISCIPLINES },
         keywords: {
           type: 'array', minItems: 2, maxItems: 9,
           items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
@@ -55,7 +62,8 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   const order = { core: 0, scope: 1, aspect: 2 };
   const keywords = normKeywords(out.keywords).sort((a, b) => order[a.role] - order[b.role]);
   if (keywords.filter((k) => k.role === 'core').length < 1) throw new Error('模型沒有給出主題詞');
-  return { focus: clip(out.focus, 120), keywords };
+  // 學科給錯或沒給不算失敗：留空，搜尋時改用規則式判斷（sources.mjs 的 guessDiscipline）
+  return { focus: clip(out.focus, 120), keywords, discipline: normDiscipline(out.discipline) };
 }
 
 // planSearch／reflectSearch 共用：整理模型給的關鍵字
@@ -67,9 +75,14 @@ function normKeywords(list) {
     return en.length > 1 ? en.map((e, i) => ({ ...k, en: e, zh: zh[i] || '', synonyms: i === en.length - 1 ? k.synonyms : [] })) : [k];
   });
   const keywords = split
-    .map((k) => ({ zh: clip(k.zh, 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    // 中文去掉括號裡的說明：模型會寫「女子教育（學校教育）」，但中文文獻要求關鍵字原樣出現在標題或摘要，括號會讓每篇都對不上
+    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
-  return keywords;
+  // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
+  // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
+  const words = (s) => s.split(/[\s-]+/).filter(Boolean);
+  const covered = (a, b) => a !== b && words(a).every((w) => words(b).includes(w));
+  return keywords.filter((k) => k.role !== 'core' || !keywords.some((o) => o.role === 'core' && covered(k.en, o.en)));
 }
 
 const KW_SCHEMA = {
@@ -216,11 +229,14 @@ const JUDGE_ABSTRACT_LEN = 2400;
 async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
   const out = await chatJSON({
     system:
-      '你是協助學生查證文獻的研究助理。學生有一個主張，下面是從學術資料庫找到的一篇文獻（標題與摘要）。請判讀這一篇，標準要嚴格。\n' +
+      // 這裡原本的範例只適合教育題（「文獻談醫療、商業、司法…一律是 1」），網站服務各學院之後，
+      // 法律題的司法研究、商管題的企業研究會被誤判成不切題，所以改成不分學科的說法。
+      '你是協助大學生查證文獻的研究助理，學生來自各個學院（人文、法律、社科、教育、商管、理工、醫護、藝術設計）。學生有一個主張，下面是從學術資料庫找到的一篇文獻（標題與摘要）。請判讀這一篇。\n' +
       'rel（相關度）：\n' +
       '3＝這篇直接在研究主張談的事（同樣的現象、同樣或相近的對象）。\n' +
-      '2＝主題相同、對象或情境略有不同，可以當佐證。\n' +
-      '1＝只有部分用詞相同。對象或領域明顯不同就屬於這一級：主張談學生的學習，文獻談醫療、商業、司法、行銷、公共政策，一律是 1。\n' +
+      '2＝主題相同、對象或情境略有不同（例如不同國家、不同年齡層、相近的制度），可以當佐證。\n' +
+      '1＝只有部分用詞相同，研究的現象或對象跟主張明顯不同（例如主張談大學生使用社群媒體，文獻談企業的社群行銷）。\n' +
+      '判斷時以「主張本身談的現象」為準，不要因為文獻屬於哪個學科就降級：主張是法律題，司法、判決、審判的研究就是同一領域。\n' +
       '0＝無關。\n' +
       'stance（立場）：support＝研究發現支持主張；counter＝發現與主張相反，或指出主張不成立的情況；mixed＝有支持也有相反，或只在特定條件下成立；' +
       'unclear＝摘要只說明研究目的或方法、沒有寫出研究結果，無法判斷；unrelated＝rel 是 0 或 1。\n' +
@@ -247,19 +263,26 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
  * @param {string} o.claim 要查證的主張
  * @param {object[]} o.evidence agent-local 的 classifyWork 產生的項目（含 _ab 摘要）
  * @param {string} o.model 顯示用的模型名稱
- * @returns {Promise<{evidence:object[], removed:number, judged:number}>} evidence 依相關度高到低排，最多 10 篇
+ * @returns {Promise<{evidence:object[], removed:number, judged:number, removedItems:{t:string, src:string, rel:number}[]}>} evidence 依相關度高到低排，最多 10 篇；
+ *   removedItems：判讀為不切題而排除的文獻（標題、來源、相關度），寫進研究歷程讓小組知道排除了哪些
  */
 export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl) {
   const list = Array.isArray(evidence) ? evidence : [];
-  if (!list.length || !String(claim || '').trim()) return { evidence: list, removed: 0, judged: 0 };
+  if (!list.length || !String(claim || '').trim()) return { evidence: list, removed: 0, judged: 0, removedItems: [] };
   const verdicts = await judgeWorks({ claim, works: list.map((e) => ({ title: e.t, abstract: e._ab || e.f })) }, fetchImpl);
-  const kept = [];
+  const kept = [], removedItems = [];
   let judged = 0;
   list.forEach((e, i) => {
     const v = verdicts[i];
     if (!v || v.rel < 0) { kept.push({ e, rel: 1.5 }); return; } // 模型漏掉的：保留規則式的結果
     judged++;
-    if (v.rel < 2) return; // 不切題：排除
+    // 中文網路搜尋（華藝、博碩士論文網）的文獻：摘要只是搜尋結果的片段，比較短，容易被判成只沾到邊；
+    // 而且 Claude 搜尋時已經依論點挑過一次。相關度 1 時仍保留，標成相關度低、立場待確認，請學生讀原文
+    if (v.rel === 1 && e.web) {
+      kept.push({ rel: 0.5, e: { ...e, k: 'u', rel: '低', d: '間接', unc: true, ai: model || 'Claude', fo: e.f, f: '摘要只看得出部分相關，請閱讀原文確認是否適用於你們的主張。' } });
+      return;
+    }
+    if (v.rel < 2) { removedItems.push({ t: clip(e.t, 60), src: e.src || 'OpenAlex', rel: v.rel }); return; } // 不切題：排除
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
     kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' ? 's' : 'c', // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
@@ -267,7 +290,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
   kept.sort((a, b) => b.rel - a.rel);
-  return { evidence: kept.slice(0, 10).map((x) => x.e), removed: list.length - kept.length, judged };
+  return { evidence: kept.slice(0, 10).map((x) => x.e), removed: list.length - kept.length, judged, removedItems };
 }
 
 /**
@@ -286,6 +309,55 @@ export async function summarizeZh(title, abstract, fetchImpl) {
   // 小模型偶爾會寫成韓文、日文或英文：不是以繁體中文為主就不採用，呼叫端會改用翻譯或請學生看原文
   if (!isZhText(zh)) throw new Error('模型沒有用中文寫摘要');
   return zh;
+}
+
+/**
+ * 重點整理：依摘要寫成結構化的繁體中文，讓學生不用讀原文（多半是英文）就能判斷這篇對報告有沒有用。
+ * 取代原本 80 字的中文摘要（summarizeZh）。只能根據摘要——多數論文全文要付費或透過圖書館，網站拿不到。
+ * @param {{title:string, abstract:string, claim?:string}} o claim：學生的主張，用來寫「對報告的用處」
+ * @returns {Promise<{question:string, method:string, findings:string, limits:string, use:string}|null>} 摘要太短時回傳 null
+ */
+export const KP_FIELDS = ['question', 'method', 'findings', 'limits', 'use'];
+
+// 模型偶爾會把下一個欄位連同標記寫進前一個欄位（預覽網站實際出現過：
+// findings 的結尾是「…平均值。</findings>\n<parameter name="limits">研究範圍限於日本…」）。
+// 把標記後面的內容搬回它該在的欄位（那個欄位原本是空的或「摘要沒有說明」時），再去掉殘留的標記。
+const EMPTYISH = (s) => !String(s || '').trim() || /^摘要沒有說明。?$/.test(String(s).trim());
+export function fixLeakedFields(out) {
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, String(out?.[k] ?? '')]));
+  for (const k of KP_FIELDS) {
+    const parts = kp[k].split(/<parameter\s+name="(\w+)"\s*>/);
+    if (parts.length < 2) continue;
+    kp[k] = parts[0];
+    for (let i = 1; i < parts.length; i += 2) {
+      const name = parts[i], text = parts[i + 1] || '';
+      if (KP_FIELDS.includes(name) && EMPTYISH(kp[name])) kp[name] = text;
+    }
+  }
+  for (const k of KP_FIELDS) kp[k] = kp[k].replace(/<\/?(?:parameter|invoke|antml:[\w]+|question|method|findings|limits|use)\b[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return kp;
+}
+export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
+  if (clip(abstract, 1200).length < 60) return null;
+  const out = await chatJSON({
+    system:
+      '你是協助大學生閱讀文獻的研究助理。根據下面這篇文獻的標題與摘要，用繁體中文（台灣用語，不可以用韓文、日文或英文作答）寫重點整理，' +
+      '讓學生不用讀原文就能判斷這篇對報告有沒有用。只能根據摘要，不要加入摘要沒有的內容；摘要沒寫的欄位就寫「摘要沒有說明」。\n' +
+      '各欄位：\n' +
+      'question：研究問題，這篇想回答什麼（一句）。\n' +
+      'method：對象與方法，誰、多少人、在哪裡、怎麼研究（問卷、實驗、訪談、文獻分析…），一到兩句。\n' +
+      'findings：主要發現，兩到三句，保留摘要裡的關鍵數據；摘要只寫目的沒寫結果就寫「摘要沒有寫出研究結果」。\n' +
+      'limits：限制或適用範圍（例如只研究某個國家、某個年齡層、樣本小），一句；摘要沒寫就寫「摘要沒有說明」。\n' +
+      'use：對照學生的主張，說明這篇可以支持主張的哪一部分、哪裡不適用，一到兩句；沒有提供主張時寫這篇適合用在哪類報告。\n' +
+      '全部合起來 200 到 300 字。',
+    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
+    schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
+    maxTokens: 900, timeout: 90000,
+  }, fetchImpl);
+  const kp = Object.fromEntries(KP_FIELDS.map((k) => [k, clip(fixLeakedFields(out)[k], k === 'findings' ? 260 : 160)]));
+  // 小模型偶爾會寫成別的語言：主要發現與用處合起來不是以繁體中文為主就不採用，呼叫端會再試一次或改用翻譯
+  if (!isZhText(kp.findings + kp.use) || !kp.findings) throw new Error('模型沒有用中文寫重點整理');
+  return kp;
 }
 
 // 是不是以中文為主的文字：有韓文或日文假名就不算；中文字要占文字的一半以上

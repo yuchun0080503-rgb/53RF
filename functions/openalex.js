@@ -38,6 +38,9 @@ async function handleOpenAlex(req, res, { verify, apiKey, fetchImpl = fetch }) {
   try { url = buildUrl(req.query || {}, apiKey()); } catch (err) { return res.status(400).json({ error: err.message }); }
   try {
     const r = await fetchImpl(url);
+    // 錯誤時只回狀態碼，不把 OpenAlex 的錯誤內容轉給網頁：錯誤訊息可能引用請求網址，而網址裡帶著金鑰（api_key）。
+    // 429（額度用完）照樣回 429，前端不會改回直接連；其他錯誤回原狀態碼，前端會改回直接連 OpenAlex。
+    if (!(r.status >= 200 && r.status < 300)) return res.status(r.status || 502).json({ error: `OpenAlex 回應 ${r.status}` });
     const text = await r.text();
     res.status(r.status).set('Content-Type', 'application/json').send(text);
   } catch {

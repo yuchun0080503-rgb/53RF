@@ -42,9 +42,23 @@
         }
       },
       {
+        "source": "/api/zhsearch",
+        "function": {
+          "functionId": "zhsearch",
+          "region": "asia-east1"
+        }
+      },
+      {
         "source": "/api/openalex",
         "function": {
           "functionId": "oaproxy",
+          "region": "asia-east1"
+        }
+      },
+      {
+        "source": "/api/jstage",
+        "function": {
+          "functionId": "jstage",
           "region": "asia-east1"
         }
       },

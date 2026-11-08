@@ -416,7 +416,7 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
   // 觀點詞：畫布上提到的其他概念（比較的條件、可能的機制、子問題），列出來讓小組看到有沒有漏掉，但不加進搜尋條件（加了會讓查詢太嚴）
   S.kwAspect=ks.filter(k=>k.aspect).map(k=>k.name);
-  S.kw=[...ks.map(k=>k.name),...mine];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.kwV=2;
+  S.kw=[...ks.map(k=>k.name),...mine];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
   aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
@@ -432,7 +432,7 @@ function kwSets(){const core=(S.kwCore||[]).filter(k=>S.kw.includes(k)),isCore=k
  const ordered=[...S.kw.filter(isCore).sort((a,b)=>rank(a)-rank(b)),...S.kw.filter(k=>!isCore(k)&&!isAsp(k))];
  const claim=S.claim||(rdItems().find(o=>o.tag==="claim")||{}).text||S.q0||"";
  return{keywords:ordered.map(en).filter(Boolean),keywordsZh:ordered.filter(hasZh),coreCount:Math.max(1,S.kw.filter(isCore).map(en).filter(Boolean).length),coreZh:Math.max(1,S.kw.filter(k=>isCore(k)&&hasZh(k)).length),
-  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張："),synonyms:S.kwSyn||{}}}
+  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張："),synonyms:S.kwSyn||{},discipline:S.disc||""}}
 function translateKw(k,manual){if(!window.RFAGENT||!hasZh(k)||kwBusy.has(k))return;kwBusy.add(k);
  const known=RFAGENT.keywordPairs(k).some(x=>x.zh===k),ctx=[p.name,S.claim||S.rq].filter(Boolean).join("；");
  const job=AI()&&!known?RFAI.translate(k,ctx).then(r=>({en:r.en,via:AIN(),syn:r.synonyms}),()=>RFAGENT.translateTerm(k)):RFAGENT.translateTerm(k);
@@ -1350,14 +1350,14 @@ function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k=
   :S.wantCounter===false?`你們選擇先不看反面例證。<div class="acts"><button data-a="counter">改變主意，找反面例證</button></div>`
   :`<b>需要反面例證作為參考嗎？</b><div class="mute" style="margin-top:3px">主張論證模式不會主動提供反面例證。如果想知道別人可能怎麼反駁這個主張，可以請 Agent 另外找。</div><div class="acts"><button data-a="counter">需要，找反面例證</button><button data-a="nocounter">先不用</button></div>`;
  return `<h3>主張論證進度</h3><div class="box sm mode-claim"><b>主張論證模式</b><div class="mute" style="margin-top:3px">要論證的主張</div><div style="font-size:14.5px;margin-top:2px">${esc(S.claim)}</div></div>
- ${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪：${ROUND_N[i]||"擴大範圍的補充資料"}</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
+ ${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪：${ROUND_N[i]||"擴大範圍的補充資料（放寬出版年份）"}</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
  <div class="box sm">${S.msg||"尚未搜尋。"}</div>
  <h3>論證強度</h3>
  <div class="hl sm"><span>支持主張的證據</span><span class="st"><i class="dot ${sup.length>=3?"g":sup.length?"y":"r"}"></i>${sup.length} 筆（至少要 3 筆）</span></div>
  <div class="hl sm"><span>證據力高的研究</span><span class="st"><i class="dot ${high?"g":"r"}"></i>${high} 筆（回顧或實驗，至少要 1 筆）</span></div>
  ${S.rounds?`<h3>目前主張下可能有的潛在問題</h3>${issues.length?issues.map(x=>`<div class="box sm warn" style="margin:6px 0">${esc(x)}</div>`).join(""):`<p class="sm mute">從主張的寫法和目前的證據來看，沒有發現明顯的問題。</p>`}<div class="box sm" style="margin-top:12px">${ask}</div>`:""}
  ${ok?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}論證的證據已足夠</b><div class="mute" style="margin-top:4px">支持主張 ${sup.length} 筆，其中證據力高 ${high} 筆${uv?`；有 ${uv} 筆來源待驗證`:""}</div></div>`:""}
- <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
+ <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
 function bind(r=document){r.querySelectorAll("details[data-ei]").forEach(d=>d.ontoggle=()=>{const e=S.ev[+d.dataset.ei];if(d.open&&e)zhFor(e.id)});
  r.querySelectorAll(".flow .go").forEach(x=>x.onkeydown=e=>{if(e.key==="Enter")x.click()});
  r.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const k=b.dataset.q,v=b.dataset.v,cur=scv(k),nx=cur.includes(v)?cur.filter(x=>x!==v):[...cur,v];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];saveS();renderPane()});
@@ -1669,30 +1669,49 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
  bind(el);el.querySelectorAll("i[data-i]").length&&icons(el);
  if(busy)el.querySelectorAll("button[data-a],button[data-q]").forEach(b=>b.disabled=true)}
 const zhBusy=new Set();
-async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id===id),e0=e()[0];if(!e0||(e0.zh&&!zhBad(e0))||e0.lang==="zh"||zhBusy.has(id)||!LIVE())return;zhBusy.add(id);
- const put=t=>document.querySelectorAll('[data-zh="'+CSS.escape(String(id))+'"]').forEach(n=>n.textContent=t);
- try{let zh="";
-  if(AI()&&(e0.ab||e0.fo||e0.f)){put("中文摘要產生中…");
-   for(let k=0;k<2&&!zh;k++)zh=await RFAI.summarizeZh(e0.t,e0.ab||e0.fo||e0.f).catch(err=>{console.warn("[ResearchFlow] 模型中文摘要失敗：",err?.message||err);return ""}); // 寫成別的語言時再試一次
-   if(zh)zh+="（"+AIN().replace(/（.*$/,"")+" 整理，請對照原文）"}
-  if(!zh&&window.RFAGENT&&RFAGENT.toZh&&(e0.ab||e0.fo||e0.f)){put("中文摘要翻譯中…");zh=await RFAGENT.toZh(e0.ab||e0.fo||e0.f);if(zh)zh+="（機器翻譯，僅供參考）"}
-  if(zh){e().forEach(x=>x.zh=zh);put(zh);saveS()}else put(evZh(e0)||"無法產生中文摘要，請閱讀原文。")}
- catch(err){console.warn("[ResearchFlow] 產生中文摘要失敗：",err?.message||err);put(evZh(e0)||"無法產生中文摘要，請閱讀原文。")}
- finally{zhBusy.delete(id)}}
-// 搜尋完成後在背景逐篇產生（只有本機模型才這樣做；免費翻譯服務有每日額度，留給學生真的展開的那幾篇）
+// 重點整理（取代原本 80 字的中文摘要）：研究問題、對象與方法、主要發現、限制、對你們報告的用處。
+// 有 AI 時由 Claude 依摘要整理（RFAI.keyPoints），存在 e.kp；中英日文獻都整理。沒有 AI 時英文摘要退回機器翻譯（e.zh）。
+// 舊專案已經存的中文摘要（e.zh）照樣顯示；有 AI 時背景會再補上重點整理。
+const KP_N={question:"研究問題",method:"對象與方法",findings:"主要發現",limits:"限制",use:"對你們報告的用處"};
+const kpClaim=()=>S.claim||S.rq||"";
+function kpHTML(e){
+ // 已經存下來的重點整理也在顯示時清掉模型誤寫的欄位標記（見 agent-llm.mjs 的 fixLeakedFields）
+ if(e.kp){const kp=window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp;
+  return `<div class="box sm" style="margin:6px 0"><b>重點整理</b><span class="mute">（${esc(e.kpBy||"AI")} 依摘要整理，請對照原文）</span>${Object.entries(KP_N).map(([k,n])=>kp[k]?`<p style="margin:4px 0"><b>${n}：</b>${esc(kp[k])}</p>`:"").join("")}</div>`}
+ if(!zhBad(e)&&e.zh)return `<p><b>中文摘要：</b>${esc(e.zh)}</p>`;
+ if(!(e.ab||e.fo||e.f))return `<p class="mute">資料庫沒有提供這篇的摘要，請開啟原始來源閱讀。</p>`;
+ // 摘要太短（例如網路搜尋只拿到一小段）：整理不出重點，直接說明（RFAI.keyPoints 也是 60 字以下不整理）
+ if(String(e.ab||e.fo||e.f).trim().length<60)return `<p class="mute">只有摘要片段，無法整理重點，請開啟原始來源閱讀完整摘要。</p>`;
+ if(zhBusy.has(e.id)||(AI()&&!e.zhx))return `<p class="mute">重點整理產生中…</p>`;
+ return e.lang==="zh"?"":`<p class="mute">無法產生重點整理，請開啟原始來源閱讀。</p>`}
+async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id===id),e0=e()[0];
+ if(!e0||e0.kp||zhBusy.has(id)||!LIVE())return;
+ const text=e0.ab||e0.fo||e0.f;if(!text)return;
+ if(!AI()&&((e0.zh&&!zhBad(e0))||e0.lang==="zh"))return; // 沒有 AI：只替英文摘要做機器翻譯
+ zhBusy.add(id);
+ const put=()=>document.querySelectorAll('[data-kp="'+CSS.escape(String(id))+'"]').forEach(n=>{n.innerHTML=kpHTML(e()[0]||e0)});
+ try{put();let kp=null;
+  if(AI())for(let k=0;k<2&&!kp;k++)kp=await RFAI.keyPoints({title:e0.t,abstract:text,claim:kpClaim()}).catch(err=>{console.warn("[ResearchFlow] 模型重點整理失敗：",err?.message||err);return null}); // 寫成別的語言時再試一次
+  if(kp){const by=AIN().replace(/（.*$/,"");e().forEach(x=>{x.kp=kp;x.kpBy=by});saveS()}
+  else if(e0.lang!=="zh"&&!(e0.zh&&!zhBad(e0))&&window.RFAGENT&&RFAGENT.toZh){const zh=await RFAGENT.toZh(text);if(zh){e().forEach(x=>{x.zh=zh+"（機器翻譯，僅供參考）"});saveS()}}}
+ catch(err){console.warn("[ResearchFlow] 產生重點整理失敗：",err?.message||err)}
+ finally{zhBusy.delete(id);put()}}
+// 搜尋完成後在背景逐篇產生（有 AI 時；沒有 AI 時免費翻譯服務有每日額度，只替英文文獻翻譯）
 let zhRun=false;
-// zhTried：這次開網頁後已經試過的。之前失敗標記過 zhx 的，有本機模型時這次會再試一次（以前模型格式失效時全部失敗過）
+// zhTried：這次開網頁後已經試過的。之前失敗標記過 zhx 的，有 AI 時這次會再試一次
 const zhTried=new Set();
 async function zhFill(){if(zhRun||!LIVE()||!p||!canEdit())return;zhRun=true;const proj=p;
- try{for(const id of [...S.ev,...(S.saved||[])].filter(e=>(!e.zh||zhBad(e))&&(AI()||!e.zhx)&&!zhTried.has(e.id)&&e.lang!=="zh").map(e=>e.id)){zhTried.add(id);if(p!==proj)return;await zhFor(id);
-   const e=[...S.ev,...(S.saved||[])].find(x=>x.id===id);if(e&&(!e.zh||zhBad(e)))e.zhx=1; // 產生失敗的這次不再重試，避免一直打翻譯服務
+ try{for(const id of [...S.ev,...(S.saved||[])].filter(e=>!e.kp&&!zhTried.has(e.id)&&(AI()||((!e.zh||zhBad(e))&&!e.zhx&&e.lang!=="zh"))).map(e=>e.id)){zhTried.add(id);if(p!==proj)return;await zhFor(id);
+   const e=[...S.ev,...(S.saved||[])].find(x=>x.id===id);if(e&&!e.kp&&(!e.zh||zhBad(e))){e.zhx=1;document.querySelectorAll('[data-kp="'+CSS.escape(String(id))+'"]').forEach(n=>{n.innerHTML=kpHTML(e)})} // 產生失敗的這次不再重試
    if(!AI())await new Promise(r=>setTimeout(r,400))}}
  finally{zhRun=false}}
 // 中文文獻在公開資料庫裡收錄有限，所以另外給一個用中文關鍵字到 Google 學術搜尋自己找的連結（開新分頁，由學生自己判斷與引用）
 const zhMore=()=>{/* 中文資料庫多半沒有開放 API，這裡把關鍵字帶過去，讓學生到各資料庫自己查；找到的文獻可以用文字工具加到畫布上 */
- const z=S.kw.filter(hasZh).slice(0,3),k=(z.length?z:S.kw.slice(0,3)).join(" ");if(!LIVE()||!k)return"";
+ // 關鍵字：主題詞＋短的時期或地點詞（例如「女子教育 日治」；華藝每個詞都要出現，整串長詞結果少很多），見 sources.mjs 的 localTerms
+ const z=S.kw.filter(hasZh).slice(0,3),smart=window.RFAGENT&&RFAGENT.localTerms?RFAGENT.localTerms(S.kw.filter(hasZh),S.claim||S.rq||""):"",k=smart||(z.length?z:S.kw.slice(0,3)).join(" ");if(!LIVE()||!k)return"";
  const d=new Date(),p2=n=>String(n).padStart(2,"0"),ts=`${d.getFullYear()}/${p2(d.getMonth()+1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
- const airiti="https://www.airitilibrary.com/Article/Query?queryString="+encodeURIComponent(JSON.stringify({"查詢時間":ts,"查詢歷史類型代碼":"ADLang","是否關鍵字統計":true,"DSF":{"SearchFileds":[{"FieldName":49,"SearchKeyWord":k,"FieldQuery":true}],"IsFuzzySearch":false},"BSF":{"SearchFiledList":[{"FieldName":0,"SearchKeyWord":k,"FieldQuery":true,"FieldLogic":0}]}}));
+ // 華藝：每個詞各一個檢索欄位（跟它首頁搜尋框送出的格式一樣；2026-11-08 實測「女子教育 日治」查到 230 筆）
+ const airiti=window.RFAGENT&&RFAGENT.airitiUrl?RFAGENT.airitiUrl(k):"https://www.airitilibrary.com/Article/Query?queryString="+encodeURIComponent(JSON.stringify({"查詢時間":ts,"查詢歷史類型代碼":"ADLang","是否關鍵字統計":true,"DSF":{"SearchFileds":[{"FieldName":49,"SearchKeyWord":k,"FieldQuery":true}],"IsFuzzySearch":false},"BSF":{"SearchFiledList":[{"FieldName":0,"SearchKeyWord":k,"FieldQuery":true,"FieldLogic":0}]}}));
  const scholar="https://scholar.google.com/scholar?hl=zh-TW&lr=lang_zh-TW&q="+encodeURIComponent(k);
  const a=(href,label,extra="")=>`<a class="tag" href="${esc(href)}" target="_blank" rel="noopener noreferrer"${extra} style="text-decoration:none">${label} ↗</a>`;
  const zl=zhLinksOf(p),L={airiti:a(airiti,"華藝線上圖書館"),ndltd:a("https://ndltd.ncl.edu.tw/","臺灣博碩士論文",` data-copy="${esc(k)}" title="會先幫你複製關鍵字，到搜尋框貼上即可" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.copy)"`),scholar:a(scholar,"Google 學術")};
@@ -1704,7 +1723,8 @@ const dbLine=()=>{if(!window.RFSRC)return"";const ks=srcOf(p),c=courseOfP(p),by=
 // 例證的中文說明：模型整理的摘要（zh）優先，其次是模型判讀時寫的一句主要發現
 // 之前存下來的摘要如果是別的語言（例如韓文），當作沒有，重新產生
 const zhBad=e=>!!(e.zh&&window.RFAI&&RFAI.isZhText&&!RFAI.isZhText(String(e.zh).replace(/（[^）]*）$/,"")));
-const evZh=e=>(!zhBad(e)&&e.zh)||(e.ai&&!e.unc?e.f:"");
+// 畫布證據卡用的一段中文：有重點整理時用「主要發現＋用處」
+const evZh=e=>e.kp?[e.kp.findings,e.kp.use&&("用處："+e.kp.use)].filter(Boolean).join(" "):((!zhBad(e)&&e.zh)||(e.ai&&!e.unc?e.f:""));
 const isSaved=e=>(S.saved||[]).some(x=>x.id===e.id);
 function savedHTML(){const sv=S.saved||[];if(!sv.length)return"";
  return `<h3>已收藏的例證（${sv.length}）</h3><p class="sm mute" style="margin-top:-2px">收藏的例證會一直留著，重新開始或換主張都不會不見，可以隨時放到畫布上。</p>`+sv.map((e,j)=>`<div class="ev sv"><b>${esc(e.t)}</b>（${esc(e.y)}）${evZh(e)?`<div class="evzh">${esc(evZh(e))}</div>`:""}<div class="acts" style="margin-top:6px">${/^https:\/\//.test(e.url||"")?`<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;align-self:center">開啟原始來源</a>`:""}<button data-a="tocv" data-k="s${j}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>放到畫布</button><button data-a="unsave" data-k="${j}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>取消收藏</button></div></div>`).join("")}
@@ -1715,7 +1735,7 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
  // 「加入畫布」時可以選這筆證據要支撐哪個主張：預設選主張論證模式正在論證的那個，或證據上記錄的相關論點，否則第一個
  const claimOpts=contentObjs().filter(o=>o.tag==="claim"),guessClaim=e=>(claimOpts.find(o=>objLabel(o)===(S.claim||"").slice(0,24))||claimOpts.find(o=>e.c&&(o.text||o.aiRead)===e.c)||claimOpts[0]||{}).id;
  const src=e=>/^https:\/\//.test(e.url||"")?`<p><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">開啟原始來源</a>${e.au?"　"+esc(e.au):""}${e.vn?"．"+esc(e.vn):""}</p>`:"";
- const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}<div class="evzh" data-zh="${esc(e.id)}">${esc(evZh(e)||(e.lang==="zh"||e.zhx?"":"中文摘要產生中…"))}</div></summary>${src(e)}<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}${e.lv?"　證據力："+esc(e.lv):""}</p><p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc(e.l)}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||"—")}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
+ const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}${e.lv?"　證據力："+esc(e.lv):""}</p><p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc(e.l)}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||"—")}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
  const li=k=>S.ev.map((e,i)=>e.k===k?item(e,i):"").join("")||`<p class="sm mute">尚無資料</p>`;
  // 主張論證模式：只列支持主張的證據，依證據力分層；反面例證只有小組要求過才出現在最下面
  if(MODE()==="claim"){const sup=S.ev.map((e,i)=>[e,i]).filter(x=>x[0].k==="s"),grp=f=>sup.filter(x=>f(lvOf(x[0]))).map(x=>item(x[0],x[1])).join("")||`<p class="sm mute">尚無資料</p>`;
@@ -1805,7 +1825,7 @@ async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S
   setStat("OpenAlex 沒有這篇的摘要，向 Semantic Scholar 查詢中…","y");
   const ab=await RFAGENT.fetchAbstractByDoi(e.url);if(p!==proj)return;
   if(ab){[...S.ev,...(S.saved||[])].filter(x=>x.id===e.id).forEach(x=>{x.ab=ab;x.abs="Semantic Scholar"});saveS()}}
- if(LIVE()&&(!e.zh||zhBad(e))&&e.lang!=="zh"&&(e.ab||e.fo||e.f)){setStat("整理中文摘要中…","y");await zhFor(e.id);if(p!==proj)return}
+ if(LIVE()&&!e.kp&&(AI()||((!e.zh||zhBad(e))&&e.lang!=="zh"))&&(e.ab||e.fo||e.f)){setStat("整理重點中…","y");await zhFor(e.id);if(p!==proj)return}
  let card=p.objs.find(isCard);
  if(!card){const b=claim?bbox(claim):null,tops=claim?p.objs.filter(l=>l.type==="link"&&l.a===claim.id).map(l=>getO(l.b)).filter(Boolean).map(o=>{const q=bbox(o);return q.y+q.h}):[];
   card=mkO({type:"text",by:ME,x:b?b.x+b.w+70:120,y:b?(tops.length?Math.max(...tops)+31:b.y+19):20+p.objs.length*6,text:head+"\n"+evSummary(e),ml:true,eid:e.id,...(/^https:\/\//.test(e.url||"")?{url:e.url,ul:shortUrl(e.url)}:{}),tag:"evidence",stage:"證據"});p.objs.push(card)}
@@ -1858,15 +1878,16 @@ async function actLive(a,w){
   // 查詢由小組確認過的關鍵字組成：第 1 輪找支持方向，第 2 輪起加上負面／限制用語找反向方向（見 agent-local.mjs 的 buildQueries）
   if(!S.kw.length){alert("請先回到上一步新增至少一個搜尋關鍵字。");return}
   const known=()=>[...S.ev,...(S.held||[])].flatMap(e=>[e.id,e.url]).filter(Boolean).concat(S.gone||[]); // 連 DOI 網址一起排除：同一篇從不同資料庫找到時 id 不一樣，DOI 一樣
-  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料"}中…`:`第 ${n+1} 輪：搜尋 OpenAlex 學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
+  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料（放寬出版年份）"}中…`:`第 ${n+1} 輪：搜尋學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
   label=roundLabel(S.rounds);
   // 反思迴圈（第 5 頁流程圖第 4 階段）：每一輪搜尋完，Agent 自己檢查證據缺口；還不夠、而且沒用完輪數預算時，
   // 自己檢討原因、調整關鍵字，接著搜下一輪，不用學生一輪一輪按。用完預算（預設 3 輪）就停下來，等小組決定要不要擴大範圍。
   job=async()=>{for(;;){const n=S.rounds;busy=roundLabel(n);renderPane();
-   const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p)});
+   // sources：老師勾選或依領域自動挑的加查資料庫（srcOf）；sourcesLocked：老師有勾選時只查老師勾的，不再依學科自動加查
+   const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p),sourcesLocked:Array.isArray(courseOfP(p)?.sources)});
    S.qs.push(r.queries);S.rounds++;S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.filter(e=>e.k==="c").length,nu=r.evidence.filter(e=>e.k==="u").length,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
-   const off=((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
+   const off=((r.dbNames||[]).length?`本輪查詢的資料庫：${r.dbNames.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");
    if(MODE()==="claim"){S.msg=`本輪找到 ${ns} 篇支持主張的文獻（請到「證據」頁確認）。`+off+(enoughOf(p)?"論證的證據已達門檻。":"證據還不夠：支持主張的證據至少要 3 筆，而且其中要有回顧或實驗研究。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"");}else{
    S.msg=(r.scanned?`本輪找到 ${r.scanned} 篇切題的新文獻，初步分類為支持 ${ns} 篇、反向／限制 ${nc} 篇${nu?`、立場待確認 ${nu} 篇（摘要沒寫結果）`:""}（請到「證據」頁確認分類）。`:"本輪沒有找到同時提到所有主題詞的新文獻。可以按「修改搜尋方向」減少主題詞，或換一個說法。")+off+(c<3?"反向證據仍不足（Evidence Imbalance）。":"反向證據已達 3 篇。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"")}

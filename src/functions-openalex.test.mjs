@@ -21,6 +21,14 @@ test('登入後轉送並保留 OpenAlex 的狀態碼', async () => {
   await handleOpenAlex(req({ search: 'a' }), res, { verify, apiKey: () => 'K', fetchImpl: async (u) => { seen = u; return { status: 200, text: async () => '{"results":[]}' }; } });
   assert.equal(res.code, 200); assert.match(seen, /api_key=K/); assert.equal(res.body, '{"results":[]}');
 });
+test('OpenAlex 回錯誤時只回狀態碼，不把錯誤內容（可能含金鑰）轉給網頁', async () => {
+  for (const status of [429, 400, 500]) {
+    const res = mkRes();
+    await handleOpenAlex(req({ search: 'a' }), res, { verify, apiKey: () => 'SECRETKEY', fetchImpl: async (u) => ({ status, text: async () => `{"error":"bad request ${u}"}` }) });
+    assert.equal(res.code, status);
+    assert.doesNotMatch(JSON.stringify(res.body), /SECRETKEY|api_key/);
+  }
+});
 test('缺 search/filter 回 400', async () => {
   const res = mkRes();
   await handleOpenAlex(req({ select: 'id' }), res, { verify, apiKey: () => '' });

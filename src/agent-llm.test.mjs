@@ -54,6 +54,50 @@ test('planSearch：把寫在一起的概念拆開，丟掉不是英文的翻譯�
   await assert.rejects(planSearch({ title: 't', claim: 'c' }, none), /主題詞/);
 });
 
+test('planSearch：提示詞要求主題詞同時涵蓋原因與結果、時期地點放範圍詞', async () => {
+  const f = fake({ focus: 'x', discipline: 'humanities', keywords: [{ zh: '女子教育', en: 'female education', role: 'core', synonyms: [] }, { zh: '女性就業', en: 'female employment', role: 'core', synonyms: [] }] });
+  await planSearch({ title: 't', claim: '日治時期臺灣的女子教育如何影響女性就業' }, f);
+  assert.match(f.calls[0].system, /「原因」.*與「結果」各至少一個/);
+  assert.match(f.calls[0].system, /不可以用兩個意思相近的詞當兩個主題詞/);
+  assert.match(f.calls[0].system, /時期與地點.*放在範圍詞/);
+});
+
+test('planSearch：兩個主題詞重複時（employment ⊂ female employment）只留具體的那個；範圍詞不受影響', async () => {
+  // 預覽網站實際出現過的規劃結果：主張的原因（女子教育）沒有被列為主題詞
+  const f = fake({ focus: 'x', discipline: 'social', keywords: [
+    { zh: '就業', en: 'employment', role: 'core', synonyms: [] },
+    { zh: '女性就業', en: 'female employment', role: 'core', synonyms: ["women's employment"] },
+    { zh: '女子教育', en: 'female education', role: 'core', synonyms: [] },
+    { zh: '學生', en: 'students', role: 'scope', synonyms: [] },
+    { zh: '大學生', en: 'university students', role: 'scope', synonyms: [] },
+  ] });
+  const r = await planSearch({ title: 't', claim: 'c' }, f);
+  assert.deepEqual(r.keywords.map((k) => k.en), ['female employment', 'female education', 'students', 'university students']);
+  const one = fake({ focus: 'x', keywords: [{ zh: '就業', en: 'employment', role: 'core', synonyms: [] }, { zh: '女性就業', en: 'female-employment', role: 'core', synonyms: [] }] });
+  assert.deepEqual((await planSearch({ title: 't', claim: 'c' }, one)).keywords.map((k) => k.en), ['female-employment'], '連字號也算同一個字');
+});
+
+test('planSearch／reflectSearch：中文關鍵字去掉括號裡的說明（預覽網站出現過「女子教育（學校教育）」）', async () => {
+  const f = fake({ focus: 'x', discipline: 'humanities', keywords: [
+    { zh: '女子教育（學校教育）', en: 'female education', role: 'core', synonyms: [] },
+    { zh: '女性勞動參與(labor)', en: 'female labor force participation', role: 'core', synonyms: [] },
+  ] });
+  assert.deepEqual((await planSearch({ title: 't', claim: 'c' }, f)).keywords.map((k) => k.zh), ['女子教育', '女性勞動參與']);
+  const g = fake({ reason: 'r', keywords: [{ zh: '日治（殖民）時期', en: 'japanese colonial period', role: 'scope', synonyms: [] }, { zh: '女子教育', en: 'female education', role: 'core', synonyms: [] }] });
+  const r = await reflectSearch({ claim: 'c', gap: 'g', keywords: [], found: [], queries: [] }, g);
+  assert.ok(r.keywords.some((k) => k.zh === '日治時期'));
+});
+
+test('planSearch：要求模型給學科（schema 限定 8 種），給錯或沒給就留空、不算失敗', async () => {
+  const kw = [{ zh: '翻轉教室', en: 'flipped classroom', role: 'core', synonyms: [] }];
+  const f = fake({ focus: 'x', discipline: 'education', keywords: kw });
+  assert.equal((await planSearch({ title: 't', claim: '翻轉教室提升數學成就' }, f)).discipline, 'education');
+  assert.deepEqual(f.calls[0].schema.properties.discipline.enum, ['humanities', 'law', 'social', 'education', 'business', 'stem', 'health', 'arts']);
+  assert.ok(f.calls[0].schema.required.includes('discipline'));
+  assert.equal((await planSearch({ title: 't', claim: 'c' }, fake({ focus: 'x', discipline: 'physics', keywords: kw }))).discipline, '');
+  assert.equal((await planSearch({ title: 't', claim: 'c' }, fake({ focus: 'x', keywords: kw }))).discipline, '');
+});
+
 test('translate：只接受英文結果', async () => {
   const f = fake({ en: 'Screen Time', synonyms: ['usage duration'] });
   assert.deepEqual(await translate('使用時間', '社群媒體', f), { en: 'screen time', synonyms: ['usage duration'] });
@@ -99,6 +143,69 @@ test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、�
   assert.equal(r.evidence[0].fo, '原摘要a');
   assert.equal(r.evidence[1].unc, true);
   assert.equal(r.evidence[2].mix, true);
+  // 排除了哪些：寫進研究歷程（第 2 篇 rel 1；沒有 src 的當作 OpenAlex）
+  assert.deepEqual(r.removedItems, [{ t: 'Tb', src: 'OpenAlex', rel: 1 }]);
+  const f3 = sequence([{ rel: 0, stance: 'unrelated', finding: '' }]);
+  const r3 = await refineEvidence({ claim: '主張', evidence: [{ id: 'z', t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', _ab: '摘要' }] }, f3);
+  assert.deepEqual(r3.removedItems, [{ t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', rel: 0 }]);
+});
+
+test('refineEvidence：中文網路搜尋的文獻相關度 1 時保留（相關度低、立場待確認），0 仍排除；其他來源相關度 1 照樣排除', async () => {
+  const ev = [
+    { id: 'w1', t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', web: true, k: 's', f: '片段一', _ab: '片段一' },
+    { id: 'w0', t: '無關的中文文獻', src: '華藝線上圖書館', web: true, k: 's', f: '片段二', _ab: '片段二' },
+    { id: 'o1', t: 'Unrelated English paper', src: 'OpenAlex', k: 's', f: 'abs', _ab: 'abs' },
+    { id: 'ok', t: 'Lay judges and sentencing', src: 'OpenAlex', k: 's', f: 'abs2', _ab: 'abs2' },
+  ];
+  const f = sequence([{ rel: 1, stance: 'unrelated', finding: '' }, { rel: 0, stance: 'unrelated', finding: '' }, { rel: 1, stance: 'unrelated', finding: '' }, { rel: 3, stance: 'support', finding: '參審員量刑較輕。' }]);
+  const r = await refineEvidence({ claim: '國民法官制度對刑事量刑的影響', evidence: ev, model: 'Claude' }, f);
+  assert.deepEqual(r.evidence.map((e) => [e.id, e.rel, e.unc]), [['ok', '高', undefined], ['w1', '低', true]], '保留的排在最後');
+  assert.match(r.evidence[1].f, /請閱讀原文確認/);
+  assert.deepEqual(r.removedItems.map((x) => x.t), ['無關的中文文獻', 'Unrelated English paper']);
+});
+
+test('keyPoints：五個欄位的中文重點整理，帶入學生的主張；摘要太短不整理；不是中文就算失敗', async () => {
+  const { keyPoints, KP_FIELDS } = await import('./agent-llm.mjs');
+  const reply = { question: '翻轉教室能否提升國中數學成就？', method: '台灣某國中七年級 141 名學生，準實驗設計。', findings: '實驗組的數學成就測驗平均高於對照組 8 分，達顯著差異。', limits: '只在一所學校進行，樣本較小。', use: '可直接支持「翻轉教室提升國中數學成就」，但只涵蓋七年級。' };
+  const f = fake(reply);
+  const abs = 'This quasi-experimental study examined the effect of the flipped classroom on mathematics achievement among 141 seventh graders in Taiwan. Results showed significant gains.';
+  const r = await keyPoints({ title: 'Flipped classroom and math', abstract: abs, claim: '翻轉教室提升國中數學成就' }, f);
+  assert.deepEqual(Object.keys(r), KP_FIELDS);
+  assert.equal(r.findings, reply.findings);
+  assert.match(f.calls[0].user, /學生的主張：翻轉教室提升國中數學成就/);
+  assert.match(f.calls[0].system, /只能根據摘要/);
+  assert.deepEqual(f.calls[0].schema.required, KP_FIELDS);
+  assert.equal(await keyPoints({ title: 't', abstract: '太短' }, f), null);
+  await assert.rejects(keyPoints({ title: 't', abstract: abs }, fake({ ...reply, findings: 'Math scores improved significantly in the experimental group.', use: 'Supports the claim.' })), /中文/);
+});
+
+test('keyPoints：模型把下一個欄位連同標記寫進前一個欄位時，拆回正確欄位並去掉標記', async () => {
+  const { keyPoints, fixLeakedFields } = await import('./agent-llm.mjs');
+  // 預覽網站實際出現的回應
+  const leaked = {
+    question: '日本刑事審判中 DNA 證據的可采性如何變化？', method: '分析 1989 至 2024 年的判決。',
+    findings: 'DNA證據案件的有罪率不高於一般公布的各審級有罪率。</findings>\n<parameter name="limits">研究範圍限於日本、以單一商業資料庫的判決為樣本。',
+    limits: '', use: '只能部分支持主張。',
+  };
+  const fixed = fixLeakedFields(leaked);
+  assert.equal(fixed.findings, 'DNA證據案件的有罪率不高於一般公布的各審級有罪率。');
+  assert.equal(fixed.limits, '研究範圍限於日本、以單一商業資料庫的判決為樣本。');
+  assert.equal(fixLeakedFields({ ...leaked, limits: '摘要沒有說明' }).limits, '研究範圍限於日本、以單一商業資料庫的判決為樣本。', '原本是「摘要沒有說明」也換掉');
+  assert.equal(fixLeakedFields({ ...leaked, limits: '樣本小。' }).limits, '樣本小。', '原本有內容就不覆蓋');
+  assert.equal(fixLeakedFields({ findings: '結果顯著。</findings>', use: 'x' }).findings, '結果顯著。');
+  const abs = 'This study analyzed Japanese criminal judgments from 1989 to 2024 involving DNA evidence and compared conviction rates before and after the lay judge system.';
+  const r = await keyPoints({ title: 't', abstract: abs }, fake(leaked));
+  assert.doesNotMatch(JSON.stringify(r), /parameter|<\//);
+  assert.match(r.limits, /研究範圍限於日本/);
+});
+
+test('judgeOne 的提示詞：不分學科，不再把司法等領域一律判成不切題', async () => {
+  const f = sequence([{ rel: 3, stance: 'support', finding: 'x' }]);
+  await judgeWorks({ claim: '國民法官制度對刑事量刑的影響', works: [{ title: 't', abstract: 'a' }] }, f);
+  const sys = f.calls[0].system;
+  assert.doesNotMatch(sys, /一律是 1/);
+  assert.doesNotMatch(sys, /標準要嚴格/);
+  assert.match(sys, /不要因為文獻屬於哪個學科就降級/);
 });
 
 test('judgeWorks：單篇失敗只影響那一篇；連續兩篇失敗或全部失敗就丟出錯誤讓呼叫端整批退回', async () => {

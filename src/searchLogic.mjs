@@ -4,6 +4,8 @@
 // 為什麼選 OpenAlex：免費、不需要 API key、回傳 DOI 與摘要，足以做到「沒有可驗證來源的資料不標記為證據」。
 // 文件：https://docs.openalex.org/api-entities/works
 
+import { openAireUrl, normalizeOpenAire } from './sources.mjs';
+
 const MAX_QUERIES = 3;
 const MAX_QUERY_LEN = 120;
 const MAX_ABSTRACT_LEN = 2400; // 要包含摘要最後的研究結果（見 agent-llm.mjs JUDGE_ABSTRACT_LEN）
@@ -142,6 +144,8 @@ export const SOURCES = {
   eric: { name: 'ERIC', field: '教育', home: 'https://eric.ed.gov/' },
   europepmc: { name: 'Europe PMC（含 PubMed）', field: '醫學、護理、心理、公衛、生命科學', home: 'https://europepmc.org/' },
   doaj: { name: 'DOAJ 開放取用期刊', field: '跨領域，含人文社會', home: 'https://doaj.org/' },
+  // OpenAIRE：歐洲開放取用研究成果（2026-11-08 實測允許網頁直接查詢）；法律、社科、人文的收錄比 OpenAlex 多。實作在 sources.mjs
+  openaire: { name: 'OpenAIRE', field: '法律、社會科學、人文（歐洲開放取用）', home: 'https://explore.openaire.eu/' },
 };
 // 老師沒有勾選時，依研究領域、課程名稱自動加查（只是預設，老師勾選的優先）
 export function pickSources({ teacher, field = '', course = '', name = '' } = {}) {
@@ -162,6 +166,7 @@ export function sourceUrl(key, q, { fromYear = 2020, rows = 15 } = {}) {
   if (key === 'eric') return `https://api.ies.ed.gov/eric/?search=${enc(flatBool(q))}&format=json&rows=${rows}&fields=id,title,author,publicationdateyear,description,url,peerreviewed,source,publicationtype`;
   if (key === 'europepmc') return `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=${enc(`${flatBool(q)} AND PUB_YEAR:[${fromYear} TO 3000] AND HAS_ABSTRACT:y`)}&format=json&pageSize=${rows}&resultType=core`;
   if (key === 'doaj') return `https://doaj.org/api/search/articles/${enc(`${flatBool(q)} AND bibjson.year:[${fromYear} TO 3000]`)}?pageSize=${rows}`;
+  if (key === 'openaire') return openAireUrl(q, { fromYear, size: rows }); // 會把 AND／OR 減到 4 個以內（OpenAIRE 的上限）
   throw new Error('未知的資料庫：' + key);
 }
 
@@ -179,6 +184,9 @@ export function normalizeSource(key, json, q, { fromYear = 2020 } = {}) {
       const doi = doiUrl(x.doi);
       return pack({ id: doi || `EPMC:${x.source}:${x.id}`, title: strip(x.title).replace(/\.$/, ''), year: Number(x.pubYear) || null, doi, url: doi || `https://europepmc.org/article/${x.source}/${x.id}`, authors: String(x.authorString || '').split(/,\s*/).filter(Boolean).slice(0, 3), venue: x.journalInfo?.journal?.title || '', abstract: strip(x.abstractText) });
     }).filter(Boolean);
+  }
+  if (key === 'openaire') {
+    return (json?.results || []).map((r) => normalizeOpenAire(r, q)).filter((w) => w && (!w.year || w.year >= fromYear));
   }
   if (key === 'doaj') {
     return (json?.results || []).map((r) => {
