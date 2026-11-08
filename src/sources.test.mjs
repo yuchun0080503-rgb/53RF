@@ -63,6 +63,10 @@ test('localTerms：主題詞＋短的時期或地點詞（華藝每個詞都要�
   assert.equal(localTerms(['國民法官', '量刑']), '國民法官 量刑');
   assert.equal(localTerms(['臺灣', '原住民教育']), '原住民教育 臺灣');
   assert.equal(localTerms(['female education']), '', '沒有中文關鍵字就不建議');
+  // 預覽網站實際出現的情況：AI 檢討後關鍵字加了括號說明，也不再有「日治時期臺灣」
+  const claim = '報告題目「日治時期臺灣的女子教育如何影響女性就業」；主張：日治時期臺灣的女子教育如何影響女性就業';
+  assert.equal(localTerms(['女子教育（學校教育）', '女性勞動參與'], claim), '女子教育 日治');
+  assert.equal(localTerms(['女子教育(schooling)', '女性勞動參與']), '女子教育 女性勞動參與', '沒有時期地點時用第二個關鍵字');
 });
 
 test('airitiUrl：跟華藝首頁搜尋框送出的格式相同，每個詞各一個檢索欄位', () => {

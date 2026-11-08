@@ -77,6 +77,17 @@ test('planSearch：兩個主題詞重複時（employment ⊂ female employment�
   assert.deepEqual((await planSearch({ title: 't', claim: 'c' }, one)).keywords.map((k) => k.en), ['female-employment'], '連字號也算同一個字');
 });
 
+test('planSearch／reflectSearch：中文關鍵字去掉括號裡的說明（預覽網站出現過「女子教育（學校教育）」）', async () => {
+  const f = fake({ focus: 'x', discipline: 'humanities', keywords: [
+    { zh: '女子教育（學校教育）', en: 'female education', role: 'core', synonyms: [] },
+    { zh: '女性勞動參與(labor)', en: 'female labor force participation', role: 'core', synonyms: [] },
+  ] });
+  assert.deepEqual((await planSearch({ title: 't', claim: 'c' }, f)).keywords.map((k) => k.zh), ['女子教育', '女性勞動參與']);
+  const g = fake({ reason: 'r', keywords: [{ zh: '日治（殖民）時期', en: 'japanese colonial period', role: 'scope', synonyms: [] }, { zh: '女子教育', en: 'female education', role: 'core', synonyms: [] }] });
+  const r = await reflectSearch({ claim: 'c', gap: 'g', keywords: [], found: [], queries: [] }, g);
+  assert.ok(r.keywords.some((k) => k.zh === '日治時期'));
+});
+
 test('planSearch：要求模型給學科（schema 限定 8 種），給錯或沒給就留空、不算失敗', async () => {
   const kw = [{ zh: '翻轉教室', en: 'flipped classroom', role: 'core', synonyms: [] }];
   const f = fake({ focus: 'x', discipline: 'education', keywords: kw });

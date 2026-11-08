@@ -217,10 +217,12 @@ export function toJa(term) {
 
 // 時期或地點詞的短寫法（華藝的檢索是每個詞都要出現，「日治時期臺灣」整串比「日治」少很多結果）
 const PERIOD_PLACE = /日治|日據|清代|戰後|戒嚴|臺灣|台灣|中國|日本|韓國|香港|東亞/;
-export function localTerms(keywordsZh) {
-  const zh = (Array.isArray(keywordsZh) ? keywordsZh : []).map((k) => String(k || '').trim()).filter((k) => /[一-鿿]/.test(k));
+// text：主張原文。AI 檢討後常把「日治時期臺灣」從關鍵字拿掉，這時改從主張裡找時期或地點詞。
+export function localTerms(keywordsZh, text = '') {
+  // 去掉括號裡的說明（AI 會寫成「女子教育（學校教育）」，整串拿去華藝查，每個字都要出現）
+  const zh = (Array.isArray(keywordsZh) ? keywordsZh : []).map((k) => String(k || '').replace(/[（(][^）)]*[）)]/g, '').trim()).filter((k) => /[一-鿿]/.test(k));
   if (!zh.length) return '';
-  const pp = zh.map((k) => (k.match(PERIOD_PLACE) || [])[0]).find(Boolean);
+  const pp = [...zh, String(text || '')].map((k) => (k.match(PERIOD_PLACE) || [])[0]).find(Boolean);
   // 去掉所有時期、地點詞（還有「時期」「時代」「地區」）之後還剩兩個字以上的，才是主題詞
   const rest = (k) => k.replace(new RegExp(PERIOD_PLACE.source, 'g'), '').replace(/時期|時代|地區|的/g, '');
   const topic = zh.find((k) => rest(k).length >= 2) || zh[0];
@@ -245,7 +247,7 @@ export const LOCAL_DISCIPLINES = ['humanities', 'law'];
  * @returns {null | {terms:string, links:{name:string, url:string, note:string}[]}} 不需要建議（理工、醫護等國際期刊為主的領域）時回 null
  */
 export function localHints({ discipline, keywordsZh, text = '' }) {
-  const terms = localTerms(keywordsZh);
+  const terms = localTerms(keywordsZh, text);
   if (!terms) return null;
   if (!LOCAL_DISCIPLINES.includes(discipline) && !/臺灣|台灣|日治|日據/.test(`${text} ${(keywordsZh || []).join(' ')}`)) return null;
   return {

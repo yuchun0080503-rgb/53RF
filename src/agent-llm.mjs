@@ -70,7 +70,8 @@ function normKeywords(list) {
     return en.length > 1 ? en.map((e, i) => ({ ...k, en: e, zh: zh[i] || '', synonyms: i === en.length - 1 ? k.synonyms : [] })) : [k];
   });
   const keywords = split
-    .map((k) => ({ zh: clip(k.zh, 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' ? 'scope' : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    // 中文去掉括號裡的說明：模型會寫「女子教育（學校教育）」，但中文文獻要求關鍵字原樣出現在標題或摘要，括號會讓每篇都對不上
+    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' ? 'scope' : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
   // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
   // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
