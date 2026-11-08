@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, localTerms, airitiUrl, localHints, DISCIPLINES, ROUTES,
+  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, localTerms, airitiUrl, localHints, normalizeZhWeb, DISCIPLINES, ROUTES,
   ericUrl, normalizeEric, openAireUrl, normalizeOpenAire, europePmcUrl, normalizeEuropePmc, jstageUrl, normalizeJstage, SOURCES,
 } from './sources.mjs';
 
@@ -163,6 +163,17 @@ test('J-STAGE：網址指向自己的後端；只接受 J-STAGE 文章頁的連�
   assert.deepEqual([w.id, w.year, w.src], ['https://doi.org/10.32170/tourismstudies.1.2_185', 2013, 'J-STAGE']);
   assert.equal(normalizeJstage({ ...it, url: 'https://evil.example/a' }, 'q'), null);
   assert.equal(normalizeJstage({ ...it, abstract: '' }, 'q'), null);
+});
+
+test('normalizeZhWeb：只收華藝與國圖的 https 網址、要有摘要；標記 web 與來源', () => {
+  const it = { title: '翻轉教室於國中數學學習成效之研究', url: 'https://ndltd.ncl.edu.tw/r/77017766775706671815', abstract: '本研究主要目的在探討翻轉教室法，對於國中生在數學領域學習成效如何。', year: 2015, authors: ['某某'], venue: '某大學', source: '臺灣博碩士論文網' };
+  const w = normalizeZhWeb(it, 'q');
+  assert.deepEqual([w.id, w.src, w.web, w.doi, w.year], [it.url, '臺灣博碩士論文網', true, '', 2015]);
+  assert.equal(normalizeZhWeb({ ...it, url: 'http://ndltd.ncl.edu.tw/r/1' }, 'q'), null, '不是 https');
+  assert.equal(normalizeZhWeb({ ...it, url: 'https://ncl.edu.tw.evil.example/r/1' }, 'q'), null, '假冒的網域');
+  assert.equal(normalizeZhWeb({ ...it, url: 'javascript:alert(1)' }, 'q'), null);
+  assert.equal(normalizeZhWeb({ ...it, abstract: '太短' }, 'q'), null);
+  assert.ok(normalizeZhWeb({ ...it, url: 'https://www.airitilibrary.com/Article/Detail/x' }, 'q'));
 });
 
 test('SOURCES：每個來源都能從回應取出清單', () => {

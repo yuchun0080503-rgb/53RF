@@ -210,6 +210,27 @@ export function toJa(term) {
   return [...t].map((c) => CHARS_JA[c] || c).join('');
 }
 
+// ---------------- 中文文獻（華藝、臺灣博碩士論文網）：經由後端 /api/zhsearch，用 Claude 的網路搜尋找 ----------------
+// 後端已經核對過：網址在搜尋結果裡、網域是華藝或國圖、標題相符、有摘要（見 functions/zhsearch.js）。
+// 摘要取自搜尋結果的片段，程式看不到網頁原文，所以標記 web，畫面上提醒學生點原文確認。
+
+export const ZHSEARCH_ENDPOINT = '/api/zhsearch';
+const ZH_HOSTS = /(^|\.)airitilibrary\.com$|(^|\.)ncl\.edu\.tw$/;
+export function normalizeZhWeb(it, query) {
+  if (!it || typeof it !== 'object' || typeof it.url !== 'string') return null;
+  let host = '';
+  try { const u = new URL(it.url); if (u.protocol !== 'https:') return null; host = u.host.toLowerCase(); } catch { return null; }
+  if (!ZH_HOSTS.test(host)) return null;
+  const title = clean(it.title), abstract = clean(it.abstract).slice(0, MAX_ABSTRACT_LEN);
+  if (!title || abstract.length < 20) return null;
+  return {
+    id: it.url, title: title.slice(0, 300), year: Number.isInteger(it.year) ? it.year : null, doi: '', url: it.url,
+    authors: (Array.isArray(it.authors) ? it.authors : []).filter((a) => typeof a === 'string').slice(0, 3),
+    venue: typeof it.venue === 'string' ? it.venue : '', abstract, q: query,
+    src: typeof it.source === 'string' && it.source ? it.source : '華藝／國家圖書館', web: true,
+  };
+}
+
 // ---------------- 沒有開放查詢介面的中文資料庫：給學生的建議 ----------------
 // 人文、法律、臺灣與東亞主題的研究多半在華藝、臺灣博碩士論文網、國圖期刊，網站無法直接查。
 // 證據不足時告訴學生去哪裡查、用什麼詞查，不要只看到 0 篇就卡住。

@@ -17,7 +17,7 @@ function service(handlers) {
     return json({});
   };
   fn.calls = calls;
-  fn.hosts = () => calls.map((c) => (c.url.startsWith('/api/jstage') ? 'jstage-proxy' : c.url.startsWith('/api/openalex') ? 'openalex-proxy' : new URL(c.url).host));
+  fn.hosts = () => calls.map((c) => (c.url.startsWith('/api/jstage') ? 'jstage-proxy' : c.url.startsWith('/api/openalex') ? 'openalex-proxy' : c.url.startsWith('/api/') ? c.url.split('?')[0] : new URL(c.url).host));
   return fn;
 }
 
@@ -105,6 +105,68 @@ test('searchEvidence：人文、法律、臺灣主題回傳中文資料庫的建
   assert.equal(h.local.terms, '國民法官 量刑');
   const s = await searchEvidence({ ...buildQueries(['perovskite', 'stability'], 0), keywords: ['perovskite', 'stability'], keywordsZh: ['鈣鈦礦'], discipline: 'stem' }, svc);
   assert.equal(s.local, null);
+});
+
+// ---------------- 中文網路搜尋（華藝、臺灣博碩士論文網）----------------
+
+const ZW = 'https://www.airitilibrary.com/Article/Detail/22186670-201412-201501280032-201501280032-91-107';
+const zhItems = () => json({ items: [
+  { title: '開化意識下的日治時期臺灣女子教育政策－以彰化高女為例', url: ZW, abstract: '日治時期的臺灣女子教育政策制訂內容，基於開化意識，肯定職業婦女對社會的貢獻。', year: 2014, authors: ['陳瑛珣'], venue: '藝術與文化論衡', source: '華藝線上圖書館' },
+  { title: '外站', url: 'https://evil.example/x', abstract: '這筆不該出現在證據裡，網域不是華藝或國圖。', source: '華藝線上圖書館' },
+] });
+
+test('中文網路搜尋：登入且 web 開啟時最先送出（跟其他資料庫同時進行），結果標成中文、web、來源是華藝', async () => {
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    const order = [];
+    const svc = service({ '/api/zhsearch': () => { order.push('zh'); return zhItems(); }, '/api/openalex': () => { order.push('oa'); return json({ results: [] }); } });
+    const r = await searchEvidence({ ...buildQueries(['girls education', 'women employment'], 0), keywords: ['girls education', 'women employment'], keywordsZh: ['女子教育', '女性就業'], coreZh: 2, discipline: 'business', web: true, routeText: '日治時期臺灣的女子教育如何影響女性就業', excludeIds: ['https://doi.org/10.1/x', 'W1'] }, svc);
+    assert.equal(order[0], 'zh', '最先送出');
+    const call = svc.calls.find((c) => c.url === '/api/zhsearch');
+    assert.equal(call.init.method, 'POST');
+    assert.equal(call.init.headers.Authorization, 'Bearer tok');
+    const body = JSON.parse(call.init.body);
+    assert.deepEqual(body.keywords, ['女子教育', '女性就業']);
+    assert.deepEqual(body.exclude, ['https://doi.org/10.1/x'], '只送 https 網址');
+    const web = r.evidence.filter((e) => e.web);
+    assert.deepEqual(web.map((e) => [e.t.slice(0, 6), e.src, e.lang, e.v]), [['開化意識下的', '華藝線上圖書館', 'zh', false]], '外站的不要；沒有 DOI 標成待驗證');
+    assert.ok(r.sources.includes('華藝／臺灣博碩士論文網（網路搜尋）'));
+    assert.ok(r.queries.some((q) => q.startsWith('網路搜尋')));
+  } finally { delete globalThis.RF_AI_TOKEN; }
+});
+
+test('中文網路搜尋：沒登入、web 沒開、沒有中文關鍵字時都不送；失敗不影響其他資料庫', async () => {
+  const args = { ...buildQueries(['remote work', 'productivity'], 0), keywords: ['remote work', 'productivity'], keywordsZh: ['遠距工作'], discipline: 'business' };
+  const oa = () => json({ results: [oaWork(1, 'Remote work and productivity', 'remote work productivity')] });
+  let svc = service({ '/api/zhsearch': zhItems, 'api.openalex.org': oa });
+  await searchEvidence({ ...args, web: true }, svc); // 沒登入
+  assert.ok(!svc.calls.some((c) => c.url === '/api/zhsearch'));
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    svc = service({ '/api/zhsearch': zhItems, '/api/openalex': oa });
+    await searchEvidence({ ...args, web: false }, svc);
+    assert.ok(!svc.calls.some((c) => c.url === '/api/zhsearch'));
+    svc = service({ '/api/zhsearch': zhItems, '/api/openalex': oa });
+    await searchEvidence({ ...args, keywordsZh: [], web: true }, svc);
+    assert.ok(!svc.calls.some((c) => c.url === '/api/zhsearch'));
+    svc = service({ '/api/zhsearch': () => ({ ok: false, status: 502 }), '/api/openalex': oa });
+    const r = await searchEvidence({ ...args, web: true }, svc);
+    assert.equal(r.evidence.length, 1, '中文網路搜尋失敗，OpenAlex 的結果照常');
+    assert.ok(!r.sources.some((s) => s.includes('網路搜尋')));
+  } finally { delete globalThis.RF_AI_TOKEN; }
+});
+
+test('searchRelaxed：中文網路搜尋只在第 1 輪的第一次查詢時送', async () => {
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    const args = { keywords: ['girls education', 'women employment', 'colonial taiwan'], coreCount: 3, keywordsZh: ['女子教育', '女性就業'], coreZh: 2, discipline: 'business', mode: 'claim' };
+    let svc = service({ '/api/zhsearch': () => json({ items: [] }) });
+    await searchRelaxed({ ...args, round: 0 }, svc);
+    assert.equal(svc.calls.filter((c) => c.url === '/api/zhsearch').length, 1);
+    svc = service({ '/api/zhsearch': () => json({ items: [] }) });
+    await searchRelaxed({ ...args, round: 1 }, svc);
+    assert.equal(svc.calls.filter((c) => c.url === '/api/zhsearch').length, 0);
+  } finally { delete globalThis.RF_AI_TOKEN; }
 });
 
 // ---------------- OpenAlex 代查（帶金鑰）----------------

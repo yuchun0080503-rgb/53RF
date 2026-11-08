@@ -10,6 +10,7 @@ const admin = require('firebase-admin');
 const { handle } = require('./proxy');
 const jstage = require('./jstage');
 const openalex = require('./openalex');
+const zhsearch = require('./zhsearch');
 
 admin.initializeApp();
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -32,4 +33,10 @@ exports.jstage = onRequest(
 exports.openalex = onRequest(
   { region: 'asia-east1', secrets: [OPENALEX_API_KEY], timeoutSeconds: 30, maxInstances: 5, memory: '256MiB' },
   (req, res) => openalex.handle(req, res, { verify, apiKey: () => OPENALEX_API_KEY.value() }),
+);
+
+// 中文文獻搜尋（/api/zhsearch）：Claude Haiku＋網路搜尋，只搜華藝與國家圖書館。每次約 0.04 美元、20～35 秒。
+exports.zhsearch = onRequest(
+  { region: 'asia-east1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, maxInstances: 3, memory: '256MiB' },
+  (req, res) => zhsearch.handle(req, res, { verify, apiKey: () => ANTHROPIC_API_KEY.value() }),
 );

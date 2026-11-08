@@ -42,6 +42,13 @@
         }
       },
       {
+        "source": "/api/zhsearch",
+        "function": {
+          "functionId": "zhsearch",
+          "region": "asia-east1"
+        }
+      },
+      {
         "source": "/api/openalex",
         "function": {
           "functionId": "openalex",
