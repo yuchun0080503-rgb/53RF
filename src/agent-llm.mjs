@@ -251,26 +251,27 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
  * @param {string} o.claim 要查證的主張
  * @param {object[]} o.evidence agent-local 的 classifyWork 產生的項目（含 _ab 摘要）
  * @param {string} o.model 顯示用的模型名稱
- * @returns {Promise<{evidence:object[], removed:number, judged:number}>} evidence 依相關度高到低排，最多 10 篇
+ * @returns {Promise<{evidence:object[], removed:number, judged:number, removedItems:{t:string, src:string, rel:number}[]}>} evidence 依相關度高到低排，最多 10 篇；
+ *   removedItems：判讀為不切題而排除的文獻（標題、來源、相關度），寫進研究歷程讓小組知道排除了哪些
  */
 export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl) {
   const list = Array.isArray(evidence) ? evidence : [];
-  if (!list.length || !String(claim || '').trim()) return { evidence: list, removed: 0, judged: 0 };
+  if (!list.length || !String(claim || '').trim()) return { evidence: list, removed: 0, judged: 0, removedItems: [] };
   const verdicts = await judgeWorks({ claim, works: list.map((e) => ({ title: e.t, abstract: e._ab || e.f })) }, fetchImpl);
-  const kept = [];
+  const kept = [], removedItems = [];
   let judged = 0;
   list.forEach((e, i) => {
     const v = verdicts[i];
     if (!v || v.rel < 0) { kept.push({ e, rel: 1.5 }); return; } // 模型漏掉的：保留規則式的結果
     judged++;
-    if (v.rel < 2) return; // 不切題：排除
+    if (v.rel < 2) { removedItems.push({ t: clip(e.t, 60), src: e.src || 'OpenAlex', rel: v.rel }); return; } // 不切題：排除
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
     kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? e.k : v.stance === 'support' ? 's' : 'c', mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
   kept.sort((a, b) => b.rel - a.rel);
-  return { evidence: kept.slice(0, 10).map((x) => x.e), removed: list.length - kept.length, judged };
+  return { evidence: kept.slice(0, 10).map((x) => x.e), removed: list.length - kept.length, judged, removedItems };
 }
 
 /**

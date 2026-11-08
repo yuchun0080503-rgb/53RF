@@ -81,14 +81,16 @@ const SOURCE = (h) => (h.endsWith('airitilibrary.com') ? '華藝線上圖書館'
 function verifyPapers(papers, results, exclude = []) {
   const seen = new Map(results.map((r) => [normUrl(r.url), r.title]));
   const skip = new Set(exclude.map(normUrl));
-  const out = [];
+  const out = [], droppedList = [];
   let dropped = 0;
   for (const p of Array.isArray(papers) ? papers : []) {
     const url = typeof p?.url === 'string' ? p.url.trim() : '', u = normUrl(url), h = hostOf(url);
     const title = str(p?.title, 300), abstract = str(p?.abstract === 'null' ? '' : p?.abstract, 1200);
     const rt = norm(seen.get(u)), t = norm(title);
     const titleOk = t.length >= 4 && rt.length >= 4 && (rt.includes(t.slice(0, 12)) || t.includes(rt.slice(0, 12)));
-    if (!/^https:\/\//.test(url) || !allowedHost(h) || !seen.has(u) || !titleOk || abstract.length < 20 || skip.has(u) || out.some((x) => normUrl(x.url) === u)) { dropped += 1; continue; }
+    // 丟掉的原因（依序檢查，記第一個不符合的），寫進紀錄方便追查
+    const reason = !/^https:\/\//.test(url) || !allowedHost(h) ? '網域不對' : !seen.has(u) ? '網址不在搜尋結果裡' : !titleOk ? '標題對不上' : abstract.length < 20 ? '沒有摘要' : skip.has(u) ? '已經有了' : out.some((x) => normUrl(x.url) === u) ? '重複' : '';
+    if (reason) { dropped += 1; droppedList.push({ title: title.slice(0, 60), reason }); continue; }
     const year = parseInt(p.year, 10);
     out.push({
       title, url, abstract, source: SOURCE(h),
@@ -98,7 +100,7 @@ function verifyPapers(papers, results, exclude = []) {
     });
     if (out.length >= MAX_PAPERS) break;
   }
-  return { items: out, dropped };
+  return { items: out, dropped, droppedList };
 }
 
 // verify(token)：驗證 Firebase ID token，失敗要 throw；apiKey()：回傳 Anthropic 金鑰
@@ -137,10 +139,11 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, now = Date.
   const text = (last?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
   const { results, queries } = collect(contents);
   const parsed = parseFinal(text);
-  const { items, dropped } = verifyPapers(parsed?.papers, results, input.exclude);
+  const { items, dropped, droppedList } = verifyPapers(parsed?.papers, results, input.exclude);
   const meta = { model: MODEL, queries, results: results.length, dropped, parsed: Boolean(parsed), stop: last?.stop_reason || '', ms: now() - t0, usage };
-  console.log('[zhsearch]', JSON.stringify({ ...meta, queries: queries.length, items: items.length })); // 記錄用量（不含學生輸入的內容）
-  return res.json({ items, meta });
+  // 記錄用量與找到的論文標題（論文標題是公開的書目資料）；不記學生輸入的主張、關鍵字與搜尋詞
+  console.log('[zhsearch]', JSON.stringify({ ...meta, queries: queries.length, items: items.length, titles: items.map((x) => `${x.source}｜${x.title.slice(0, 60)}`), droppedList }));
+  return res.json({ items, meta: { ...meta, droppedList } });
 }
 
 module.exports = { parseBody, buildRequest, collect, parseFinal, verifyPapers, handle, MODEL, SEARCH_TOOL, DOMAINS, MAX_SEARCHES };

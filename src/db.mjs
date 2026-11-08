@@ -97,11 +97,11 @@ export async function searchEvidence(projectId, { keywords, keywordsZh, coreCoun
   const st = await llm.detect();
   const out = await agent.searchRelaxed({ keywords, coreCount, round, mode, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg, synonyms, discipline, routeText: claim, limit: 10 });
   const dbs = (out.sources || []).join('、') || '學術資料庫';
-  out.ai = { model: '', judged: 0, removed: 0, error: st.ok ? '' : st.reason };
+  out.ai = { model: '', judged: 0, removed: 0, removedItems: [], error: st.ok ? '' : st.reason };
   if (st.ok && out.evidence.length) {
     try {
       const r = await refineEvidence({ claim, evidence: out.evidence, model: llm.modelLabel(st.textModel || st.model) });
-      Object.assign(out, { evidence: r.evidence, scanned: r.evidence.length, ai: { model: llm.modelLabel(st.textModel || st.model), judged: r.judged, removed: r.removed, error: '' } });
+      Object.assign(out, { evidence: r.evidence, scanned: r.evidence.length, ai: { model: llm.modelLabel(st.textModel || st.model), judged: r.judged, removed: r.removed, removedItems: r.removedItems || [], error: '' } });
     } catch (err) {
       out.ai.error = String(err?.message || err).slice(0, 120);
       out.evidence = out.evidence.slice(0, 10); out.scanned = out.evidence.length;
@@ -109,7 +109,9 @@ export async function searchEvidence(projectId, { keywords, keywordsZh, coreCoun
   }
   // 摘要留一小段（給之後產生中文摘要用），其餘丟掉，避免研究狀態太大
   out.evidence.forEach((e) => { e.ab = String(e._ab || '').slice(0, 1200); delete e._ab; });
-  const by = out.ai.model ? `（${out.ai.model} 讀過 ${out.ai.judged} 篇摘要，排除 ${out.ai.removed} 篇不切題）` : '';
+  // 排除了哪些（最多列 6 篇）：讓小組知道被判為不切題的是哪幾篇、來自哪個資料庫，覺得判錯可以自己去看原文
+  const gone = (out.ai.removedItems || []).slice(0, 6).map((x) => `〈${x.t}〉（${x.src}）`).join('、');
+  const by = out.ai.model ? `（${out.ai.model} 讀過 ${out.ai.judged} 篇摘要，排除 ${out.ai.removed} 篇不切題${gone ? '：' + gone + ((out.ai.removedItems || []).length > 6 ? '等' : '') : ''}）` : '';
   const sup = out.evidence.filter((e) => e.k === 's').length;
   if (mode === 'claim' && round !== 'counter') {
     const held = out.evidence.filter((e) => e.k !== 's');

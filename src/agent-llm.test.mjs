@@ -143,6 +143,11 @@ test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、�
   assert.equal(r.evidence[0].fo, '原摘要a');
   assert.equal(r.evidence[1].unc, true);
   assert.equal(r.evidence[2].mix, true);
+  // 排除了哪些：寫進研究歷程（第 2 篇 rel 1；沒有 src 的當作 OpenAlex）
+  assert.deepEqual(r.removedItems, [{ t: 'Tb', src: 'OpenAlex', rel: 1 }]);
+  const f3 = sequence([{ rel: 0, stance: 'unrelated', finding: '' }]);
+  const r3 = await refineEvidence({ claim: '主張', evidence: [{ id: 'z', t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', _ab: '摘要' }] }, f3);
+  assert.deepEqual(r3.removedItems, [{ t: '國民法官制度中罪責評議的具體實踐', src: '臺灣博碩士論文網', rel: 0 }]);
 });
 
 test('judgeWorks：單篇失敗只影響那一篇；連續兩篇失敗或全部失敗就丟出錯誤讓呼叫端整批退回', async () => {

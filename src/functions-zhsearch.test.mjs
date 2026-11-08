@@ -50,6 +50,10 @@ test('verifyPapers：只留網址在搜尋結果裡、網域對、標題相符�
   ], res.results, []);
   assert.deepEqual(items.map((x) => [x.source, x.title.slice(0, 6), x.year]), [['華藝線上圖書館', '開化意識下的', 2014], ['臺灣博碩士論文網', '職業法官與國', 2023]]);
   assert.equal(dropped, 5);
+  assert.deepEqual(verifyPapers([
+    paper({ url: A + '/' }), paper(), paper({ url: 'https://www.airitilibrary.com/Article/Detail/fake', title: '編出來的論文' }),
+    paper({ url: N, title: '完全不同的標題' }), paper({ url: 'https://example.com/a', title: '別的網站' }), paper({ url: N, title: '職業法官與國民法官之論罪量刑比較', abstract: null }),
+  ], res.results, []).droppedList.map((x) => x.reason), ['重複', '網址不在搜尋結果裡', '標題對不上', '網域不對', '沒有摘要'], '每篇被丟掉的原因');
   assert.equal(verifyPapers([paper()], res.results, [A]).items.length, 0, '已經有的文獻不要再給');
 });
 
