@@ -436,6 +436,12 @@ export async function deleteProject(projectId, uid) {
   await wipe('agentTrace');
   await wipe('tasks');
   await wipe('feedback');
+  // 老師在畫布上的留言：每則留言底下的回覆要先刪（子集合不會跟著母文件一起刪）
+  for (const pin of (await getDocs(collection(db, 'projects', projectId, 'pins'))).docs) {
+    const ms = await getDocs(collection(db, 'projects', projectId, 'pins', pin.id, 'msgs'));
+    await Promise.all(ms.docs.map((m) => deleteDoc(m.ref)));
+    await deleteDoc(pin.ref);
+  }
   // 課程的組別清單裡指到這份研究的登記也一起清掉（不然同學會看到一個點不進去的組別）
   const pdata = (await getDoc(ref).catch(() => null))?.data();
   if (pdata?.courseId) {
@@ -627,4 +633,39 @@ function cryptoRandomToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ---------------- 老師在畫布上的留言（pins）----------------
+// 像 Figma 的留言圖釘：老師點畫布留言；點在便利貼或手寫上時記住是哪一個（oid）和相對位置（dx, dy），內容被拖走時圖釘跟著走；
+// 點在空白處就用畫布座標（x, y）。學生和老師都可以在底下回覆（msgs 子集合），學生處理完按「已處理」（status: done，紅點變綠點）。
+const ms = (t) => (t?.toMillis ? t.toMillis() : t ? Date.now() : 0);
+export async function addPin(projectId, { oid, dx, dy, x, y, text }, who) {
+  const r = await addDoc(collection(db, 'projects', projectId, 'pins'), {
+    uid: auth.currentUser.uid, by: who || '老師', oid: oid || null, dx: Number(dx) || 0, dy: Number(dy) || 0, x: Number(x) || 0, y: Number(y) || 0,
+    text: String(text).slice(0, 1000), status: 'open', n: 0, at: serverTimestamp(),
+  });
+  return r.id;
+}
+export async function replyPin(projectId, pinId, text, who) {
+  await addDoc(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), { uid: auth.currentUser.uid, by: who || '', text: String(text).slice(0, 1000), at: serverTimestamp() });
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), { n: increment(1), lastAt: serverTimestamp(), lastBy: who || '' });
+}
+export async function setPinStatus(projectId, pinId, done, who) {
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), done ? { status: 'done', doneBy: who || '', doneAt: serverTimestamp() } : { status: 'open', doneBy: '', doneAt: null });
+}
+export async function deletePin(projectId, pinId) {
+  const m = await getDocs(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'));
+  await Promise.all(m.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'projects', projectId, 'pins', pinId));
+}
+export function subscribePins(projectId, onChange, onError) {
+  const q = query(collection(db, 'projects', projectId, 'pins'), orderBy('at', 'asc'), limit(200));
+  return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => {
+    const x = d.data({ serverTimestamps: 'estimate' });
+    return { id: d.id, uid: x.uid, by: x.by, oid: x.oid || null, dx: x.dx || 0, dy: x.dy || 0, x: x.x || 0, y: x.y || 0, text: x.text || '', status: x.status === 'done' ? 'done' : 'open', n: x.n || 0, doneBy: x.doneBy || '', at: ms(x.at), lastAt: ms(x.lastAt) };
+  })), onError);
+}
+export function subscribePinMsgs(projectId, pinId, onChange, onError) {
+  const q = query(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), orderBy('at', 'asc'), limit(200));
+  return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, uid: x.uid, by: x.by || '', text: x.text || '', at: ms(x.at) }; })), onError);
 }

@@ -17,6 +17,8 @@ rules_version = '2';
 //   researchState/canvas  { ver }                          共用的 Canvas 版本號
 //   agentTrace/{traceId}  { w, x, k, uid, at }             k: user|sync|ai|sys；只能新增，不能修改或刪除
 //   feedback/{id}         { text, uid, by, at }   老師給小組的回饋；只有老師能寫，組員都看得到
+//   pins/{id}             { uid, by, oid, dx, dy, x, y, text, status, n, at, lastAt, lastBy, doneBy, doneAt }   老師貼在畫布上的留言
+//   pins/{id}/msgs/{id}   { uid, by, text, at }   留言底下的回覆（老師、Owner、Editor 都能回）
 //   tasks/{taskId}        { title, type, assigneeUid, createdBy, createdAt, done, doneBy, doneAt }   分工清單；done 只有負責人本人能改
 //
 // 這個系統只用 Firebase 免費方案，沒有 Cloud Functions：所有「硬限制」都寫在這份規則裡，
@@ -287,6 +289,33 @@ service cloud.firestore {
       }
 
       // ---- feedback：老師給小組的回饋。只有這份研究的老師能新增（時間用伺服器時間）；組員都看得到；不能修改，老師可以刪掉自己寫的 ----
+      // ---- pins：老師貼在畫布上的留言（像 Figma 的留言圖釘）。只有老師能新增；老師、Owner、Editor 可以回覆和標記已處理；
+      //      內容（文字、位置）建立後不能改；老師可以刪自己的留言 ----
+      match /pins/{pinId} {
+        allow read: if canRead(projectId);
+        allow create: if hasRole(projectId, ['teacher'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.status == 'open' && request.resource.data.n == 0
+          && request.resource.data.at == request.time;
+        allow update: if hasRole(projectId, ['teacher', 'owner', 'editor'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneBy', 'doneAt', 'n', 'lastAt', 'lastBy'])
+          && request.resource.data.status in ['open', 'done']
+          && request.resource.data.n in [resource.data.n, resource.data.n + 1];
+        allow delete: if (hasRole(projectId, ['teacher']) && resource.data.uid == request.auth.uid) || ownerDeleting(projectId);
+        match /msgs/{msgId} {
+          allow read: if canRead(projectId);
+          allow create: if hasRole(projectId, ['teacher', 'owner', 'editor'])
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+            && request.resource.data.at == request.time;
+          allow update: if false;
+          allow delete: if hasRole(projectId, ['teacher']) || ownerDeleting(projectId);
+        }
+      }
+
       match /feedback/{fbId} {
         allow read: if canRead(projectId);
         allow create: if hasRole(projectId, ['teacher'])

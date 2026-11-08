@@ -241,6 +241,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .refl{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,#ddd);font-size:12.5px;line-height:1.55}.refl b{display:block;margin-bottom:2px}
 .tag.warn{color:var(--warn);border-color:var(--warn)}
 .recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#d93025;margin-right:5px;vertical-align:0}#rec.recon{color:#d93025;font-variant-numeric:tabular-nums}#rec.recon .recdot{border-radius:2px;animation:recb 1s steps(2) infinite}@keyframes recb{50%{opacity:.25}}
+#pinbox{position:absolute;z-index:6;width:290px;max-height:62%;display:flex;flex-direction:column;gap:7px;background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.16);padding:10px 12px}#pinbox.hide{display:none}.pbh{display:flex;align-items:center;gap:6px}.pbh .dot{margin-right:2px}.pbh .pbx{margin-left:auto;border:0;background:none;padding:2px 6px;color:var(--mute)}.pbm{overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:0}.pmsg{font-size:13px;line-height:1.55;padding:2px 2px}.pmsg b{margin-right:6px}.pmsg.t{background:var(--soft);border-radius:8px;padding:6px 8px}#pinbox textarea{width:100%;resize:vertical;font:inherit;font-size:13px;margin:0}#pinbox .acts{margin:0}.pinrow{display:flex;gap:8px;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px}.pinrow:hover,.pinrow:focus{background:var(--soft);outline:none}.pinrow .dot{margin-top:7px;flex:none}.pinn{display:inline-block;min-width:16px;padding:0 4px;border-radius:99px;background:var(--bad);color:#fff;font-size:10.5px;line-height:16px;text-align:center}
 </style>
 </head>
 <body>
@@ -301,18 +302,19 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
     <div class="cvw" id="cvw">
       <div class="tools" role="toolbar" aria-label="畫布工具">
         <button id="undo" title="返回上一個操作 (Ctrl+Z)" aria-label="返回上一個操作"><i data-i="undo"></i></button><button id="redo" title="取消返回 (Ctrl+Shift+Z)" aria-label="取消返回"><i data-i="redo"></i></button><span class="vr"></span>
-        <button data-t="sel" class="on"><i data-i="ptr"></i>選取</button><button data-t="hand"><i data-i="hand"></i>平移</button><button data-t="pen"><i data-i="pen"></i>手寫</button><button data-t="txt"><i data-i="type"></i>文字</button><button data-t="link"><i data-i="arrow"></i>連線</button><button data-t="era"><i data-i="era"></i>擦除</button>
+        <button data-t="sel" class="on"><i data-i="ptr"></i>選取</button><button data-t="hand"><i data-i="hand"></i>平移</button><button data-t="pen"><i data-i="pen"></i>手寫</button><button data-t="txt"><i data-i="type"></i>文字</button><button data-t="link"><i data-i="arrow"></i>連線</button><button data-t="era"><i data-i="era"></i>擦除</button><button data-t="pin" id="pintool" class="hide" title="點便利貼、手寫或畫布任何位置，留言給這組"><i data-i="target"></i>留言</button>
         <input type="range" id="pw" min="1" max="8" value="3" aria-label="筆畫粗細"><span class="sm mute" id="hws" style="align-self:center;padding:0 8px"></span><button id="fgp" title="把筆收起來、想用手指寫字時點一下；再拿筆出來寫就會自動切回來"><i data-i="hand"></i><span id="penl"></span></button><button id="pens" title="觸控筆與手指的設定" aria-label="觸控筆與手指的設定"><i data-i="gear"></i></button>
       </div>
       <canvas id="cv" aria-label="無限研究畫布"></canvas>
       <div class="insp hide" id="insp"></div>
+      <div id="pinbox" class="hide" role="dialog" aria-label="老師留言"></div>
       <div class="syb"><span id="sy"></span><button id="sim">模擬組員操作</button></div>
       <div class="zoom"><button id="zo" aria-label="縮小"><i data-i="minus"></i></button><span class="sm" id="zl" style="min-width:42px;text-align:center"></span><button id="zi" aria-label="放大"><i data-i="plus"></i></button><span class="vr"></span><button id="zme" aria-label="回到我剛寫的地方" title="回到我剛寫的地方"><i data-i="target"></i></button><button id="zr" aria-label="顯示全部內容" title="顯示全部內容"><i data-i="frame"></i></button><button id="zf" aria-label="全螢幕" title="全螢幕（再按一次或按 Esc 離開）"><i data-i="fit"></i></button><span class="vr"></span><button id="rec" title="錄下畫布的變化，停止後存成影片檔（只存在你的電腦，不會上傳）" aria-label="錄影"><i class="recdot"></i><span id="recl">錄影</span></button></div>
       <button id="lost" class="hide">內容在畫面外，點這裡回到內容</button>
     </div>
   </div>
   <aside class="side">
-    <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button></div>
+    <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button><button data-p="pins"><i data-i="target"></i>留言<span id="pinct"></span></button></div>
     <div class="pane" id="pane"></div>
   </aside>
 </div></section>
@@ -837,9 +839,9 @@ const cv=$("#cv"),ctx=cv.getContext("2d",{desynchronized:true});
 function openWs(i){p=projects[i];S=p.S;sel.clear();tool="sel";editing={};linkFrom=null;pane="agent";if(p.fid){LS("rf.open",p.fid);LS("rf.pane","")}
  if(!p.H){p.H=[JSON.stringify(p.objs)];p.hi=0}
  $$(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p==="agent"));show("ws");openWsUI();resize();if(!p.v)p.v={x:cv.getBoundingClientRect().width*.62,y:cv.getBoundingClientRect().height*.4,z:1};
- attachLiveObjects(p);attachLiveState(p);draw();renderPane();setStat("已連線，等待操作");
+ attachLiveObjects(p);attachLiveState(p);attachLivePins(p);closePin();draw();renderPane();setStat("已連線，等待操作");
  if(!p.mode&&roleIn(p)==="Owner")chooseMode(p)}
-function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
+function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb","_unsubPins"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
 function leaveWs(){if($("#ws").classList.contains("full")){setFull(false);try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}}detachLive(p);LS("rf.open","");goHome()}
 /* 小組共用的 Agent 流程狀態、Canvas 版本、Token 用量、研究歷程（live 模式）：訂閱 Firestore，組員做的每一步大家都看得到 */
 function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
@@ -965,7 +967,7 @@ function openWsUI(){aiChip();fbChip();if(window.RFLLM)RFLLM.detect().then(aiChip
  $("#pres").innerHTML=p.members.filter(m=>!U[m.u].pending).map(m=>av(m.u,26)).join("");
  $("#rpt").innerHTML=`${I("ext")}${p.reportUrl?(p.reportType||"報告"):"小組報告"}`;
  $("#rpt").title=p.reportUrl?"開啟「"+(p.reportType||"報告")+"」："+p.reportUrl:"尚未設定報告連結，點一下即可加入";
- $$(".tools button:not(#undo):not(#redo)").forEach(b=>b.disabled=!canEdit()&&b.dataset.t&&!["hand","sel"].includes(b.dataset.t));$("#undo").disabled=$("#redo").disabled=!canEdit();$("#sim").classList.toggle("hide",isT()||LIVE())}
+ $$(".tools button:not(#undo):not(#redo)").forEach(b=>b.disabled=!canEdit()&&b.dataset.t&&!["hand","sel","pin"].includes(b.dataset.t));$("#pintool").classList.toggle("hide",!isT());pinTab();$("#undo").disabled=$("#redo").disabled=!canEdit();$("#sim").classList.toggle("hide",isT()||LIVE())}
 function resize(){const r=$("#cvw").getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);p&&draw()} // 顯示大小由 CSS 決定（填滿外框），這裡只設定畫素數量
 addEventListener("resize",resize);
 const cssv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -1007,9 +1009,9 @@ function draw(){if(!p||!p.v)return;const r=$("#cvw").getBoundingClientRect(),d=d
   if(sel.has(o.id)||linkFrom===o.id){const b=bbox(o);ctx.strokeStyle=ac;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(b.x-3,b.y-3,b.w+6,b.h+6);ctx.setLineDash([])}}
  if(cur){ctx.strokeStyle=U[ME].c;ctx.lineWidth=+$("#pw").value;ctx.beginPath();cur.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke()}
  if(mq){ctx.strokeStyle=ac;ctx.lineWidth=1/v.z;ctx.strokeRect(mq[0],mq[1],mq[2]-mq[0],mq[3]-mq[1])}
- drawHW();
+ drawHW();drawPins();
  if(eraPos&&(tool==="era"||dm==="era")){ctx.setTransform(d,0,0,d,0,0);ctx.beginPath();ctx.arc(eraPos[0],eraPos[1],eraR(),0,Math.PI*2);ctx.fillStyle="rgba(120,120,128,.12)";ctx.fill();ctx.lineWidth=1.5;ctx.strokeStyle=cssv("--mute");ctx.stroke()}
- $("#zl").textContent=Math.round(v.z*100)+"%";lostChk()}
+ $("#zl").textContent=Math.round(v.z*100)+"%";lostChk();pinBoxPos()}
 let cur=null,mq=null,dm=null,last=null,moved=false,space=false;
 const toW=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left-p.v.x)/p.v.z,(e.clientY-r.top-p.v.y)/p.v.z]};
 const inB=(q,b)=>q[0]>=b.x&&q[0]<=b.x+b.w&&q[1]>=b.y&&q[1]<=b.y+b.h;
@@ -1043,6 +1045,10 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
   if(tp.size===2){const[a,b]=[...tp.values()];cur=null;mq=null;dm="pinch";pz={d:Math.hypot(a[0]-b[0],a[1]-b[1])||1,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2,t0:e.timeStamp,s:[a,b],mv:0};draw();return}}
  try{cv.setPointerCapture(e.pointerId)}catch(err){}const q=toW(e);last=[e.clientX,e.clientY];moved=false;
  pd={t:e.timeStamp,x:e.clientX,y:e.clientY,pen:e.pointerType==="pen",mv:0};
+ // 老師留言：點到圖釘就打開對話；選了「留言」工具就在點的地方新增；點別的地方就把開著的留言收起來
+ if(tool!=="pen"&&tool!=="era"&&e.button!==1&&!space){const pn=pinAt(q);if(pn){pd=null;openPin(pn.id);return}}
+ if(tool==="pin"){pd=null;if(isT())newPin(q);return}
+ if(pinOpen||pinNew)closePin();
  linkHit="";if(tool==="sel"){const o=hit(q);if(o&&o.type==="text"&&o.url&&inLink(o,q))linkHit=o.url} // 點在證據卡的來源連結上：放開時（沒有拖動）開新分頁
  if(tool==="hand"||e.button===1||space||(e.pointerType==="touch"&&fingerPans())){dm="pan";return}
  if(!canEdit())return;
@@ -1139,6 +1145,82 @@ $("#rec").onclick=()=>rec?stopRec():startRec();
 $("#zf").onclick=()=>{const on=!$("#ws").classList.contains("full"),el=$("#ws");setFull(on);
  try{if(on&&el.requestFullscreen)el.requestFullscreen().catch(()=>{});else if(!on&&document.fullscreenElement)document.exitFullscreen().catch(()=>{})}catch(e){}};
 document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&$("#ws").classList.contains("full"))setFull(false)});
+/* ---- 老師在畫布上的留言（第 7 項）----
+   像 Figma 的留言圖釘：老師選「留言」工具點畫布。點在便利貼或手寫上，圖釘就黏在那個內容上（記住是哪一個和相對位置），
+   學生把內容拖走時圖釘跟著走；點在空白處就釘在那個位置。內容被刪掉時圖釘留在原地，標示「原本的內容已刪除」。
+   點圖釘會在旁邊打開對話：老師和學生（Owner、Editor）都能回覆，處理完按「標記已處理」，紅點變綠點。
+   右側「留言」分頁列出全部留言（未處理的排前面），點一則就跳到畫布上的位置。
+   live 模式存在 Firestore 的 projects/{id}/pins（回覆在 pins/{id}/msgs）；展示模式存在本機的 p.pins。 */
+let pinOpen=null,pinNew=null,pinMsgs=[],pinUnsub=null;
+function attachLivePins(proj){if(!LIVE()||!proj.fid||proj._unsubPins||!RFDB.subscribePins)return;
+ proj._unsubPins=RFDB.subscribePins(proj.fid,rows=>{proj.pins=rows;if(p!==proj)return;draw();pinTab();if(pane==="pins")renderPane();if(pinOpen)renderPinBox()},err=>console.error("[ResearchFlow] 讀取老師留言失敗：",err))}
+function pinPos(pn){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);return{x:b.x+pn.dx,y:b.y+pn.dy,o,gone:false}}return{x:pn.x,y:pn.y,o:null,gone:!!pn.oid}}
+function pinAt(q){const ps=p.pins||[],r=14/p.v.z;for(let i=ps.length-1;i>=0;i--){const P=pinPos(ps[i]);if(Math.hypot(q[0]-P.x,q[1]-P.y)<=r)return ps[i]}return null}
+function drawPins(){const ps=p.pins||[];if(!ps.length&&!pinNew)return;const z=p.v.z,r=11/z,ok=cssv("--ok"),bad=cssv("--bad");
+ ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font=`bold ${11/z}px sans-serif`;
+ ps.forEach((pn,i)=>{const P=pinPos(pn);ctx.beginPath();ctx.arc(P.x,P.y,r,0,Math.PI*2);ctx.fillStyle=pn.status==="done"?ok:bad;ctx.fill();ctx.lineWidth=2/z;ctx.strokeStyle="#fff";ctx.stroke();
+  if(pinOpen===pn.id){ctx.beginPath();ctx.arc(P.x,P.y,r+4/z,0,Math.PI*2);ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1.5/z;ctx.stroke()}
+  ctx.fillStyle="#fff";ctx.fillText(String(i+1),P.x,P.y+.5/z)});
+ if(pinNew){ctx.beginPath();ctx.arc(pinNew[0],pinNew[1],r,0,Math.PI*2);ctx.setLineDash([3/z,3/z]);ctx.strokeStyle=bad;ctx.lineWidth=2/z;ctx.stroke();ctx.setLineDash([])}
+ ctx.restore()}
+function pinTab(){const el=$("#pinct");if(!el||!p)return;const n=(p.pins||[]).filter(x=>x.status!=="done").length;el.innerHTML=n?` <b class="pinn">${n}</b>`:""}
+const pinWhere=P=>P.o?"「"+esc(objLabel(P.o))+"」":P.gone?"原本的內容（已刪除）":"畫布空白處";
+function pinsHTML(){const ps=p.pins||[],open=ps.filter(x=>x.status!=="done").length;
+ if(!ps.length)return `<h3>老師留言</h3><p class="sm mute">${isT()?"選畫布工具列的「留言」，點便利貼、手寫或畫布任何位置，就可以留言給這組。留言貼在內容上時，內容移動，留言會跟著移動。":"老師還沒有在畫布上留言。老師留言後，畫布上會出現紅色圖釘，這裡也會列出來。"}</p>`;
+ const row=([pn,i])=>{const P=pinPos(pn);return `<div class="pinrow" data-pin="${esc(pn.id)}" tabindex="0" role="button"><i class="dot ${pn.status==="done"?"g":"r"}"></i><div><b>#${i+1}</b> ${esc(pn.text.slice(0,70))}${pn.text.length>70?"…":""}<div class="sm mute">${esc(pn.by)}．貼在${pinWhere(P)}．${pn.n?pn.n+" 則回覆":"還沒有回覆"}${pn.status==="done"?"．"+(pn.doneBy?esc(pn.doneBy)+" ":"")+"標記已處理":""}</div></div></div>`};
+ return `<h3>老師留言</h3><div class="box sm">未處理 <b style="color:var(--bad)">${open}</b>　已處理 <b style="color:var(--ok)">${ps.length-open}</b></div>`
+  +ps.map((pn,i)=>[pn,i]).sort((a,b)=>(a[0].status==="done")-(b[0].status==="done")).map(row).join("")
+  +`<p class="note">點一則留言會跳到畫布上的位置。${isT()?"":"處理完老師的建議後，打開留言按「標記已處理」，老師就看得到。"}</p>`}
+function goPin(id){const pn=(p.pins||[]).find(x=>x.id===id);if(!pn)return;const P=pinPos(pn),r=cv.getBoundingClientRect();p.v.x=r.width*.42-P.x*p.v.z;p.v.y=r.height*.45-P.y*p.v.z;openPin(id)}
+function closePin(){pinOpen=null;pinNew=null;pinMsgs=[];if(pinUnsub){pinUnsub();pinUnsub=null}const b=$("#pinbox");if(b){b.classList.add("hide");b.innerHTML=""}if(p&&p.v)draw()}
+function openPin(id){if(pinUnsub){pinUnsub();pinUnsub=null}pinOpen=id;pinNew=null;pinMsgs=[];
+ if(LIVE()&&p.fid&&RFDB.subscribePinMsgs)pinUnsub=RFDB.subscribePinMsgs(p.fid,id,rows=>{pinMsgs=rows;renderPinBox()},err=>console.error("[ResearchFlow] 讀取留言回覆失敗：",err));
+ renderPinBox();draw()}
+function newPin(q){closePin();pinNew=q;renderPinBox();draw();setTimeout(()=>$("#pbt")?.focus(),0)}
+const pinTime=t=>t?new Date(t).toLocaleString("zh-TW",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}):"";
+function renderPinBox(){const box=$("#pinbox");if(!box)return;if(!p||(!pinOpen&&!pinNew)){box.classList.add("hide");return}
+ const can=isT()||canEdit(),keep=$("#pbt")?.value||"";
+ if(pinNew){const o=hit(pinNew);
+  box.innerHTML=`<div class="pbh"><b>新增留言</b><button class="pbx" aria-label="關閉">✕</button></div><div class="sm mute">${o?"貼在「"+esc(objLabel(o))+"」上，學生移動這個內容時留言會跟著走":"貼在畫布空白處"}</div><textarea id="pbt" rows="3" maxlength="1000" placeholder="寫下給這組的建議或問題"></textarea><div class="acts"><button class="pri" id="pbs">留言</button><button class="pbx">取消</button></div>`}
+ else{const i=(p.pins||[]).findIndex(x=>x.id===pinOpen),pn=p.pins&&p.pins[i];
+  if(!pn)box.innerHTML=`<div class="pbh"><span class="sm mute">儲存中…</span><button class="pbx" aria-label="關閉">✕</button></div>`;
+  else{const P=pinPos(pn),ms=LIVE()?pinMsgs:(pn.msgs||[]),done=pn.status==="done";
+   box.innerHTML=`<div class="pbh"><i class="dot ${done?"g":"r"}"></i><b>老師留言 #${i+1}</b><span class="sm mute">${done?"已處理":"未處理"}</span><button class="pbx" aria-label="關閉">✕</button></div>`
+    +`<div class="sm mute">貼在${pinWhere(P)}</div>`
+    +`<div class="pbm"><div class="pmsg t"><b>${esc(pn.by)}</b><span class="sm mute">${pinTime(pn.at)}</span><div>${esc(pn.text)}</div></div>${ms.map(m=>`<div class="pmsg${m.uid===pn.uid?" t":""}"><b>${esc(m.by)}</b><span class="sm mute">${pinTime(m.at)}</span><div>${esc(m.text)}</div></div>`).join("")}</div>`
+    +(can?`<textarea id="pbt" rows="2" maxlength="1000" placeholder="回覆…"></textarea><div class="acts"><button class="pri" id="pbs">回覆</button><button id="pbd">${done?"重新打開":"標記已處理"}</button>${isT()&&pn.uid===ME?'<button id="pbdel">刪除</button>':""}</div>`:`<div class="sm mute">你的角色是唯讀，只能查看留言。</div>`);
+   const m=box.querySelector(".pbm");if(m)m.scrollTop=m.scrollHeight}}
+ if(keep&&$("#pbt"))$("#pbt").value=keep;
+ box.classList.remove("hide");
+ box.querySelectorAll(".pbx").forEach(b=>b.onclick=closePin);
+ const t=$("#pbt");if(t)t.onkeydown=e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey))$("#pbs").click();if(e.key==="Escape")closePin()};
+ const s=$("#pbs");if(s)s.onclick=pinSend;
+ const d=$("#pbd");if(d)d.onclick=pinToggle;
+ const x=$("#pbdel");if(x)x.onclick=pinDelete;
+ pinBoxPos()}
+function pinBoxPos(){const box=$("#pinbox");if(!box||box.classList.contains("hide")||!p||!p.v)return;
+ const pn=pinOpen&&(p.pins||[]).find(x=>x.id===pinOpen),P=pinNew?{x:pinNew[0],y:pinNew[1]}:pn?pinPos(pn):null;if(!P)return;
+ const W=$("#cvw").clientWidth,H=$("#cvw").clientHeight,sx=P.x*p.v.z+p.v.x,sy=P.y*p.v.z+p.v.y,bw=box.offsetWidth||290,bh=box.offsetHeight||200;
+ let L=sx+20;if(L+bw>W-8)L=sx-20-bw;L=Math.max(8,Math.min(L,W-bw-8));const T=Math.max(8,Math.min(sy-24,H-bh-8));
+ box.style.left=L+"px";box.style.top=T+"px"}
+async function pinSend(){const t=$("#pbt"),text=(t?.value||"").trim();if(!text){t?.focus();return}const b=$("#pbs");b.disabled=true;
+ try{if(pinNew){const q=pinNew,o=hit(q),bb=o&&bbox(o),d={oid:o?o.id:null,dx:o?q[0]-bb.x:0,dy:o?q[1]-bb.y:0,x:q[0],y:q[1],text};let id;
+   if(LIVE()&&p.fid)id=await RFDB.addPin(p.fid,d,U[ME].n);
+   else{id="pn"+(++uid);(p.pins=p.pins||[]).push({id,uid:ME,by:U[ME].n,...d,status:"open",n:0,at:Date.now(),msgs:[]})}
+   t.value="";pinNew=null;setTool("sel");openPin(id);pinTab();if(pane==="pins")renderPane();setStat("已新增留言，學生打開畫布就看得到")}
+  else{const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)return;
+   if(LIVE()&&p.fid)await RFDB.replyPin(p.fid,pn.id,text,U[ME].n);
+   else{(pn.msgs=pn.msgs||[]).push({id:"pm"+(++uid),uid:ME,by:U[ME].n,text,at:Date.now()});pn.n=(pn.n||0)+1}
+   t.value="";renderPinBox();if(pane==="pins")renderPane()}}
+ catch(err){alert("留言沒有送出："+(err?.message||err))}finally{if(b)b.disabled=false}}
+async function pinToggle(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)return;const done=pn.status!=="done";
+ try{if(LIVE()&&p.fid)await RFDB.setPinStatus(p.fid,pn.id,done,U[ME].n);else{pn.status=done?"done":"open";pn.doneBy=done?U[ME].n:""}
+  renderPinBox();pinTab();draw();if(pane==="pins")renderPane();setStat(done?"已標記為已處理（圖釘變綠色）":"已重新打開這則留言")}
+ catch(err){alert("沒有更新成功："+(err?.message||err))}}
+async function pinDelete(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)return;
+ if(!(await ask("確定要刪除這則留言嗎？底下的回覆也會一起刪除。")))return;
+ try{if(LIVE()&&p.fid)await RFDB.deletePin(p.fid,pn.id);else p.pins=p.pins.filter(x=>x!==pn);closePin();pinTab();if(pane==="pins")renderPane()}
+ catch(err){alert("刪除失敗："+(err?.message||err))}}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#ws").classList.contains("full")&&!document.fullscreenElement&&!document.querySelector("dialog[open]")&&document.activeElement.tagName!=="INPUT")setFull(false)});
 $$(".tools [data-t]").forEach(b=>b.onclick=()=>{tool=b.dataset.t;linkFrom=null;$$(".tools [data-t]").forEach(x=>x.classList.toggle("on",x===b));cv.style.cursor=tool==="sel"?"default":tool==="hand"?"grab":"crosshair";draw()});
 function openEd(o,q){const i=document.createElement("textarea"),z=p.v.z;i.className="ti";i.rows=1;i.value=o?o.text:"";i.style.left=(q[0]*z+p.v.x)+"px";i.style.top=(q[1]*z+p.v.y-16)+"px";
@@ -1565,6 +1647,7 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
  $("#pmode").textContent=MODE_N[MODE()];$("#pmode").className="tag m-"+MODE();
  if(pane==="agent")el.innerHTML=agentHTML();
  if(pane==="ev"){el.innerHTML=evHTML();setTimeout(zhFill,200)}
+ if(pane==="pins"){el.innerHTML=pinsHTML();$$("#pane [data-pin]").forEach(r=>{r.onclick=()=>goPin(r.dataset.pin);r.onkeydown=e=>{if(e.key==="Enter")goPin(r.dataset.pin)}})}
  if(pane==="hl"){const H=t=>`<h3>${t}</h3>`;
   el.innerHTML=`<div class="stage"><span class="sb">${I("pulse")}</span><div><b>${stageOf()}</b><div class="sm mute" style="margin-top:2px">${p.LV>=2?next():"此作業尚未開放建議"}</div></div></div>`
    +health().map(([t,list])=>H(t)+list.map(h=>`<div class="hl"><span>${h[0]}</span><span><span class="st"><i class="dot ${h[1]}"></i>${h[2]}</span>${h[3]}</span></div>`).join("")).join("")
