@@ -54,6 +54,29 @@ test('planSearch：把寫在一起的概念拆開，丟掉不是英文的翻譯�
   await assert.rejects(planSearch({ title: 't', claim: 'c' }, none), /主題詞/);
 });
 
+test('planSearch：提示詞要求主題詞同時涵蓋原因與結果、時期地點放範圍詞', async () => {
+  const f = fake({ focus: 'x', discipline: 'humanities', keywords: [{ zh: '女子教育', en: 'female education', role: 'core', synonyms: [] }, { zh: '女性就業', en: 'female employment', role: 'core', synonyms: [] }] });
+  await planSearch({ title: 't', claim: '日治時期臺灣的女子教育如何影響女性就業' }, f);
+  assert.match(f.calls[0].system, /「原因」.*與「結果」各至少一個/);
+  assert.match(f.calls[0].system, /不可以用兩個意思相近的詞當兩個主題詞/);
+  assert.match(f.calls[0].system, /時期與地點.*放在範圍詞/);
+});
+
+test('planSearch：兩個主題詞重複時（employment ⊂ female employment）只留具體的那個；範圍詞不受影響', async () => {
+  // 預覽網站實際出現過的規劃結果：主張的原因（女子教育）沒有被列為主題詞
+  const f = fake({ focus: 'x', discipline: 'social', keywords: [
+    { zh: '就業', en: 'employment', role: 'core', synonyms: [] },
+    { zh: '女性就業', en: 'female employment', role: 'core', synonyms: ["women's employment"] },
+    { zh: '女子教育', en: 'female education', role: 'core', synonyms: [] },
+    { zh: '學生', en: 'students', role: 'scope', synonyms: [] },
+    { zh: '大學生', en: 'university students', role: 'scope', synonyms: [] },
+  ] });
+  const r = await planSearch({ title: 't', claim: 'c' }, f);
+  assert.deepEqual(r.keywords.map((k) => k.en), ['female employment', 'female education', 'students', 'university students']);
+  const one = fake({ focus: 'x', keywords: [{ zh: '就業', en: 'employment', role: 'core', synonyms: [] }, { zh: '女性就業', en: 'female-employment', role: 'core', synonyms: [] }] });
+  assert.deepEqual((await planSearch({ title: 't', claim: 'c' }, one)).keywords.map((k) => k.en), ['female-employment'], '連字號也算同一個字');
+});
+
 test('planSearch：要求模型給學科（schema 限定 8 種），給錯或沒給就留空、不算失敗', async () => {
   const kw = [{ zh: '翻轉教室', en: 'flipped classroom', role: 'core', synonyms: [] }];
   const f = fake({ focus: 'x', discipline: 'education', keywords: kw });

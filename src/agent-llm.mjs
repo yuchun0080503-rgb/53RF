@@ -26,11 +26,15 @@ const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
 export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   const out = await chatJSON({
     system:
-      '你是協助學生查證文獻的研究助理，熟悉教育、心理、社會科學的學術用語。' +
+      '你是協助大學生查證文獻的研究助理，熟悉人文、歷史、法律、社會科學、教育、商管、理工、醫護、藝術設計各領域的學術用語。' +
       '任務：根據報告題目與學生要查證的主張，決定到學術資料庫要用哪些關鍵字。\n' +
       '規則：\n' +
-      '1. 主題詞（role=core）2 到 3 個：這個主張真正在談的「現象或工具」與「結果」。主張常常省略主詞，要從題目補上（題目是 AI，主張只寫「影響判斷能力」，主題詞就要有 AI）。\n' +
-      '2. 範圍詞（role=scope）1 到 2 個：研究對象或情境。題目或主張提到對象（學生、大學生、老人、青少年）就一定要列出來。\n' +
+      '1. 主題詞（role=core）2 到 3 個，必須同時包含主張裡的「原因」（現象、工具、介入、制度）與「結果」各至少一個。' +
+      '例如「日治時期臺灣的女子教育如何影響女性就業」：原因是女子教育（female education），結果是女性就業（female employment），兩個都要是主題詞。' +
+      '不可以用兩個意思相近的詞當兩個主題詞（例如 employment 和 female employment），近義詞放進 synonyms。' +
+      '主張常常省略主詞，要從題目補上（題目是 AI，主張只寫「影響判斷能力」，主題詞就要有 AI）。\n' +
+      '2. 範圍詞（role=scope）1 到 2 個：研究對象、時期或地點。題目或主張提到對象（學生、大學生、老人、青少年）就一定要列出來；' +
+      '時期與地點（日治時期臺灣、臺灣、歐盟）放在範圍詞，不要當主題詞——當主題詞會讓每篇文獻都必須提到它，幾乎找不到。\n' +
       '3. en 必須是英文論文標題實際會出現的學術用語（1 到 3 個英文單字），依「概念」翻譯，不要逐字翻。例如「自主判斷能力」是 independent thinking，不是 autonomy judgment ability。\n' +
       '4. synonyms 給 1 到 3 個意思幾乎相同的英文學術用語，第一個放最常用的。不要放意思更廣的詞（例如不要把 decision making 當成 critical thinking 的同義詞）。\n' +
       '5. zh 用學生原本的中文說法（繁體）。不要列「影響」「研究」「能力」這類太籠統的詞。\n' +
@@ -68,7 +72,11 @@ function normKeywords(list) {
   const keywords = split
     .map((k) => ({ zh: clip(k.zh, 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' ? 'scope' : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
-  return keywords;
+  // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
+  // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
+  const words = (s) => s.split(/[\s-]+/).filter(Boolean);
+  const covered = (a, b) => a !== b && words(a).every((w) => words(b).includes(w));
+  return keywords.filter((k) => k.role !== 'core' || !keywords.some((o) => o.role === 'core' && covered(k.en, o.en)));
 }
 
 const KW_SCHEMA = {
