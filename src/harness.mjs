@@ -19,6 +19,7 @@ export const MIN_LEVEL = {
   proposeKeywords: 1, // 學生自己寫 Research Question，Agent 只產生搜尋關鍵字
   proposeQuestion: 2, // Agent 草擬 Research Question
   summarizeEvidence: 3,
+  slideOutline: 3, // 投影片文字大綱：只整理小組自己的內容與證據，結論頁不代寫（寫作助理才開放）
   generateReport: Infinity,
 };
 

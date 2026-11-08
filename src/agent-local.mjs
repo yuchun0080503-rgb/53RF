@@ -759,3 +759,67 @@ export function summarizeEvidence(evidence) {
     `其中 ${ev.filter((e) => !e.v).length} 筆來源待驗證、${ev.filter((e) => e.auto).length} 筆的分類尚未經小組確認。結論請由小組自行判斷。`
   );
 }
+
+// ---------------- 投影片大綱（Level 3）----------------
+// 只整理小組自己的內容與已經找到的證據；每個重點標引用編號，參考文獻由這裡依編號產生（不讓模型寫書目）。
+// 結論頁不代寫，只列出小組要回答的問題（ResearchFlow 不代替學生完成報告，見 harness.mjs）。
+
+const META_ZH = /摘要(沒有|沒|未|只|並未|僅|截斷)|未完整|未說明|請閱讀原文|無法判斷/;
+const firstPoint = (e) => {
+  const kp = e.kp || {};
+  for (const s of [kp.takeaway, kp.findings, e.unc ? '' : e.f]) {
+    const t = String(s || '').split(/(?<=[。！？])/).filter((x) => x.trim() && !META_ZH.test(x)).join('').trim();
+    if (t) return t.slice(0, 160);
+  }
+  return '';
+};
+
+/**
+ * 可以放進簡報的證據：支持（s）與反向／限制（c），立場待確認（u）不放。依支持在前、證據力高的在前排好並編號（最多 12 篇）。
+ * @returns {{n:number, k:'s'|'c', t:string, y:*, au:string, vn:string, url:string, point:string}[]}
+ */
+export function outlineEvidence(evidence) {
+  const lvRank = (e) => ({ 高: 0, 中: 1 }[e.lv] ?? 2);
+  return (Array.isArray(evidence) ? evidence : [])
+    .filter((e) => e && (e.k === 's' || e.k === 'c') && e.t)
+    .sort((a, b) => (a.k === b.k ? lvRank(a) - lvRank(b) : a.k === 's' ? -1 : 1))
+    .slice(0, 12)
+    .map((e, i) => ({ n: i + 1, k: e.k, t: String(e.t), y: e.y || '年份不明', au: String(e.au || ''), vn: String(e.vn || ''), url: /^https:\/\//.test(e.url || '') ? e.url : '', point: firstPoint(e) }));
+}
+
+// 結論頁固定的引導問題（不代寫結論）
+export const CONCLUSION_PROMPTS = ['證據是否足以支持主張？最有力的是哪一篇？', '有哪些限制或反面證據要說明？', '小組自己的結論是什麼？（請小組撰寫）'];
+
+/** 沒有 AI 時的大綱：依固定結構排好，重點直接用證據的重點整理。 */
+export function ruleOutline({ topic = '', question = '', claim = '', points = [], items = [] }) {
+  const sup = items.filter((x) => x.k === 's'), con = items.filter((x) => x.k === 'c');
+  const slides = [
+    { title: topic || '研究題目', bullets: [question && `研究問題：${question}`].filter(Boolean), cite: [] },
+  ];
+  const bg = (Array.isArray(points) ? points : []).map((s) => String(s || '').trim()).filter(Boolean).slice(0, 4);
+  if (bg.length) slides.push({ title: '研究背景與小組的想法', bullets: bg.map((s) => s.slice(0, 60)), cite: [] });
+  if (claim) slides.push({ title: '我們的主張', bullets: [claim.slice(0, 80)], cite: [] });
+  for (const x of sup) slides.push({ title: `支持證據：${x.au.split(',')[0] || '文獻'}（${x.y}）`, bullets: [x.point || x.t].map((s) => s.slice(0, 80)), cite: [x.n] });
+  if (con.length) slides.push({ title: '限制與反面觀點', bullets: con.map((x) => (x.point || x.t).slice(0, 60)), cite: con.map((x) => x.n) });
+  slides.push({ title: '結論（請小組撰寫）', bullets: CONCLUSION_PROMPTS, cite: [] });
+  return { slides };
+}
+
+/** 參考文獻：只列大綱裡真的引用到的，依編號排序（作者、年份、標題、出處、網址都來自資料庫，不是模型寫的）。 */
+export function outlineRefs(items, slides) {
+  const used = new Set((slides || []).flatMap((s) => s.cite || []));
+  return items.filter((x) => used.has(x.n)).map((x) => `[${x.n}] ${x.au ? x.au + '（' + x.y + '）' : '（' + x.y + '）'}。${x.t}。${x.vn ? x.vn + '。' : ''}${x.url}`);
+}
+
+/** 純文字版（給「複製」用）。 */
+export function outlineToText({ topic = '', slides = [], refs = [] }) {
+  const lines = [`投影片大綱${topic ? '：' + topic : ''}`, ''];
+  slides.forEach((s, i) => {
+    lines.push(`第 ${i + 1} 頁　${s.title}`);
+    for (const b of s.bullets || []) lines.push(`・${b}`);
+    if ((s.cite || []).length) lines.push(`　引用：${s.cite.map((n) => `[${n}]`).join('')}`);
+    lines.push('');
+  });
+  if (refs.length) lines.push(`第 ${slides.length + 1} 頁　參考文獻`, ...refs);
+  return lines.join('\n').trim();
+}

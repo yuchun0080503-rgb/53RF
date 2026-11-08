@@ -60,3 +60,9 @@ test('checkSetLevel：只有老師能設定，且 Level 必須是 0–3 的整�
   assert.equal(checkSetLevel({ role: 'teacher', level: 4 }).ok, false);
   assert.equal(checkSetLevel({ role: 'teacher', level: '2' }).ok, false);
 });
+
+test('checkAgentCall：投影片大綱需要 Level 3，唯讀角色不能用', () => {
+  assert.equal(checkAgentCall({ role: 'editor', aiLevel: 2, action: 'slideOutline' }).ok, false);
+  assert.equal(checkAgentCall({ role: 'editor', aiLevel: 3, action: 'slideOutline' }).ok, true);
+  assert.equal(checkAgentCall({ role: 'viewer', aiLevel: 3, action: 'slideOutline' }).ok, false);
+});

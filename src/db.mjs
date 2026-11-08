@@ -19,7 +19,7 @@ import { checkAgentCall } from './harness.mjs';
 import { makeCode, normalizeCode, looksLikeCode, codeStatus, endOfDayTW, semesterEnd } from './course.mjs';
 import * as agent from './agent-local.mjs';
 import * as llm from './llm.mjs';
-import { refineEvidence, scopeFocus, draftQuestion } from './agent-llm.mjs';
+import { refineEvidence, scopeFocus, draftQuestion, slideOutline as slideOutlineAI } from './agent-llm.mjs';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -127,6 +127,22 @@ export async function searchEvidence(projectId, { keywords, keywordsZh, coreCoun
     ? `應學生要求搜尋反面例證（參考用）：找到 ${out.scanned} 篇，其中 ${out.scanned - sup} 篇初步分類為反向／限制。${by}`
     : `正反例證模式第 ${round + 1} 輪搜尋 ${dbs}：找到 ${out.scanned} 篇，初步分類為支持 ${sup} 篇、反向／限制 ${out.scanned - sup} 篇（待小組確認）。${by}`);
   return { ...out, held: [] };
+}
+
+// 投影片文字大綱（Level 3）：有 AI 時由 Claude 排版重點，沒有 AI 或失敗時用規則式；參考文獻一律由程式依引用編號產生
+export async function slideOutline(projectId, { topic, question, claim, points, evidence }) {
+  const uid = await guard(projectId, 'slideOutline');
+  const items = agent.outlineEvidence(evidence);
+  if (!items.length) throw new Error('還沒有可以引用的證據（支持或限制），請先完成搜尋並確認證據。立場待確認的文獻讀過原文、列為支持後才會放進大綱。');
+  const st = await llm.detect();
+  let slides = null, by = '規則式整理';
+  if (st.ok) {
+    try { slides = (await slideOutlineAI({ topic, question, claim, points, items })).slides; by = llm.modelLabel(st.textModel || st.model); } catch (err) { console.warn('[ResearchFlow] 模型整理簡報大綱失敗，改用規則式：', err?.message || err); }
+  }
+  if (!slides) slides = agent.ruleOutline({ topic, question, claim, points, items }).slides;
+  const refs = agent.outlineRefs(items, slides);
+  await agentLog(projectId, uid, `產生投影片大綱（${slides.length} 頁，引用 ${refs.length} 篇文獻；${by}）。`);
+  return { slides, refs, by, at: Date.now() };
 }
 
 export async function summarizeEvidence(projectId, { evidence }) {

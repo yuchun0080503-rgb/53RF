@@ -1297,7 +1297,7 @@ const EV=[{k:"s",t:"Generative AI and information-seeking efficiency in undergra
 {k:"c",t:"AI dependency and self-regulated learning",y:2023,p:"大學生",m:"縱貫調查",f:"依賴程度與自主學習策略呈負相關。",l:"為相關性研究。",d:"直接",c:"但是可能產生 AI 依賴。",q:"AI dependency self-directed learning",sc:"一致"},
 {k:"c",t:"Hallucinated references in student use of chatbots",y:2024,p:"高等教育",m:"內容分析",f:"聊天機器人產生的引用中有一部分無法查證。",l:"研究情境為寫作，與自主學習只有部分重疊。",d:"間接",c:"需要確認是否真的提高學習成績。",q:"ChatGPT critical thinking students",sc:"部分重疊（情境不同）",u:1}];
 const RD=[[0,1],[2,3],[4]],RQ=[["generative AI university students self-directed learning","AI feedback learning outcomes"],["generative AI cognitive offloading university students","ChatGPT critical thinking students","AI dependency self-directed learning"],["LLM hallucination citation students"]];
-const NEED={analyze:1,re:1,ok1:1,ask:1,rq:2,myrq:1,go:1,round:1,expand:1,board:2,sum:3,report:99};
+const NEED={analyze:1,re:1,ok1:1,ask:1,rq:2,myrq:1,go:1,round:1,expand:1,board:2,sum:3,outline:3,report:99};
 const lockedHTML=()=>`<div class="box"><b>此作業未開放 AI</b><p class="sm mute" style="margin:6px 0 0">老師設定為 Level 0。你們仍可使用共享畫布、專案管理與協作功能。</p></div>`;
 const repBtn=()=>`<div class="box sm" style="margin-top:22px"><div class="mute">目前權限：Level ${p.LV}（${LVN[p.LV]}）</div><div class="acts" style="margin-top:8px"><button data-a="report">${I("file")}請 Agent 完成整份報告</button></div></div>`;
 function stale(){if(!S.ver||S.step<1||p.ver<=S.ver||p.LV===0)return "";const n=p.ver-S.ver;return `<div class="box warn sm">自上次 Agent 分析（v${S.ver}）後，Canvas 已有 ${n} 項新修改。${S.snap&&S.snap.length?"這一輪分析鎖定的是 v"+(S.snapVer||S.ver)+" 的內容，新修改不會影響目前的結果。":""}是否分析新的研究內容？<div class="acts"><button class="pri" data-a="re">重新分析新增內容</button></div></div>`}
@@ -1341,7 +1341,7 @@ function body(){const s=S.step,sc=S.scope;
  ${S.rounds===1&&!balanced&&!S.skip?`<div class="box warn sm"><b>Evidence Imbalance</b><br>支持證據 ${sp} 筆，反向證據 ${c} 筆。請選擇下一步：<div class="acts"><button class="pri" data-a="round">重新規劃並搜尋</button><button data-a="board">加入討論板</button><button data-a="kwedit">修改搜尋方向</button><button data-a="skip">暫時略過</button></div></div>`:""}
  ${balanced?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}證據已足夠</b><div class="mute" style="margin-top:4px">支持 ${sp} 筆．反向／限制 ${c} 筆${uv?`，其中 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
- return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
+ return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button><button data-a="outline">${I("spark")}產生投影片大綱</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
 /* 主張論證模式的搜尋頁：只呈現「支持這個主張的證據夠不夠扎實」。不主動提供反面例證——
    先列出主張的潛在問題（看主張的寫法與證據的組成），再問小組要不要另外找反面例證當參考。 */
 function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),high=sup.filter(e=>lvOf(e)==="高").length,uv=S.ev.filter(e=>!e.v).length,ok=enoughOf(p),held=(S.held||[]).length;
@@ -1680,6 +1680,14 @@ const KP_N={takeaway:"重點",question:"研究問題",method:"對象與方法",p
 const kpStale=e=>!!e.kp&&!("takeaway" in e.kp&&"process" in e.kp)&&AI();
 const kpNeed=e=>!e.kp||kpStale(e);
 const kpClaim=()=>S.claim||S.rq||"";
+// 投影片文字大綱（S.outline 來自 RFDB.slideOutline）：每頁標題、重點、引用編號；最後一頁參考文獻（程式依引用編號產生）。可以複製成純文字
+function outlineHTML(){const O=S.outline;if(!O||!Array.isArray(O.slides)||!O.slides.length)return"";
+ const txt=window.RFAGENT&&RFAGENT.outlineToText?RFAGENT.outlineToText({topic:p&&p.name,slides:O.slides,refs:O.refs||[]}):"";window.RF_OUTLINE_TXT=txt;
+ const cite=c=>(c||[]).length?`<span class="mute">（${c.map(n=>"["+esc(n)+"]").join("")}）</span>`:"";
+ return `<div class="box sm" style="margin-top:8px"><b>投影片大綱</b><span class="mute">（${esc(O.by||"")}整理，${O.slides.length} 頁；內容只來自小組的題目、主張、畫布與已確認的證據，結論請小組自己寫）</span>`
+  +O.slides.map((s,i)=>`<div style="margin-top:8px"><b>第 ${i+1} 頁　${esc(s.title)}</b>${cite(s.cite)}<ul style="margin:4px 0 0 18px;padding:0">${(s.bullets||[]).map(b=>`<li>${esc(b)}</li>`).join("")}</ul></div>`).join("")
+  +((O.refs||[]).length?`<div style="margin-top:8px"><b>第 ${O.slides.length+1} 頁　參考文獻</b><ul style="margin:4px 0 0 18px;padding:0">${O.refs.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:"")
+  +`<div class="acts"><button onclick="try{navigator.clipboard.writeText(window.RF_OUTLINE_TXT||'');this.textContent='已複製'}catch(e){}">複製大綱（純文字）</button></div></div>`}
 function kpHTML(e){
  // 已經存下來的重點整理也在顯示時清掉模型誤寫的欄位標記（見 agent-llm.mjs 的 fixLeakedFields）
  if(e.kp){const kp=window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp;
@@ -1753,9 +1761,9 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
   ${S.ev.some(e=>e.k==="u")?`<h3>立場待確認（不計入論證強度）</h3><p class="sm mute" style="margin-top:-2px">這些文獻跟主張有關，但摘要沒有寫出研究結果、只看得出部分相關，或（網路搜尋找到的中文文獻）沒有取得摘要，AI 判斷不出是否支持。請打開原文閱讀，確認支持主張後按「讀過了，列為支持」。</p>${li("u")}`:""}
   ${zhMore()}
   ${S.wantCounter===true?`<h3>反面例證（參考用）</h3><p class="sm mute" style="margin-top:-2px">這是應你們的要求另外找的，用來預想別人可能怎麼反駁，不計入論證強度。</p>${li("c")}`:""}
-  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button><button data-a="outline">產生投影片大綱（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
  return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${cn.length/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　限制／反向 ${cn.length}</span></div><h3>支持證據</h3>${li("s")}<h3>限制／反向證據</h3>${li("c")}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
- <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+ <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button><button data-a="outline">產生投影片大綱（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
 
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
@@ -1819,6 +1827,9 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(a==="finishsearch"){S.step=6;S.tok+=600;log(w,"確認證據已足夠，結束搜尋階段。");log("Agent","證據蒐集階段完成。","ai")}
  if(a==="reopen"){S.step=5;log(w,"重新開啟搜尋，可以再補充證據。")}
  if(a==="sum"){S.sum=`目前共 ${S.ev.length} 筆資料：支持 ${S.ev.filter(e=>e.k==="s").length} 筆、限制 ${S.ev.filter(e=>e.k==="c").length} 筆；${S.ev.filter(e=>!e.v).length} 筆來源待驗證。結論請由小組自行判斷。`;log("Agent","產生證據摘要（Level 3）。","ai")}
+ // 示範模式（沒連 Firebase）：投影片大綱用規則式整理
+ if(a==="outline"&&window.RFAGENT){const it=RFAGENT.outlineEvidence(S.ev);if(!it.length){alert("還沒有可以引用的證據（支持或限制）。");return}
+  const o=RFAGENT.ruleOutline({topic:p.name,question:S.rq,claim:S.claim,points:rdItems().map(x=>x.text).filter(Boolean),items:it});S.outline={...o,refs:RFAGENT.outlineRefs(it,o.slides),by:"規則式整理",at:Date.now()};log("Agent","產生投影片大綱（示範：規則式整理）。","ai")}
  if(a==="reset"){const keep=S.saved||[];S=p.S=fresh();S.saved=keep} // 收藏的例證不會因為重新開始而消失
  syncObjsLive(false);saveS();renderProj();renderPane()}
 // 證據卡：標題（年份）＋中文摘要＋可以點開的來源連結。完整網址存在 url，卡片上只顯示一小段（ul）。
@@ -1864,7 +1875,7 @@ async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S
  setStat("已加入畫布");renderProj();renderPane()}
 /* live 模式的 Agent 動作：交給資料層（src/db.mjs → agent-local.mjs：規則式判斷＋OpenAlex）。等待期間 busy 有值，側欄按鈕全部鎖住；
    失敗（含被 AI Harness 拒絕）時把後端的說明顯示給使用者，流程停在原本的步驟，不會退回內建範例假裝成功。 */
-const LIVE_ACTS=new Set(["ok1","rq","myrq","round","counter","sum","report"]);
+const LIVE_ACTS=new Set(["ok1","rq","myrq","round","counter","sum","outline","report"]);
 // 還缺什麼（給 Agent 反思與畫面說明用）
 function evGap(){const sup=S.ev.filter(e=>e.k==="s"),c=S.ev.filter(e=>e.k==="c").length;
  return MODE()==="claim"?`支持主張的證據 ${sup.length} 筆（至少要 3 筆）${sup.some(e=>lvOf(e)==="高")?"":"，還沒有回顧或實驗研究"}`:`反向／限制證據 ${c} 筆（至少要 3 筆）`}
@@ -1934,6 +1945,9 @@ async function actLive(a,w){
  if(a==="sum"){
   label="整理證據摘要中…";
   job=async()=>{S.sum=(await RFDB.summarizeEvidence(p.fid,{rq:S.rq,evidence:S.ev})).summary}}
+ if(a==="outline"){
+  label="整理投影片大綱中…（約 20 秒）";
+  job=async()=>{if(!RFDB.slideOutline)throw new Error("網站版本太舊，請重新整理頁面");S.outline=await RFDB.slideOutline(p.fid,{topic:p.name,question:S.rq,claim:S.claim,points:rdItems().map(o=>o.text).filter(Boolean),evidence:S.ev})}}
  if(a==="report"){label="送出請求中…";job=()=>RFDB.generateReport(p.fid)}
  busy=label;renderPane();
  try{await job()}
