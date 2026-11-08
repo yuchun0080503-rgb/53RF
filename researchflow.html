@@ -314,7 +314,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
     </div>
   </div>
   <aside class="side">
-    <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button><button data-p="pins"><i data-i="target"></i>留言<span id="pinct"></span></button></div>
+    <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button><button data-p="slides"><i data-i="frame"></i>簡報</button><button data-p="pins"><i data-i="target"></i>留言<span id="pinct"></span></button></div>
     <div class="pane" id="pane"></div>
   </aside>
 </div></section>
@@ -1341,7 +1341,7 @@ function body(){const s=S.step,sc=S.scope;
  ${S.rounds===1&&!balanced&&!S.skip?`<div class="box warn sm"><b>Evidence Imbalance</b><br>支持證據 ${sp} 筆，反向證據 ${c} 筆。請選擇下一步：<div class="acts"><button class="pri" data-a="round">重新規劃並搜尋</button><button data-a="board">加入討論板</button><button data-a="kwedit">修改搜尋方向</button><button data-a="skip">暫時略過</button></div></div>`:""}
  ${balanced?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}證據已足夠</b><div class="mute" style="margin-top:4px">支持 ${sp} 筆．反向／限制 ${c} 筆${uv?`，其中 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
- return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button><button data-a="outline">${I("spark")}產生投影片大綱</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
+ return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
 /* 主張論證模式的搜尋頁：只呈現「支持這個主張的證據夠不夠扎實」。不主動提供反面例證——
    先列出主張的潛在問題（看主張的寫法與證據的組成），再問小組要不要另外找反面例證當參考。 */
 function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),high=sup.filter(e=>lvOf(e)==="高").length,uv=S.ev.filter(e=>!e.v).length,ok=enoughOf(p),held=(S.held||[]).length;
@@ -1666,6 +1666,7 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
    +H("目前進度")+F("階段",stageOf())+F("建議下一步",p.LV>=2?next():"此作業尚未開放建議")
    +`<p class="note">這是 Agent 用來記住進度的摘要，之後不用每次重新讀取整張畫布與所有歷史紀錄。</p>`}
  if(pane==="team"){el.innerHTML=teamHTML(false);bindTeam(el)}
+ if(pane==="slides")el.innerHTML=slidesHTML();
  if(pane==="tr"){el.innerHTML=`<h3>研究歷程</h3><p class="sm mute" style="margin-top:-4px">依時間排序，深色標籤代表由 Agent 產生的內容，淺灰的同步紀錄可略過不看。</p>`
   +p.trace.slice().reverse().map(t=>{const k=t.k==="ai"?"ai":t.k==="sync"?"sync":t.k==="sys"?"sys":"";
    return `<div class="hl tt ${k==="sync"?"sync":""}"><span>${t.t}</span><span><div><span class="tag ${k}">${t.k==="ai"?"Agent":t.k==="sync"?"同步":t.k==="sys"?"權限":"學生"}</span>${k!=="sync"?` <b>${esc(t.w)}</b>`:""}</div><div>${esc(t.x)}</div></span></div>`}).join("")}
@@ -1680,11 +1681,20 @@ const KP_N={takeaway:"重點",question:"研究問題",method:"對象與方法",p
 const kpStale=e=>!!e.kp&&!("takeaway" in e.kp&&"process" in e.kp)&&AI();
 const kpNeed=e=>!e.kp||kpStale(e);
 const kpClaim=()=>S.claim||S.rq||"";
+// 「簡報」分頁：說明、可以引用的證據數、產生按鈕（Level 3）、大綱
+function slidesHTML(){const su=S.ev.filter(e=>e.k==="s").length,cn=S.ev.filter(e=>e.k==="c").length,ok=su+cn>0,lv=p.LV>=3;
+ return `<h3>投影片大綱</h3><p class="sm mute" style="margin-top:-4px">依小組的題目、研究問題、主張、畫布上的想法，以及證據頁已確認的支持／限制證據，整理每一頁的標題與重點。結論頁只列出要回答的問題，結論請小組自己寫；參考文獻依引用編號自動列出。</p>`
+  +`<div class="box sm">可以引用的證據：支持 <b>${su}</b> 篇、限制／反向 <b>${cn}</b> 篇<span class="mute">（立場待確認的不會放進大綱）</span></div>`
+  +(busy?`<div class="box sm warn"><b>Agent 處理中</b><div class="mute">${esc(busy)}</div></div>`:"")
+  +(!ok?`<p class="sm mute">還沒有證據可以引用，請先到「證據」分頁搜尋並確認證據。</p>`
+   :!lv?`<p class="sm mute">產生投影片大綱需要 AI 權限 Level 3（寫作助理），目前是 Level ${p.LV}，可以請老師調整。</p>`
+   :`<div class="acts"><button class="pri" data-a="outline">${I("spark")}${S.outline?"重新產生投影片大綱":"產生投影片大綱"}</button></div>`)
+  +outlineHTML()}
 // 投影片文字大綱（S.outline 來自 RFDB.slideOutline）：每頁標題、重點、引用編號；最後一頁參考文獻（程式依引用編號產生）。可以複製成純文字
 function outlineHTML(){const O=S.outline;if(!O||!Array.isArray(O.slides)||!O.slides.length)return"";
  const txt=window.RFAGENT&&RFAGENT.outlineToText?RFAGENT.outlineToText({topic:p&&p.name,slides:O.slides,refs:O.refs||[]}):"";window.RF_OUTLINE_TXT=txt;
  const cite=c=>(c||[]).length?`<span class="mute">（${c.map(n=>"["+esc(n)+"]").join("")}）</span>`:"";
- return `<div class="box sm" style="margin-top:8px"><b>投影片大綱</b><span class="mute">（${esc(O.by||"")}整理，${O.slides.length} 頁；內容只來自小組的題目、主張、畫布與已確認的證據，結論請小組自己寫）</span>`
+ return `<div class="box sm" style="margin-top:8px"><b>投影片大綱</b><span class="mute">（${esc(/整理$/.test(O.by||"")?O.by:(O.by||"AI")+" 整理")}，${O.slides.length} 頁；內容只來自小組的題目、主張、畫布與已確認的證據，結論請小組自己寫）</span>`
   +O.slides.map((s,i)=>`<div style="margin-top:8px"><b>第 ${i+1} 頁　${esc(s.title)}</b>${cite(s.cite)}<ul style="margin:4px 0 0 18px;padding:0">${(s.bullets||[]).map(b=>`<li>${esc(b)}</li>`).join("")}</ul></div>`).join("")
   +((O.refs||[]).length?`<div style="margin-top:8px"><b>第 ${O.slides.length+1} 頁　參考文獻</b><ul style="margin:4px 0 0 18px;padding:0">${O.refs.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:"")
   +`<div class="acts"><button onclick="try{navigator.clipboard.writeText(window.RF_OUTLINE_TXT||'');this.textContent='已複製'}catch(e){}">複製大綱（純文字）</button></div></div>`}
@@ -1761,9 +1771,9 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
   ${S.ev.some(e=>e.k==="u")?`<h3>立場待確認（不計入論證強度）</h3><p class="sm mute" style="margin-top:-2px">這些文獻跟主張有關，但摘要沒有寫出研究結果、只看得出部分相關，或（網路搜尋找到的中文文獻）沒有取得摘要，AI 判斷不出是否支持。請打開原文閱讀，確認支持主張後按「讀過了，列為支持」。</p>${li("u")}`:""}
   ${zhMore()}
   ${S.wantCounter===true?`<h3>反面例證（參考用）</h3><p class="sm mute" style="margin-top:-2px">這是應你們的要求另外找的，用來預想別人可能怎麼反駁，不計入論證強度。</p>${li("c")}`:""}
-  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button><button data-a="outline">產生投影片大綱（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
  return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${cn.length/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　限制／反向 ${cn.length}</span></div><h3>支持證據</h3>${li("s")}<h3>限制／反向證據</h3>${li("c")}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
- <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button><button data-a="outline">產生投影片大綱（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}${outlineHTML()}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+ <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
 
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
