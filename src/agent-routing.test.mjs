@@ -73,6 +73,40 @@ test('專門資料庫失敗不影響 OpenAlex；全部失敗才報錯', async ()
   await assert.rejects(searchEvidence({ ...buildQueries(FLIP, 0), keywords: FLIP, discipline: 'education' }, async () => ({ ok: false, status: 500 })), /都沒有回應/);
 });
 
+// ---------------- 第 4 輪起放寬年份 ----------------
+
+import { fromYearOf, buildQueriesZh, nextDirection } from './agent-local.mjs';
+
+test('第 4 輪起（擴大範圍）：查詢回到最直接的寫法並放寬年份，不再重複第 3 輪的查詢', () => {
+  const kw = ['female education', 'female employment', 'colonial taiwan'];
+  const r3 = buildQueries(kw, 2, 'claim', 2), r4 = buildQueries(kw, 3, 'claim', 2), r5 = buildQueries(kw, 4, 'claim', 2);
+  assert.notDeepEqual(r4.queries, r3.queries, '截圖裡第 3、4 輪的查詢一模一樣');
+  assert.deepEqual([r3.fromYear, r4.fromYear, r5.fromYear], [2020, 2010, 2000]);
+  assert.deepEqual(r4.queries, buildQueries(kw, 0, 'claim', 2).queries, '第 4 輪用第 1 輪的直接查詢，但年份放寬');
+  assert.equal(buildQueries(kw, 3, 'procon', 2).fromYear, 2010);
+  assert.notDeepEqual(buildQueries(kw, 3, 'procon', 2).queries, buildQueries(kw, 2, 'procon', 2).queries);
+  assert.deepEqual(buildQueriesZh(['女子教育', '女性就業'], 3, 'claim', 2), ['女子教育 女性就業']);
+  assert.equal(fromYearOf('counter'), 2020);
+  assert.match(nextDirection(3, 'claim'), /擴大範圍.*2010 年以後/);
+});
+
+test('searchEvidence：年份下限傳給 OpenAlex 與專門資料庫；中文再往前 5 年', async () => {
+  const svc = service({ 'api.ies.ed.gov': () => json({ response: { docs: [] } }), 'api.openalex.org': () => json({ results: [] }) });
+  await searchEvidence({ ...buildQueries(FLIP, 3, 'claim'), keywords: FLIP, discipline: 'education', zhQueries: ['翻轉教室'], keywordsZh: ['翻轉教室'] }, svc);
+  const urls = svc.calls.map((c) => decodeURIComponent(c.url.replace(/\+/g, ' ')));
+  assert.ok(urls.some((u) => u.includes('api.ies.ed.gov') && u.includes('publicationdateyear:[2010 TO')));
+  assert.ok(urls.some((u) => u.includes('api.openalex.org') && u.includes('title_and_abstract') && u.includes('from_publication_date:2010-01-01')));
+  assert.ok(urls.some((u) => u.includes('language:zh') && u.includes('from_publication_date:2005-01-01')));
+});
+
+test('searchEvidence：人文、法律、臺灣主題回傳中文資料庫的建議；理工不回傳', async () => {
+  const svc = service({ 'api.openalex.org': () => json({ results: [] }) });
+  const h = await searchEvidence({ ...buildQueries(['lay judges', 'sentencing'], 0), keywords: ['lay judges', 'sentencing'], keywordsZh: ['國民法官', '量刑'], discipline: 'law' }, svc);
+  assert.equal(h.local.terms, '國民法官 量刑');
+  const s = await searchEvidence({ ...buildQueries(['perovskite', 'stability'], 0), keywords: ['perovskite', 'stability'], keywordsZh: ['鈣鈦礦'], discipline: 'stem' }, svc);
+  assert.equal(s.local, null);
+});
+
 // ---------------- OpenAlex 代查（帶金鑰）----------------
 
 test('OpenAlex：登入時走 /api/openalex 並帶憑證，查詢參數跟直接查詢一樣；沒登入直接查', async () => {

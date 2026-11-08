@@ -210,6 +210,55 @@ export function toJa(term) {
   return [...t].map((c) => CHARS_JA[c] || c).join('');
 }
 
+// ---------------- 沒有開放查詢介面的中文資料庫：給學生的建議 ----------------
+// 人文、法律、臺灣與東亞主題的研究多半在華藝、臺灣博碩士論文網、國圖期刊，網站無法直接查。
+// 證據不足時告訴學生去哪裡查、用什麼詞查，不要只看到 0 篇就卡住。
+// 2026-11-08 實測：華藝用「女子教育 日治」查到 230 筆（英文開放資料庫幾乎沒有這個主題、有摘要的研究）。
+
+// 時期或地點詞的短寫法（華藝的檢索是每個詞都要出現，「日治時期臺灣」整串比「日治」少很多結果）
+const PERIOD_PLACE = /日治|日據|清代|戰後|戒嚴|臺灣|台灣|中國|日本|韓國|香港|東亞/;
+export function localTerms(keywordsZh) {
+  const zh = (Array.isArray(keywordsZh) ? keywordsZh : []).map((k) => String(k || '').trim()).filter((k) => /[一-鿿]/.test(k));
+  if (!zh.length) return '';
+  const pp = zh.map((k) => (k.match(PERIOD_PLACE) || [])[0]).find(Boolean);
+  // 去掉所有時期、地點詞（還有「時期」「時代」「地區」）之後還剩兩個字以上的，才是主題詞
+  const rest = (k) => k.replace(new RegExp(PERIOD_PLACE.source, 'g'), '').replace(/時期|時代|地區|的/g, '');
+  const topic = zh.find((k) => rest(k).length >= 2) || zh[0];
+  const short = (s) => s.replace('日據', '日治');
+  return [topic, pp && !topic.includes(pp) ? short(pp) : zh.find((k) => k !== topic)].filter(Boolean).slice(0, 2).join(' ');
+}
+
+// 華藝的搜尋網址：格式跟它自己首頁搜尋框送出的一樣（2026-11-08 在瀏覽器確認可用）。
+// 這不是公開 API，華藝改版就可能失效，所以畫面上同時附首頁連結。
+export function airitiUrl(terms) {
+  const words = String(terms).split(/\s+/).filter(Boolean);
+  const q = {
+    查詢歷史類型代碼: 'ADLang', 是否關鍵字統計: true,
+    DSF: { SearchFileds: [{ FieldName: 49, SearchKeyWord: words.join(' '), FieldQuery: true }], IsFuzzySearch: false },
+    BSF: { SearchFiledList: words.map((w) => ({ FieldName: 0, SearchKeyWord: w, FieldQuery: true, FieldLogic: 0 })) },
+  };
+  return `https://www.airitilibrary.com/Article/Query?queryString=${encodeURIComponent(JSON.stringify(q))}`;
+}
+
+export const LOCAL_DISCIPLINES = ['humanities', 'law'];
+/**
+ * @returns {null | {terms:string, links:{name:string, url:string, note:string}[]}} 不需要建議（理工、醫護等國際期刊為主的領域）時回 null
+ */
+export function localHints({ discipline, keywordsZh, text = '' }) {
+  const terms = localTerms(keywordsZh);
+  if (!terms) return null;
+  if (!LOCAL_DISCIPLINES.includes(discipline) && !/臺灣|台灣|日治|日據/.test(`${text} ${(keywordsZh || []).join(' ')}`)) return null;
+  return {
+    terms,
+    links: [
+      { name: '華藝線上圖書館', url: airitiUrl(terms), note: '臺灣期刊與學位論文，多數有摘要；全文可能要透過學校圖書館' },
+      { name: '臺灣博碩士論文知識加值系統', url: 'https://ndltd.ncl.edu.tw/', note: '臺灣的碩博士論文；進入後在搜尋框輸入關鍵字' },
+      { name: '臺灣期刊論文索引系統（國家圖書館）', url: 'https://tpl.ncl.edu.tw/NclService/', note: '國內期刊文章索引；進入後在搜尋框輸入關鍵字' },
+      { name: 'Google 學術搜尋', url: `https://scholar.google.com/scholar?hl=zh-TW&q=${encodeURIComponent(terms)}`, note: '中英文都有，可以先用來找線索' },
+    ],
+  };
+}
+
 // 給 searchEvidence 用：每個來源怎麼組網址、怎麼從回應拿出清單、怎麼整理一筆
 export const SOURCES = {
   eric: { name: 'ERIC', url: ericUrl, list: (j) => j?.response?.docs, norm: normalizeEric },

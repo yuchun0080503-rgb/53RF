@@ -1085,11 +1085,17 @@ function body(){const s=S.step,sc=S.scope;
  if(s===5){const c=S.ev.filter(e=>e.k==="c").length,sp=S.ev.filter(e=>e.k==="s").length,uv=S.ev.filter(e=>!e.v).length,balanced=enoughOf(p);
  if(MODE()==="claim")return claimStep5();
  return `<h3>正反例證進度</h3><div class="box sm mode-procon"><b>正反例證模式</b><div class="mute" style="margin-top:3px">支持與反向的證據都要找；反向證據至少 3 筆才算平衡。</div><div class="bar" style="margin-top:8px"><i style="width:${sp+c?sp/(sp+c)*100:50}%;background:var(--ok)"></i><i style="width:${sp+c?c/(sp+c)*100:50}%;background:#e2662b"></i></div><span class="mute">支持 ${sp} 筆　｜　反向／限制 ${c} 筆</span></div>${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪查詢</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
- <div class="box sm">${S.msg||"尚未搜尋。"}</div>
+ <div class="box sm">${S.msg||"尚未搜尋。"}</div>${balanced?"":localBox()}
  ${S.rounds===1&&!balanced&&!S.skip?`<div class="box warn sm"><b>Evidence Imbalance</b><br>支持證據 ${sp} 筆，反向證據 ${c} 筆。請選擇下一步：<div class="acts"><button class="pri" data-a="round">重新規劃並搜尋</button><button data-a="board">加入討論板</button><button data-a="kwedit">修改搜尋方向</button><button data-a="skip">暫時略過</button></div></div>`:""}
  ${balanced?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}證據已足夠</b><div class="mute" style="margin-top:4px">支持 ${sp} 筆．反向／限制 ${c} 筆${uv?`，其中 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
  return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
+/* 證據還不夠、而且主題的研究多半在中文資料庫（人文、法律、臺灣與東亞主題）時：建議學生自己去哪裡查、用什麼詞查。
+   S.local 來自搜尋結果（agent-local.mjs 的 searchEvidence → sources.mjs 的 localHints）；關鍵字是學生輸入的，一律跳脫。 */
+function localBox(){const L=S.local;if(!S.rounds||!L||!Array.isArray(L.links)||!L.links.length)return"";
+ const safe=u=>/^https:\/\//.test(String(u))?esc(u):"#";
+ return `<div class="box sm warn"><b>這個主題的研究可能多在中文資料庫</b><div class="mute" style="margin-top:4px">網站能直接搜尋的是國際開放資料庫；臺灣的期刊與碩博士論文要到下面的資料庫查。建議關鍵字：<b>${esc(L.terms)}</b>（可以再換成同義詞或加上年代）。找到切題的文獻後，可以把書目與重點寫在畫布上和組員討論。</div>
+ <ul style="margin:6px 0 0 18px;padding:0">${L.links.map(l=>`<li style="margin:3px 0"><a href="${safe(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.name)}</a><span class="mute">：${esc(l.note)}</span></li>`).join("")}</ul></div>`}
 /* 主張論證模式的搜尋頁：只呈現「支持這個主張的證據夠不夠扎實」。不主動提供反面例證——
    先列出主張的潛在問題（看主張的寫法與證據的組成），再問小組要不要另外找反面例證當參考。 */
 function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),high=sup.filter(e=>lvOf(e)==="高").length,uv=S.ev.filter(e=>!e.v).length,ok=enoughOf(p),held=(S.held||[]).length;
@@ -1098,14 +1104,14 @@ function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k=
   :S.wantCounter===false?`你們選擇先不看反面例證。<div class="acts"><button data-a="counter">改變主意，找反面例證</button></div>`
   :`<b>需要反面例證作為參考嗎？</b><div class="mute" style="margin-top:3px">主張論證模式不會主動提供反面例證。如果想知道別人可能怎麼反駁這個主張，可以請 Agent 另外找。</div><div class="acts"><button data-a="counter">需要，找反面例證</button><button data-a="nocounter">先不用</button></div>`;
  return `<h3>主張論證進度</h3><div class="box sm mode-claim"><b>主張論證模式</b><div class="mute" style="margin-top:3px">要論證的主張</div><div style="font-size:14.5px;margin-top:2px">${esc(S.claim)}</div></div>
- ${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪：${ROUND_N[i]||"擴大範圍的補充資料"}</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
- <div class="box sm">${S.msg||"尚未搜尋。"}</div>
+ ${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪：${ROUND_N[i]||"擴大範圍的補充資料（放寬出版年份）"}</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
+ <div class="box sm">${S.msg||"尚未搜尋。"}</div>${ok?"":localBox()}
  <h3>論證強度</h3>
  <div class="hl sm"><span>支持主張的證據</span><span class="st"><i class="dot ${sup.length>=3?"g":sup.length?"y":"r"}"></i>${sup.length} 筆（至少要 3 筆）</span></div>
  <div class="hl sm"><span>證據力高的研究</span><span class="st"><i class="dot ${high?"g":"r"}"></i>${high} 筆（回顧或實驗，至少要 1 筆）</span></div>
  ${S.rounds?`<h3>目前主張下可能有的潛在問題</h3>${issues.length?issues.map(x=>`<div class="box sm warn" style="margin:6px 0">${esc(x)}</div>`).join(""):`<p class="sm mute">從主張的寫法和目前的證據來看，沒有發現明顯的問題。</p>`}<div class="box sm" style="margin-top:12px">${ask}</div>`:""}
  ${ok?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}論證的證據已足夠</b><div class="mute" style="margin-top:4px">支持主張 ${sup.length} 筆，其中證據力高 ${high} 筆${uv?`；有 ${uv} 筆來源待驗證`:""}</div></div>`:""}
- <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
+ <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
 function bind(r=document){r.querySelectorAll("details[data-ei]").forEach(d=>d.ontoggle=()=>{const e=S.ev[+d.dataset.ei];if(d.open&&e)zhFor(e.id)});
  r.querySelectorAll(".flow .go").forEach(x=>x.onkeydown=e=>{if(e.key==="Enter")x.click()});
  r.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const k=b.dataset.q,v=b.dataset.v,cur=scv(k),nx=cur.includes(v)?cur.filter(x=>x!==v):[...cur,v];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];saveS();renderPane()});
@@ -1463,13 +1469,13 @@ async function actLive(a,w){
   // 查詢由小組確認過的關鍵字組成：第 1 輪找支持方向，第 2 輪起加上負面／限制用語找反向方向（見 agent-local.mjs 的 buildQueries）
   if(!S.kw.length){alert("請先回到上一步新增至少一個搜尋關鍵字。");return}
   const known=()=>[...S.ev,...(S.held||[])].map(e=>e.id).concat(S.gone||[]);
-  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料"}中…`:`第 ${n+1} 輪：搜尋學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
+  const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料（放寬出版年份）"}中…`:`第 ${n+1} 輪：搜尋學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
   label=roundLabel(S.rounds);
   // 反思迴圈（第 5 頁流程圖第 4 階段）：每一輪搜尋完，Agent 自己檢查證據缺口；還不夠、而且沒用完輪數預算時，
   // 自己檢討原因、調整關鍵字，接著搜下一輪，不用學生一輪一輪按。用完預算（預設 3 輪）就停下來，等小組決定要不要擴大範圍。
   job=async()=>{for(;;){const n=S.rounds;busy=roundLabel(n);renderPane();
    const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE()});
-   S.qs.push(r.queries);S.rounds++;S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
+   S.qs.push(r.queries);S.rounds++;S.local=r.local||null;S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.length-ns,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
    const off=((r.sources||[]).length?`本輪查詢的資料庫：${r.sources.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");

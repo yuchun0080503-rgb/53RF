@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, DISCIPLINES, ROUTES,
+  guessDiscipline, normDiscipline, isEastAsia, routeFor, toJa, limitOps, jstageTerms, placeJa, localTerms, airitiUrl, localHints, DISCIPLINES, ROUTES,
   ericUrl, normalizeEric, openAireUrl, normalizeOpenAire, europePmcUrl, normalizeEuropePmc, jstageUrl, normalizeJstage, SOURCES,
 } from './sources.mjs';
 
@@ -55,6 +55,34 @@ test('jstageTerms：第一個主題詞＋東亞地名（實測只用主題詞會
   assert.deepEqual(jstageTerms(['日治時期', '女子教育']), ['日本統治期', '女子教育']);
   assert.deepEqual(jstageTerms([]), []);
   assert.equal(placeJa(['朝鮮半島的教育']), '朝鮮');
+});
+
+test('localTerms：主題詞＋短的時期或地點詞（華藝每個詞都要出現，整串「日治時期臺灣」結果少很多）', () => {
+  assert.equal(localTerms(['女子教育', '女性就業', '日治時期臺灣']), '女子教育 日治');
+  assert.equal(localTerms(['日據時期臺灣', '公學校']), '公學校 日治');
+  assert.equal(localTerms(['國民法官', '量刑']), '國民法官 量刑');
+  assert.equal(localTerms(['臺灣', '原住民教育']), '原住民教育 臺灣');
+  assert.equal(localTerms(['female education']), '', '沒有中文關鍵字就不建議');
+});
+
+test('airitiUrl：跟華藝首頁搜尋框送出的格式相同，每個詞各一個檢索欄位', () => {
+  const u = new URL(airitiUrl('女子教育 日治'));
+  assert.equal(u.origin + u.pathname, 'https://www.airitilibrary.com/Article/Query');
+  const q = JSON.parse(u.searchParams.get('queryString'));
+  assert.equal(q.DSF.SearchFileds[0].SearchKeyWord, '女子教育 日治');
+  assert.deepEqual(q.BSF.SearchFiledList.map((x) => x.SearchKeyWord), ['女子教育', '日治']);
+});
+
+test('localHints：人文、法律或臺灣主題才建議；理工醫護等國際期刊為主的不建議', () => {
+  const h = localHints({ discipline: 'humanities', keywordsZh: ['女子教育', '日治時期臺灣'] });
+  assert.equal(h.terms, '女子教育 日治');
+  assert.deepEqual(h.links.map((l) => l.name), ['華藝線上圖書館', '臺灣博碩士論文知識加值系統', '臺灣期刊論文索引系統（國家圖書館）', 'Google 學術搜尋']);
+  assert.ok(h.links.every((l) => l.url.startsWith('https://')));
+  assert.ok(localHints({ discipline: 'law', keywordsZh: ['國民法官', '量刑'] }));
+  assert.ok(localHints({ discipline: 'education', keywordsZh: ['原住民教育'], text: '臺灣原住民學生' }), '臺灣主題也建議');
+  assert.equal(localHints({ discipline: 'stem', keywordsZh: ['鈣鈦礦', '穩定性'] }), null);
+  assert.equal(localHints({ discipline: 'health', keywordsZh: ['正念', '倦怠'] }), null);
+  assert.equal(localHints({ discipline: 'humanities', keywordsZh: [] }), null);
 });
 
 test('limitOps：OpenAIRE 最多 4 個 AND／OR，先刪同義詞最多那組的同義詞，每組至少留一個詞', () => {

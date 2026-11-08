@@ -8,7 +8,7 @@
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
 import { clampQueries, openAlexUrl, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref } from './searchLogic.mjs';
-import { SOURCES, routeFor, jstageTerms } from './sources.mjs';
+import { SOURCES, routeFor, jstageTerms, localHints } from './sources.mjs';
 
 const clean = (items) =>
   (Array.isArray(items) ? items : [])
@@ -447,18 +447,26 @@ export function buildQueries(keywords, round, mode = 'procon', coreCount = 2) {
   const plus = (dir) => boolQuery([...C, DIRECTION[dir]]);
   const uniq = (list) => [...new Set(list.filter(Boolean))];
   let kind = 's', queries;
+  // 第 4 輪起（round ≥ 3，「擴大範圍」）：前三輪已經用過各方向的查詢，再查一樣的只會因為排除已有文獻而找到 0 篇。
+  // 改成放寬出版年份（第 4 輪 2010 年起、之後 2000 年起），查詢回到最直接的寫法——人文、法律等領域的研究常早於 2020 年。
+  const wide = typeof round === 'number' && round >= 3;
   if (round === 'counter') { kind = 'c'; queries = [plus('contrary'), plus('negative')]; }
-  else if (mode === 'claim') queries = round === 0 ? [boolQuery(withScope), boolQuery(C)] : round === 1 ? [plus('review'), boolQuery(withScope)] : [plus('mechanism'), boolQuery(C)];
+  else if (mode === 'claim') queries = round === 0 || wide ? [boolQuery(withScope), boolQuery(C)] : round === 1 ? [plus('review'), boolQuery(withScope)] : [plus('mechanism'), boolQuery(C)];
   else if (round === 0) queries = [boolQuery(withScope), boolQuery(C)];
   else if (round === 1) { kind = 'c'; queries = [plus('negative'), plus('limits')]; }
+  else if (wide) { kind = 'c'; queries = [plus('limits'), boolQuery(C)]; }
   else { kind = 'c'; queries = [plus('review'), plus('limits')]; }
-  return { kind, queries: uniq(queries), core, scope };
+  return { kind, queries: uniq(queries), core, scope, fromYear: fromYearOf(round) };
 }
+
+// 各輪英文文獻的出版年份下限：前三輪 2020 年起；第 4 輪 2010 年起；之後 2000 年起
+export const fromYearOf = (round) => (typeof round !== 'number' || round < 3 ? 2020 : round === 3 ? 2010 : 2000);
 
 // 下一輪（round 從 0 起算）改找什麼方向，給反思的說明用
 export function nextDirection(round, mode = 'procon') {
-  if (mode === 'claim') return ['直接證據', '統整性研究（系統性回顧、後設分析）', '成立條件與機制'][round] || '擴大範圍的補充證據';
-  return ['支持方向', '負面影響與限制', '統整性研究與限制'][round] || '擴大範圍的反向與限制證據';
+  const years = `（放寬到 ${fromYearOf(round)} 年以後發表的研究）`;
+  if (mode === 'claim') return ['直接證據', '統整性研究（系統性回顧、後設分析）', '成立條件與機制'][round] || `擴大範圍的直接證據${years}`;
+  return ['支持方向', '負面影響與限制', '統整性研究與限制'][round] || `擴大範圍的反向與限制證據${years}`;
 }
 
 /**
@@ -518,6 +526,7 @@ export function relevance(work, core, scope = []) {
 export function buildQueriesZh(keywordsZh, round, mode = 'procon', coreZh = 3) {
   const base = (Array.isArray(keywordsZh) ? keywordsZh : []).filter((k) => typeof k === 'string' && hasZh(k)).slice(0, Math.min(3, Math.max(1, coreZh))).join(' ');
   if (!base) return [];
+  if (typeof round === 'number' && round >= 3) return [base]; // 擴大範圍：放寬年份，查詢回到最直接的寫法（見 buildQueries）
   if (mode === 'claim') {
     if (round === 0) return [base];
     if (round === 1) return [`${base} 後設分析`, `${base} 文獻回顧`];
@@ -607,7 +616,9 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const OPENALEX_PROXY = '/api/openalex';
 const SRC_NAME = { openalex: 'OpenAlex', crossref: 'Crossref', ...Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, s.name])) };
-export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, discipline = '', routeText = '', ja = false }, fetchImpl = fetch) {
+// fromYear：英文文獻的出版年份下限（buildQueries 依輪次給，見 fromYearOf）；中文文獻再往前 5 年，最晚 2015 年起。
+export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, discipline = '', routeText = '', ja = false, fromYear = 2020 }, fetchImpl = fetch) {
+  const zhFrom = Math.min(2015, fromYear - 5);
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
   const getJson = async (url, name, init) => {
@@ -626,8 +637,8 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     if (!json) json = await getJson(direct, 'OpenAlex');
     return (Array.isArray(json.results) ? json.results : []).map((w) => normalizeWork(w, q)).filter(Boolean);
   };
-  const runSrc = async (key, q, init) => {
-    const s = SOURCES[key], list = s.list(await getJson(s.url(q), s.name, init));
+  const runSrc = async (key, q, init, opts) => {
+    const s = SOURCES[key], list = s.list(await getJson(s.url(q, opts), s.name, init));
     return (Array.isArray(list) ? list : []).map((w) => s.norm(w, q)).filter(Boolean);
   };
   const coreEn = Array.isArray(core) && core.length ? core : (Array.isArray(keywords) ? keywords : []).slice(0, 2);
@@ -640,10 +651,10 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const jaText = jaKeys.slice(0, 2).join(' ');
   // 學科專門的資料庫排在 OpenAlex 前面：它們找到的已經夠多時，OpenAlex 的英文查詢就不用查了（省下 OpenAlex 的每日額度）
   const jobs = [
-    ...(en.length ? route.extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSrc(key, en[0]) })) : []),
+    ...(en.length ? route.extra.map((key) => ({ lang: 'en', src: key, q: en[0], go: () => runSrc(key, en[0], undefined, { fromYear }) })) : []),
     ...(useJa ? [{ lang: 'ja', src: 'jstage', q: jaText, go: () => runSrc('jstage', jaText, auth) }] : []),
-    ...en.map((q) => ({ lang: 'en', src: 'openalex', q, go: () => run(q, { tiab: true, perPage: 15 }) })),
-    ...zh.map((q) => ({ lang: 'zh', src: 'openalex', q, go: () => run(q, { lang: 'zh', fromYear: 2015 }) })),
+    ...en.map((q) => ({ lang: 'en', src: 'openalex', q, go: () => run(q, { tiab: true, perPage: 15, fromYear }) })),
+    ...zh.map((q) => ({ lang: 'zh', src: 'openalex', q, go: () => run(q, { lang: 'zh', fromYear: zhFrom }) })),
   ];
   const wait = (ms) => pause(fetchImpl === fetch ? ms : 0);
   // 一條一條查、中間稍微停一下：這些是免費的公開服務，不要同時灌好幾個請求。
@@ -700,7 +711,9 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   ];
   // 這次實際查到資料的資料庫（給紀錄與畫面顯示）
   const sources = [...new Set(jobs.filter((j, i) => settled[i].ok && !settled[i].skipped).map((j) => SRC_NAME[j.src]))];
-  return { evidence, queries: [...en, ...zh, ...(useJa ? [jaText] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
+  // 人文、法律、臺灣與東亞主題：研究多半在沒有開放查詢介面的中文資料庫，附上建議（畫面在證據不足時顯示）
+  const local = localHints({ discipline: route.discipline, keywordsZh, text: routeText });
+  return { evidence, queries: [...en, ...zh, ...(useJa ? [jaText] : [])], scanned: evidence.length, fallback, sources, discipline: route.discipline, fromYear, local, dropped: pool('en').length - enRanked.length + pool('zh').length - zhRanked.length + pool('ja').length - jaRanked.length };
 }
 
 // ---------------- 證據摘要（Level 3）----------------
