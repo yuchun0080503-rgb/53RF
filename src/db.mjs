@@ -117,9 +117,11 @@ export async function searchEvidence(projectId, { keywords, keywordsZh, coreCoun
   const by = out.ai.model ? `（${out.ai.model} 讀過 ${out.ai.judged} 篇摘要，排除 ${out.ai.removed} 篇不切題${gone ? '：' + gone + ((out.ai.removedItems || []).length > 6 ? '等' : '') : ''}）` : '';
   const sup = out.evidence.filter((e) => e.k === 's').length;
   if (mode === 'claim' && round !== 'counter') {
-    const held = out.evidence.filter((e) => e.k !== 's');
-    await agentLog(projectId, uid, `主張論證模式第 ${round + 1} 輪搜尋 ${dbs}：找到 ${sup} 篇支持主張的文獻（待小組確認）；另有 ${held.length} 篇看法可能不同，先保留不顯示。${by}`);
-    return { ...out, evidence: out.evidence.filter((e) => e.k === 's'), held };
+    // 只有反向／限制（c）先保留不顯示；立場待確認（u：摘要沒寫結果、只看得出部分相關、網路搜尋的中文文獻沒有摘要）
+    // 要顯示在證據頁讓學生讀原文判斷——以前跟反向一起藏起來，學生就看不到這些切題的文獻
+    const held = out.evidence.filter((e) => e.k === 'c'), unsure = out.evidence.filter((e) => e.k === 'u').length;
+    await agentLog(projectId, uid, `主張論證模式第 ${round + 1} 輪搜尋 ${dbs}：找到 ${sup} 篇支持主張的文獻（待小組確認）${unsure ? `、${unsure} 篇立場待確認（列在證據頁，請讀原文）` : ''}；另有 ${held.length} 篇看法可能不同，先保留不顯示。${by}`);
+    return { ...out, evidence: out.evidence.filter((e) => e.k !== 'c'), held };
   }
   await agentLog(projectId, uid, mode === 'claim'
     ? `應學生要求搜尋反面例證（參考用）：找到 ${out.scanned} 篇，其中 ${out.scanned - sup} 篇初步分類為反向／限制。${by}`

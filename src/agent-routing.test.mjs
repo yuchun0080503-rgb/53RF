@@ -185,6 +185,23 @@ test('中文網路搜尋：沒登入、web 沒開、沒有中文關鍵字時都�
   } finally { delete globalThis.RF_AI_TOKEN; }
 });
 
+test('中文網路搜尋：沒有摘要的文獻也列進證據；判讀後放在「立場待確認」（正式網站上最切題的那篇曾因此消失）', async () => {
+  const { refineEvidence } = await import('./agent-llm.mjs');
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  try {
+    const N = 'https://ndltd.ncl.edu.tw/cgi-bin/gs32/gsweb.cgi/login?o=dnclcdr&s=id%3D%22111NTPU0102011%22.&searchmode=basic';
+    const svc = service({ '/api/zhsearch': () => json({ items: [{ title: '職業法官與國民法官之論罪量刑比較', url: N, abstract: '', year: 2023, source: '臺灣博碩士論文網' }] }), 'api.openalex.org': () => json({ results: [] }) });
+    const r = await searchEvidence({ ...buildQueries(['lay judges', 'sentencing'], 0), keywords: ['lay judges', 'sentencing'], keywordsZh: ['國民法官', '量刑'], coreZh: 2, discipline: 'law', web: true }, svc);
+    const e = r.evidence.find((x) => x.web);
+    assert.ok(e, '沒有摘要也要列進證據');
+    // 判讀：只有標題，模型給相關度 3 但立場 unclear → 立場待確認
+    globalThis.RF_AI_ENDPOINT = '/api/ai';
+    const judge = async () => ({ ok: true, json: async () => ({ data: { rel: 3, stance: 'unclear', finding: '' }, model: 'claude-haiku-5-5' }) });
+    const out = await refineEvidence({ claim: '國民法官制度對刑事量刑的影響', evidence: [e], model: 'Claude' }, judge);
+    assert.deepEqual(out.evidence.map((x) => [x.k, x.unc]), [['u', true]]);
+  } finally { delete globalThis.RF_AI_TOKEN; delete globalThis.RF_AI_ENDPOINT; }
+});
+
 test('searchRelaxed：中文網路搜尋只在第 1 輪的第一次查詢時送；各資料庫篇數依最後的清單計算', async () => {
   globalThis.RF_AI_TOKEN = async () => 'tok';
   try {

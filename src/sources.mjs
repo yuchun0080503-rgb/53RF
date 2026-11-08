@@ -172,7 +172,8 @@ export function normalizeZhWeb(it, query) {
   try { const u = new URL(it.url); if (u.protocol !== 'https:') return null; host = u.host.toLowerCase(); } catch { return null; }
   if (!ZH_HOSTS.test(host)) return null;
   const title = clean(it.title), abstract = clean(it.abstract).slice(0, MAX_ABSTRACT_LEN);
-  if (!title || abstract.length < 20) return null;
+  // 沒有摘要也收：後端核對過網址與標題；判讀會把它列為「立場待確認」，請學生打開原文
+  if (!title) return null;
   return {
     id: it.url, title: title.slice(0, 300), year: Number.isInteger(it.year) ? it.year : null, doi: '', url: it.url,
     authors: (Array.isArray(it.authors) ? it.authors : []).filter((a) => typeof a === 'string').slice(0, 3),

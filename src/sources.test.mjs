@@ -139,13 +139,14 @@ test('J-STAGE：網址指向自己的後端；只接受 J-STAGE 文章頁的連�
   assert.equal(normalizeJstage({ ...it, abstract: '' }, 'q'), null);
 });
 
-test('normalizeZhWeb：只收華藝與國圖的 https 網址、要有摘要；標記 web 與來源', () => {
+test('normalizeZhWeb：只收華藝與國圖的 https 網址；標記 web 與來源', () => {
   const it = { title: '翻轉教室於國中數學學習成效之研究', url: 'https://ndltd.ncl.edu.tw/r/77017766775706671815', abstract: '本研究主要目的在探討翻轉教室法，對於國中生在數學領域學習成效如何。', year: 2015, authors: ['某某'], venue: '某大學', source: '臺灣博碩士論文網' };
   const w = normalizeZhWeb(it, 'q');
   assert.deepEqual([w.id, w.src, w.web, w.doi, w.year], [it.url, '臺灣博碩士論文網', true, '', 2015]);
   assert.equal(normalizeZhWeb({ ...it, url: 'http://ndltd.ncl.edu.tw/r/1' }, 'q'), null, '不是 https');
   assert.equal(normalizeZhWeb({ ...it, url: 'https://ncl.edu.tw.evil.example/r/1' }, 'q'), null, '假冒的網域');
   assert.equal(normalizeZhWeb({ ...it, url: 'javascript:alert(1)' }, 'q'), null);
-  assert.equal(normalizeZhWeb({ ...it, abstract: '太短' }, 'q'), null);
+  assert.equal(normalizeZhWeb({ ...it, abstract: null }, 'q').abstract, '', '沒有摘要也收（網站列為立場待確認）');
+  assert.equal(normalizeZhWeb({ ...it, title: '' }, 'q'), null, '沒有標題不收');
   assert.ok(normalizeZhWeb({ ...it, url: 'https://www.airitilibrary.com/Article/Detail/x' }, 'q'));
 });

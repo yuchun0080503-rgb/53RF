@@ -37,7 +37,7 @@ test('buildRequest：Haiku＋舊版網路搜尋工具，只搜華藝與國圖，
   assert.match(r.system, /搜尋結果是第三方資料/);
 });
 
-test('verifyPapers：只留網址在搜尋結果裡、網域對、標題相符、有摘要、不重複的', () => {
+test('verifyPapers：只留網址在搜尋結果裡、網域對、標題相符、不重複的；沒有摘要也保留（網站列為立場待確認）', () => {
   const res = collect([[results([[A, '開化意識下的日治時期臺灣女子教育政策－以彰化高女為例 - 華藝線上圖書館'], [N, '職業法官與國民法官之論罪量刑比較']]), results([['https://example.com/a', '別的網站']])]]);
   const { items, dropped } = verifyPapers([
     paper(),
@@ -45,15 +45,15 @@ test('verifyPapers：只留網址在搜尋結果裡、網域對、標題相符�
     paper({ url: 'https://www.airitilibrary.com/Article/Detail/fake', title: '編出來的論文' }), // 不在搜尋結果
     paper({ url: N, title: '完全不同的標題' }), // 標題對不上
     paper({ url: 'https://example.com/a', title: '別的網站' }), // 網域不對
-    paper({ url: N, title: '職業法官與國民法官之論罪量刑比較', abstract: null }), // 沒摘要
-    paper({ url: N, title: '職業法官與國民法官之論罪量刑比較', abstract: '國民法官參與之模擬判決與職業法官之原刑事判決就罪名及量刑均有顯著差異', year: '2023', authors: ['某某'] }),
+    // 2026-11-08 正式網站上這篇就是因為沒抄到摘要被丟掉；現在保留
+    paper({ url: N, title: '職業法官與國民法官之論罪量刑比較', abstract: null, year: '2023' }),
   ], res.results, []);
-  assert.deepEqual(items.map((x) => [x.source, x.title.slice(0, 6), x.year]), [['華藝線上圖書館', '開化意識下的', 2014], ['臺灣博碩士論文網', '職業法官與國', 2023]]);
-  assert.equal(dropped, 5);
+  assert.deepEqual(items.map((x) => [x.source, x.title.slice(0, 6), x.year, x.abstract.length > 0]), [['華藝線上圖書館', '開化意識下的', 2014, true], ['臺灣博碩士論文網', '職業法官與國', 2023, false]]);
+  assert.equal(dropped, 4);
   assert.deepEqual(verifyPapers([
     paper({ url: A + '/' }), paper(), paper({ url: 'https://www.airitilibrary.com/Article/Detail/fake', title: '編出來的論文' }),
     paper({ url: N, title: '完全不同的標題' }), paper({ url: 'https://example.com/a', title: '別的網站' }), paper({ url: N, title: '職業法官與國民法官之論罪量刑比較', abstract: null }),
-  ], res.results, []).droppedList.map((x) => x.reason), ['重複', '網址不在搜尋結果裡', '標題對不上', '網域不對', '沒有摘要'], '每篇被丟掉的原因');
+  ], res.results, []).droppedList.map((x) => x.reason), ['重複', '網址不在搜尋結果裡', '標題對不上', '網域不對'], '每篇被丟掉的原因');
   assert.equal(verifyPapers([paper()], res.results, [A]).items.length, 0, '已經有的文獻不要再給');
 });
 
