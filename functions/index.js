@@ -8,7 +8,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { handle, makeCheck } = require('./proxy');
-const { handleOpenAlex } = require('./openalex');
+const { handleOpenAlex, CACHE_TTL } = require('./openalex');
 const jstage = require('./jstage');
 const zhsearch = require('./zhsearch');
 
@@ -43,9 +43,24 @@ exports.ai = onRequest(
 
 // OpenAlex 搜尋代理：網站用同網域的 /api/openalex 呼叫，後端加上金鑰再轉送（金鑰不出現在網頁）
 // 名稱用 oaproxy：另有一個叫 openalex 的函式（2026-11-08 撞名過一次；它已由 oaproxy 取代，可以從專案刪除）
+// 快取 oaCache/{sha256}：同樣的查詢 24 小時內不再花額度。expireAt 給 Firestore 的 TTL 自動刪除過期資料（要在後台開啟一次）。
+// 用量 oaUsage/{台灣日期}：calls（查詢次數）、hits（用快取的次數）、credits（實際花掉的額度，1 credit = 0.0001 美元）、
+// 依種類分開（termCheck＝關鍵字查證、search＝搜尋文獻）、err429（額度用完的次數）、remaining（OpenAlex 回報的今天剩餘額度）。
+// 網站讀不到這兩個集合（firestore.rules 沒有開放），只在 Firebase 後台看得到。
+const oaCache = {
+  get: async (key) => { const d = await admin.firestore().doc(`oaCache/${key}`).get(); return d.exists ? { text: d.get('text'), at: d.get('at') } : null; },
+  set: (key, v) => admin.firestore().doc(`oaCache/${key}`).set({ ...v, expireAt: new Date(v.at + CACHE_TTL) }),
+};
+const oaUsage = ({ kind, hit, credits, remaining, status }) => admin.firestore().doc(`oaUsage/${new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)}`).set({
+  calls: inc(1), [`${kind}Calls`]: inc(1),
+  ...(hit ? { hits: inc(1), [`${kind}Hits`]: inc(1) } : {}),
+  ...(Number.isFinite(credits) ? { credits: inc(credits), [`${kind}Credits`]: inc(credits) } : {}),
+  ...(Number.isFinite(remaining) ? { remaining } : {}),
+  ...(status === 429 ? { err429: inc(1) } : {}),
+}, { merge: true });
 exports.oaproxy = onRequest(
   { region: 'asia-east1', secrets: [OPENALEX_KEY], timeoutSeconds: 30, maxInstances: 10, memory: '256MiB' },
-  (req, res) => handleOpenAlex(req, res, { verify, apiKey: () => OPENALEX_KEY.value() }),
+  (req, res) => handleOpenAlex(req, res, { verify, apiKey: () => OPENALEX_KEY.value(), cache: oaCache, onUsage: oaUsage }),
 );
 
 // J-STAGE 代查（/api/jstage）：不呼叫 Claude、不需要金鑰；只給登入的使用者用，避免被當成公開的爬蟲跳板。
