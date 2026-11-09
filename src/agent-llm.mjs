@@ -237,6 +237,7 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
       '2＝主題相同、對象或情境略有不同（例如不同國家、不同年齡層、相近的制度），可以當佐證。\n' +
       '1＝只有部分用詞相同，研究的現象或對象跟主張明顯不同（例如主張談大學生使用社群媒體，文獻談企業的社群行銷）。\n' +
       '判斷時以「主張本身談的現象」為準，不要因為文獻屬於哪個學科就降級：主張是法律題，司法、判決、審判的研究就是同一領域。\n' +
+      '學生有寫「聚焦條件」（例如研究對象、情境）時：文獻的對象或情境跟聚焦條件不同，rel 最多 2；完全不相干的對象是 1。\n' +
       '0＝無關。\n' +
       'stance（立場）：support＝研究發現支持主張；counter＝發現與主張相反，或指出主張不成立的情況；mixed＝有支持也有相反，或只在特定條件下成立；' +
       'unclear＝摘要只說明研究目的或方法、沒有寫出研究結果，無法判斷；unrelated＝rel 是 0 或 1。\n' +
@@ -244,7 +245,7 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
       '主張只說「影響」而沒有說變好或變差時：研究發現確實有影響（不論變好或變差）都算 support，發現沒有影響才是 counter。\n' +
       '摘要裡的「建議」「可能」「未來研究應該」只是作者的推測或主張，不是研究發現；沒有寫出實際的數據或結果，stance 就是 unclear。\n' +
       'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。',
-    user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, JUDGE_ABSTRACT_LEN) || '（沒有摘要）'}`,
+    user: `學生的主張：${clip(claim, 500)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, JUDGE_ABSTRACT_LEN) || '（沒有摘要）'}`,
     schema: {
       type: 'object', required: ['rel', 'stance', 'finding'],
       properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str },
@@ -337,11 +338,16 @@ export function fixLeakedFields(out) {
       if (KP_FIELDS.includes(name) && EMPTYISH(kp[name])) kp[name] = text;
     }
   }
-  for (const k of KP_FIELDS) kp[k] = kp[k].replace(/<\/?(?:parameter|invoke|antml:[\w]+|question|method|findings|limits|use)\b[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  // 欄位名稱從 KP_FIELDS 產生：之前清單是手寫的，後來加的 takeaway、process 沒加進去，畫面上就出現了「</process>」
+  const TAG = new RegExp(`<\\/?(?:parameter|invoke|antml:[\\w]+|${KP_FIELDS.join('|')})\\b[^>]*>`, 'g');
+  for (const k of KP_FIELDS) kp[k] = kp[k].replace(TAG, ' ').replace(/\s+/g, ' ').trim();
+  // 2) 重點寫「沒有說明」、主要發現卻有內容：用主要發現的第一句當重點，兩欄不要互相矛盾
+  const noResult = (s) => EMPTYISH(s) || /沒有(寫出|說明)(研究)?結果/.test(s);
+  if (noResult(kp.takeaway) && !noResult(kp.findings)) kp.takeaway = (kp.findings.match(/^[^。！？]*[。！？]?/) || [''])[0];
   return kp;
 }
 export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
-  if (clip(abstract, 1200).length < 60) return null;
+  if (clip(abstract, 1200).length < 60) return null; // 下面送的摘要用 2400 字：研究結果通常寫在摘要最後面，切太短會整理不出發現（見 JUDGE_ABSTRACT_LEN）
   const out = await chatJSON({
     system:
       '你是協助大學生閱讀文獻的研究助理。根據下面這篇文獻的標題與摘要，用繁體中文（台灣用語，不可以用韓文、日文或英文作答）寫重點整理，' +
@@ -360,7 +366,7 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
       'limits：限制或適用範圍（例如只研究某個國家、某個年齡層、樣本小），一句；摘要沒寫就寫「摘要沒有說明」。\n' +
       'use：對照學生的主張，說明這篇可以支持主張的哪一部分、哪裡不適用，一到兩句；沒有提供主張時寫這篇適合用在哪類報告。\n' +
       '全部合起來 300 到 450 字。',
-    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
+    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 2400)}`,
     schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
     maxTokens: 1300, timeout: 90000,
   }, fetchImpl);

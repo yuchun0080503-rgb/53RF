@@ -45,7 +45,7 @@ header{height:64px;display:flex;align-items:center;gap:16px;padding:0 28px;posit
 #v-login .big{max-width:520px;margin:9vh auto 0}#v-login h1{font-size:clamp(26px,4.5vw,34px);line-height:1.35;margin-bottom:14px}
 .big button.pri{border-radius:14px;padding:11px 18px}.big input{border-radius:12px}
 #v-ws{height:calc(100% - 64px);background:var(--bg)}
-#ws{display:grid;grid-template-columns:minmax(0,1fr) 430px;height:100%}#cv{position:absolute;left:0;top:0;width:100%;height:100%}#v-ws:has(#ws.full){animation:none}
+#ws{display:grid;grid-template-columns:minmax(0,1fr) var(--sidew,430px);height:100%}#cv{position:absolute;left:0;top:0;width:100%;height:100%}#v-ws:has(#ws.full){animation:none}
 @media(max-width:900px){#ws{grid-template-columns:1fr;grid-template-rows:55% 45%}}
 .cv{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
 .pbar{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
@@ -68,7 +68,7 @@ header{height:64px;display:flex;align-items:center;gap:16px;padding:0 28px;posit
 .insp label{display:inline-flex;align-items:center;gap:5px;margin:4px 12px 0 0;color:var(--fg)}.insp label input{width:auto}
 .ti{position:absolute;z-index:4;font:15px "Noto Sans TC",sans-serif;border:1px solid var(--ac);min-width:140px;width:auto;padding:3px 7px}
 textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;box-sizing:border-box;width:220px}
-.side{display:flex;flex-direction:column;min-height:0}
+.side{display:flex;flex-direction:column;min-height:0;position:relative}#sdrag{position:absolute;left:-5px;top:0;bottom:0;width:10px;cursor:col-resize;z-index:8;touch-action:none}#sdrag:hover,#sdrag.on{background:linear-gradient(90deg,transparent 4px,var(--ac) 4px,var(--ac) 6px,transparent 6px)}@media(max-width:900px){#sdrag{display:none}}
 .tabs{display:flex;gap:6px;padding:12px 12px 10px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--soft)}
 .tabs button{flex:none;border:1px solid transparent;border-radius:99px;padding:7px 13px;color:var(--mute);font-size:12.5px;background:var(--bg);display:flex;align-items:center;gap:5px}
 .tabs button .ic{margin:0;width:14px;height:14px}
@@ -313,7 +313,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
       <button id="lost" class="hide">內容在畫面外，點這裡回到內容</button>
     </div>
   </div>
-  <aside class="side">
+  <aside class="side"><div id="sdrag" title="拖曳調整右側欄寬度（點兩下恢復預設）" aria-hidden="true"></div>
     <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button><button data-p="slides"><i data-i="frame"></i>簡報</button><button data-p="pins"><i data-i="target"></i>留言<span id="pinct"></span></button></div>
     <div class="pane" id="pane"></div>
   </aside>
@@ -426,13 +426,15 @@ function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||
 // 送去搜尋的關鍵字：主題詞排前面。英文搜尋國際文獻（中文關鍵字用它的英文翻譯），中文另外直接搜尋中文文獻。
 // 舊的研究沒有記主題詞時，把前兩個關鍵字當主題詞。
 const kwIsCore=k=>{const core=(S.kwCore||[]).filter(x=>S.kw.includes(x));return core.length?core.includes(k):S.kw.indexOf(k)<2};
+// 聚焦提問選的條件（研究對象、情境…）也交給 AI 判讀相關度：之前只給主張，對象不符的文獻也被當成高度相關
+const focusText=()=>{const f=QS().map(q=>S.scope[q[1]]||"").filter(Boolean).join("、");return f?"；聚焦條件（學生選的研究對象、情境等）："+f:""};
 function kwSets(){const core=(S.kwCore||[]).filter(k=>S.kw.includes(k)),isCore=k=>core.length?core.includes(k):S.kw.indexOf(k)<2,isAsp=k=>!isCore(k)&&(S.kwAspect||[]).includes(k);
  // 主題詞裡：翻譯可靠的主題排最前面，其次是研究對象，機器翻譯的排最後——搜尋找不到時會從最後一個開始放寬
  const en=k=>hasZh(k)?(S.kwEn||{})[k]:k,rank=k=>((S.kwWeak||[]).includes(k)?2:/students|teachers|children|adolescents/.test(en(k)||"")?1:0);
  const ordered=[...S.kw.filter(isCore).sort((a,b)=>rank(a)-rank(b)),...S.kw.filter(k=>!isCore(k)&&!isAsp(k))];
  const claim=S.claim||(rdItems().find(o=>o.tag==="claim")||{}).text||S.q0||"";
  return{keywords:ordered.map(en).filter(Boolean),keywordsZh:ordered.filter(hasZh),coreCount:Math.max(1,S.kw.filter(isCore).map(en).filter(Boolean).length),coreZh:Math.max(1,S.kw.filter(k=>isCore(k)&&hasZh(k)).length),
-  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張："),synonyms:S.kwSyn||{},discipline:S.disc||""}}
+  claimNeg:!!(window.RFAGENT&&RFAGENT.isNegativeClaim(claim)),claim:[p.name?"報告題目「"+p.name+"」":"",claim||S.rq].filter(Boolean).join("；主張：")+focusText(),synonyms:S.kwSyn||{},discipline:S.disc||""}}
 function translateKw(k,manual){if(!window.RFAGENT||!hasZh(k)||kwBusy.has(k))return;kwBusy.add(k);
  const known=RFAGENT.keywordPairs(k).some(x=>x.zh===k),ctx=[p.name,S.claim||S.rq].filter(Boolean).join("；");
  const job=AI()&&!known?RFAI.translate(k,ctx).then(r=>({en:r.en,via:AIN(),syn:r.synonyms}),()=>RFAGENT.translateTerm(k)):RFAGENT.translateTerm(k);
@@ -450,7 +452,12 @@ const MODE_D={procon:"適合題目本身有正反兩面的報告（利弊、爭�
 const MODE_F={procon:[["目標","比較正反兩方的說法"],["找什麼","支持與反向的證據並重"],["何時算夠","反向證據至少 3 筆，兩邊平衡"],["反面例證","主動搜尋，是必要的一半"]],
  claim:[["目標","把一個主張論證得扎實"],["找什麼","只找支持這個主張的證據，並依證據力分級"],["何時算夠","支持證據至少 3 筆，且含回顧或實驗研究"],["反面例證","不主動提供；先列出主張的潛在問題，需要時才找"]]};
 const modeTable=m=>`<div class="mt">${MODE_F[m].map(r=>`<span>${r[0]}</span><span>${r[1]}</span>`).join("")}</div>`;
-const lvOf=e=>e.lv||(/回顧|實驗/.test(e.m||"")?"高":/調查|縱貫/.test(e.m||"")?"中":"不明"); // 證據力（示範資料沒有 lv 欄位，從研究方法推）
+// 證據力：依研究方法分級。有 AI 重點整理時用「對象與方法」那一欄判斷（比從被切短的英文摘要猜準），並附上判斷依據
+const LV_RULES=[[/後設分析|統合分析|系統性回顧|系統性文獻回顧|meta-?analysis|systematic review/i,"高","系統性回顧／後設分析"],[/隨機|RCT|randomi[sz]ed/i,"高","隨機對照實驗"],[/準實驗|quasi/i,"中","準實驗，沒有隨機分組"],[/實驗組|對照組|控制組|實驗/,"高","有對照組的實驗"],[/縱貫|追蹤|世代研究|longitudinal|cohort/i,"中","長期追蹤研究"],[/問卷|調查|橫斷|survey|questionnaire/i,"中","問卷調查"],[/訪談|質性|個案|焦點團體|觀察|interview|qualitative|case study/i,"低","訪談／質性研究"],[/回顧|文獻分析|review/i,"中","一般文獻回顧，非系統性"]];
+const LV_TIP="證據力依研究方法分級：高＝系統性回顧、後設分析、隨機或有對照組的實驗；中＝準實驗、長期追蹤、問卷調查、一般文獻回顧；低＝訪談、個案等質性研究；不明＝摘要沒寫方法。分級只看方法，不代表研究品質，請對照原文。";
+function lvInfo(e){const t=[e.kp&&e.kp.method,e.kp&&e.kp.process,e.m].filter(Boolean).join(" ");for(const[re,lv,why]of LV_RULES)if(re.test(t))return{lv,why};
+ return e.lv&&e.lv!=="不明"?{lv:e.lv,why:e.m||""}:{lv:"不明",why:"摘要沒有寫研究方法"}}
+const lvOf=e=>lvInfo(e).lv;
 const ROUND_N=["直接證據","統整性研究","成立條件與機制"]; // 主張論證模式三輪各找什麼
 const modeOf=q=>(q.S&&q.S.mode)||q.mode||"procon";
 const MODE=()=>modeOf(p);
@@ -1145,6 +1152,15 @@ $("#rec").onclick=()=>rec?stopRec():startRec();
 $("#zf").onclick=()=>{const on=!$("#ws").classList.contains("full"),el=$("#ws");setFull(on);
  try{if(on&&el.requestFullscreen)el.requestFullscreen().catch(()=>{});else if(!on&&document.fullscreenElement)document.exitFullscreen().catch(()=>{})}catch(e){}};
 document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&$("#ws").classList.contains("full"))setFull(false)});
+/* 右側欄可以拖曳調整寬度（組員反映太窄）：拖畫布和右側欄中間的分隔線，寬度記在這台瀏覽器；點兩下恢復 430px */
+(()=>{const h=$("#sdrag"),ws=$("#ws");if(!h)return;const MIN=320,max=()=>Math.max(MIN,Math.min(1000,innerWidth*.7));
+ const set=w=>{w=Math.round(Math.max(MIN,Math.min(max(),w)));ws.style.setProperty("--sidew",w+"px");return w};
+ const saved=+LS("rf.sidew");if(saved)set(saved);
+ let drag=null;h.onpointerdown=e=>{e.preventDefault();h.setPointerCapture(e.pointerId);h.classList.add("on");drag={x:e.clientX,w:$(".side").getBoundingClientRect().width}};
+ h.onpointermove=e=>{if(!drag)return;set(drag.w+(drag.x-e.clientX));resize()};
+ h.onpointerup=e=>{if(!drag)return;drag=null;h.classList.remove("on");LS("rf.sidew",String(Math.round($(".side").getBoundingClientRect().width)));resize()};
+ h.ondblclick=()=>{ws.style.removeProperty("--sidew");LS("rf.sidew","");resize()};
+ addEventListener("resize",()=>{const w=+LS("rf.sidew");if(w)set(w)})})();
 /* ---- 老師在畫布上的留言（第 7 項）----
    像 Figma 的留言圖釘：老師選「留言」工具點畫布。點在便利貼或手寫上，圖釘就黏在那個內容上（記住是哪一個和相對位置），
    學生把內容拖走時圖釘跟著走；點在空白處就釘在那個位置。內容被刪掉時圖釘留在原地，標示「原本的內容已刪除」。
@@ -1762,7 +1778,7 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
  // 「加入畫布」時可以選這筆證據要支撐哪個主張：預設選主張論證模式正在論證的那個，或證據上記錄的相關論點，否則第一個
  const claimOpts=contentObjs().filter(o=>o.tag==="claim"),guessClaim=e=>(claimOpts.find(o=>objLabel(o)===(S.claim||"").slice(0,24))||claimOpts.find(o=>e.c&&(o.text||o.aiRead)===e.c)||claimOpts[0]||{}).id;
  const src=e=>/^https:\/\//.test(e.url||"")?`<p><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">開啟原始來源</a>${e.au?"　"+esc(e.au):""}${e.vn?"．"+esc(e.vn):""}</p>`:"";
- const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}${e.lv?"　證據力："+esc(e.lv):""}</p><p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc(e.l)}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||"—")}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
+ const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}${(()=>{const L=lvInfo(e);return `<p title="${esc(LV_TIP)}">證據力：<b>${esc(L.lv)}</b>${L.why?`<span class="mute">（${esc(L.why)}）</span>`:""} <span class="mute" style="cursor:help;border-bottom:1px dotted">怎麼分級？</span></p>`})()}${e.kp?"":`<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}</p><p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc(e.l)}</p>`}${(e.c||S.claim||S.rq)?`<p>${e.k==="c"?"相關的主張":e.k==="u"?"要對照的主張":"支持的主張"}：${esc(e.c||S.claim||S.rq)}</p>`:""}<p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
  const li=k=>S.ev.map((e,i)=>e.k===k?item(e,i):"").join("")||`<p class="sm mute">尚無資料</p>`;
  // 主張論證模式：只列支持主張的證據，依證據力分層；反面例證只有小組要求過才出現在最下面
  if(MODE()==="claim"){const sup=S.ev.map((e,i)=>[e,i]).filter(x=>x[0].k==="s"),grp=f=>sup.filter(x=>f(lvOf(x[0]))).map(x=>item(x[0],x[1])).join("")||`<p class="sm mute">尚無資料</p>`;
