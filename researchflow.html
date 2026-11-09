@@ -1726,7 +1726,8 @@ async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id==
  zhBusy.add(id);
  const put=()=>document.querySelectorAll('[data-kp="'+CSS.escape(String(id))+'"]').forEach(n=>{n.innerHTML=kpHTML(e()[0]||e0)});
  try{put();let kp=null;
-  if(AI())for(let k=0;k<2&&!kp;k++)kp=await RFAI.keyPoints({title:e0.t,abstract:text,claim:kpClaim()}).catch(err=>{console.warn("[ResearchFlow] 模型重點整理失敗：",err?.message||err);return null}); // 寫成別的語言時再試一次
+  // 只有 Owner／Editor 能用 AI（後端會擋老師和 Viewer），老師打開證據頁時不要白白送出會被拒絕的請求
+  if(AI()&&canEdit())for(let k=0;k<2&&!kp;k++)kp=await RFAI.keyPoints({title:e0.t,abstract:text,claim:kpClaim()}).catch(err=>{console.warn("[ResearchFlow] 模型重點整理失敗：",err?.message||err);return null}); // 寫成別的語言時再試一次
   if(kp){const by=AIN().replace(/（.*$/,"");e().forEach(x=>{x.kp=kp;x.kpBy=by});saveS()}
   else if(e0.lang!=="zh"&&!(e0.zh&&!zhBad(e0))&&window.RFAGENT&&RFAGENT.toZh){const zh=await RFAGENT.toZh(text);if(zh){e().forEach(x=>{x.zh=zh+"（機器翻譯，僅供參考）"});saveS()}}}
  catch(err){console.warn("[ResearchFlow] 產生重點整理失敗：",err?.message||err)}
