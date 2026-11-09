@@ -1,0 +1,24 @@
+rules_version = '2';
+// 畫布上的圖片（原圖、不壓縮）。只有這份研究的成員讀得到；Owner／Editor 才能上傳和刪除；單檔 20MB 以內、只能是圖片；上傳後不能覆蓋。
+// 成員與角色從 Firestore 的 projects/{研究}/members/{使用者} 讀，跟 firestore.rules 用同一份名單。
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /projects/{projectId}/images/{file} {
+      function memberDoc() {
+        return /databases/(default)/documents/projects/$(projectId)/members/$(request.auth.uid);
+      }
+      function isMember() {
+        return request.auth != null && firestore.exists(memberDoc());
+      }
+      function canWrite() {
+        return isMember() && firestore.get(memberDoc()).data.role in ['owner', 'editor'];
+      }
+      allow read: if isMember();
+      allow create: if canWrite()
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if canWrite();
+    }
+  }
+}
