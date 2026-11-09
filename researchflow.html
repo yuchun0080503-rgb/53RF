@@ -1170,7 +1170,10 @@ document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement
 let pinOpen=null,pinNew=null,pinMsgs=[],pinUnsub=null;
 function attachLivePins(proj){if(!LIVE()||!proj.fid||proj._unsubPins||!RFDB.subscribePins)return;
  proj._unsubPins=RFDB.subscribePins(proj.fid,rows=>{proj.pins=rows;if(p!==proj)return;draw();pinTab();if(pane==="pins")renderPane();if(pinOpen)renderPinBox()},err=>console.error("[ResearchFlow] 讀取老師留言失敗：",err))}
-function pinPos(pn){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);return{x:b.x+pn.dx,y:b.y+pn.dy,o,gone:false}}return{x:pn.x,y:pn.y,o:null,gone:!!pn.oid}}
+// 原本貼著的內容找不到時：手寫常被重新分段或合併（物件換了新的 id），不一定是被刪掉。
+// 先看留言原本的位置上有沒有內容，有就當作貼在那個內容上（只用來顯示名稱，位置不動），真的沒有才標「已刪除」
+function pinPos(pn){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);return{x:b.x+pn.dx,y:b.y+pn.dy,o,gone:false}}
+ const near=pn.oid?hit([pn.x,pn.y]):null;return{x:pn.x,y:pn.y,o:near||null,gone:!!pn.oid&&!near}}
 function pinAt(q){const ps=p.pins||[],r=14/p.v.z;for(let i=ps.length-1;i>=0;i--){const P=pinPos(ps[i]);if(Math.hypot(q[0]-P.x,q[1]-P.y)<=r)return ps[i]}return null}
 function drawPins(){const ps=p.pins||[];if(!ps.length&&!pinNew)return;const z=p.v.z,r=11/z,ok=cssv("--ok"),bad=cssv("--bad");
  ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font=`bold ${11/z}px sans-serif`;
