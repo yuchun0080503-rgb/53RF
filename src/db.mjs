@@ -199,7 +199,9 @@ export function authErrorText(err) {
     'auth/missing-password': '請輸入密碼。',
     'auth/weak-password': '密碼至少需要 6 個字元。',
     'auth/email-already-in-use': '這個電子郵件已經註冊過了，請直接登入。',
-    'auth/invalid-credential': '電子郵件或密碼不正確。如果這個信箱當初是按「使用 Google 帳號登入」建立的，它沒有設定密碼，請改按「使用 Google 帳號登入」；如果還沒有帳號，請按「註冊新帳號」。',
+    // 用電子郵件註冊、但信箱還沒驗證過的帳號，之後只要用同一個 Gmail 按過一次 Google 登入，Firebase 會把原本的密碼拿掉（Google 被視為更可靠的身分證明），密碼就再也登不進去。
+    // 這時按「忘記密碼」重設一組密碼就好，之後 Google 和密碼兩種方式都能登入。
+    'auth/invalid-credential': '電子郵件或密碼不正確。如果你曾經用這個信箱按過「使用 Google 帳號登入」，原本的密碼會被 Firebase 取消：請直接按「使用 Google 帳號登入」，或按「忘記密碼」重設一組密碼（重設後兩種方式都能登入）。如果還沒有帳號，請按「註冊新帳號」。',
     'auth/user-not-found': '找不到這個帳號，請先註冊。',
     'auth/wrong-password': '密碼不正確。',
     'auth/too-many-requests': '嘗試次數過多，請稍後再試。',
