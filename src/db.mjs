@@ -13,6 +13,7 @@ import {
   getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   collection, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment, Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL, listAll, deleteObject } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 import { firebaseConfig } from './firebase-config.js';
 import { checkAgentCall } from './harness.mjs';
@@ -24,6 +25,7 @@ import { refineEvidence, scopeFocus, draftQuestion, slideOutline as slideOutline
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+const storage = getStorage(app); // 畫布上的圖片：存原圖、不壓縮（Firestore 一筆最多 1MB，照片放不下）
 
 // AI 後端（functions/index.js，經由 Hosting 的 /api/ai）：llm.mjs 用這兩個全域值呼叫，沒登入時 token 是 null，AI 會退回規則式。
 globalThis.RF_AI_ENDPOINT = '/api/ai';
@@ -459,6 +461,8 @@ export async function deleteProject(projectId, uid) {
   await wipe('agentTrace');
   await wipe('tasks');
   await wipe('feedback');
+  // 畫布上的圖片檔（雲端儲存）：整個資料夾刪掉
+  try { const l = await listAll(sRef(storage, `projects/${projectId}/images`)); await Promise.all(l.items.map((it) => deleteObject(it))); } catch (err) { console.warn('[ResearchFlow] 刪除圖片檔失敗：', err); }
   // 老師在畫布上的留言：每則留言底下的回覆要先刪（子集合不會跟著母文件一起刪）
   for (const pin of (await getDocs(collection(db, 'projects', projectId, 'pins'))).docs) {
     const ms = await getDocs(collection(db, 'projects', projectId, 'pins', pin.id, 'msgs'));
@@ -691,4 +695,17 @@ export function subscribePins(projectId, onChange, onError) {
 export function subscribePinMsgs(projectId, pinId, onChange, onError) {
   const q = query(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), orderBy('at', 'asc'), limit(200));
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, uid: x.uid, by: x.by || '', text: x.text || '', at: ms(x.at) }; })), onError);
+}
+
+// ---------------- 畫布上的圖片（Firebase Storage）----------------
+// 存原圖、不壓縮。路徑 projects/{研究}/images/{亂數}.{副檔名}；storage.rules 限制只有這份研究的成員讀得到、Owner／Editor 才能上傳，單檔 20MB 以內、只能是圖片。
+export const IMAGE_MAX = 20 * 1024 * 1024;
+export async function uploadImage(projectId, file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('只能上傳圖片檔');
+  if (file.size > IMAGE_MAX) throw new Error('圖片超過 20MB');
+  const ext = (file.name.match(/\.([a-z0-9]{2,5})$/i) || [, (file.type.split('/')[1] || 'img')])[1].toLowerCase();
+  const path = `projects/${projectId}/images/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const r = sRef(storage, path);
+  await uploadBytes(r, file, { contentType: file.type, customMetadata: { uid: auth.currentUser.uid } });
+  return { path, url: await getDownloadURL(r) };
 }
