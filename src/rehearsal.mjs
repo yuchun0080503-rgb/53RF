@@ -6,7 +6,7 @@
 // 講者＝被指派「上台報告」（present）任務的人；製作者＝被指派「海報／簡報製作」（poster）或「研究內容」（research）任務的人。
 // 同一個人可以兩者都是；只有一人也可以。
 
-export const REQ = { support: 2, counter: 1 }; // 準備度門檻：支持證據 ≥ 2、反向證據 ≥ 1
+export const REQ = { support: 2, counter: 1 }; // 證據搜尋完畢的門檻：支持證據 ≥ 2；正反例證模式另外要反向證據 ≥ 1
 export const DONE_STEP = 6; // 研究狀態七步驟的「整理完成」
 export const DEFAULT_MIN = 10; // 老師沒設報告時間時，預設 10 分鐘
 export const MIN_MIN = 3, MAX_MIN = 60;
@@ -34,20 +34,28 @@ export function deckSeen(tasks, uid, reportUrl) {
 }
 
 // ---------------- 準備度檢查 ----------------
+// 內容準備好的條件（三者有一項即可）：研究狀態到「整理完成」、已設定小組報告連結（簡報完成）、或證據搜尋完畢。
+// 「證據搜尋完畢」依查證模式：正反例證（procon）要支持 ≥ 2 且反向 ≥ 1；主張論證（claim）只看支持 ≥ 2，不要求反向證據。
+export const evidenceReady = (s, c, mode) => s >= REQ.support && (mode === 'claim' || c >= REQ.counter);
 /**
- * @param {{step:number, reportUrl:string, ev:object[], tasks:object[], memberIds:string[]}} q
- * @returns {{ok:boolean, missing:{key:string,text:string,tab:string}[], speakers:{u:string,seen:boolean}[], counts:{s:number,c:number}}}
+ * @param {{step:number, reportUrl:string, ev:object[], tasks:object[], memberIds:string[], mode?:'procon'|'claim'}} q
+ * @returns {{ok:boolean, missing:{key:string,text:string,tab:string}[], speakers:{u:string,seen:boolean}[], counts:{s:number,c:number}, via:string[], mode:string}}
  */
-export function readiness({ step = 0, reportUrl = '', ev = [], tasks = [], memberIds = [] } = {}) {
+export function readiness({ step = 0, reportUrl = '', ev = [], tasks = [], memberIds = [], mode = 'procon' } = {}) {
+  const m = mode === 'claim' ? 'claim' : 'procon';
   const s = (ev || []).filter((e) => e && e.k === 's').length, c = (ev || []).filter((e) => e && e.k === 'c').length;
   const r = rolesOf(tasks, memberIds);
+  const via = [];
+  if (step >= DONE_STEP) via.push('step');
+  if (reportUrl) via.push('report');
+  if (evidenceReady(s, c, m)) via.push('evidence');
   const missing = [];
-  if (step < DONE_STEP) missing.push({ key: 'step', text: '研究狀態還沒到「整理完成」', tab: 'agent' });
-  if (!reportUrl) missing.push({ key: 'report', text: '還沒有設定小組報告連結（簡報還沒完成）', tab: 'settings' });
-  if (s < REQ.support) missing.push({ key: 'support', text: `支持證據 ${s} 篇，至少要 ${REQ.support} 篇`, tab: 'ev' });
-  if (c < REQ.counter) missing.push({ key: 'counter', text: `反向證據 ${c} 篇，至少要 ${REQ.counter} 篇`, tab: 'ev' });
+  if (!via.length) {
+    const need = m === 'claim' ? `支持證據 ${s}／${REQ.support} 篇` : `支持證據 ${s}／${REQ.support} 篇、反向證據 ${c}／${REQ.counter} 篇`;
+    missing.push({ key: 'content', text: `內容還沒準備好：設定小組報告連結（簡報完成），或把證據搜尋完畢（${need}），完成其中一項即可`, tab: reportUrl ? 'agent' : 'settings' });
+  }
   if (!r.speakers.length) missing.push({ key: 'speaker', text: '還沒有人被指派「上台報告」', tab: 'team' });
-  return { ok: !missing.length, missing, speakers: r.speakers.map((u) => ({ u, seen: deckSeen(tasks, u, reportUrl) })), counts: { s, c } };
+  return { ok: !missing.length, missing, speakers: r.speakers.map((u) => ({ u, seen: deckSeen(tasks, u, reportUrl) })), counts: { s, c }, via, mode: m };
 }
 
 // ---------------- 報告流程：段落、時間、講者 ----------------
@@ -61,6 +69,8 @@ export const SEGMENTS = [
   { id: 'qa', title: '問答', w: 0.17, kw: ['問答', '互動', '上台', '表現'] },
 ];
 
+// 主張論證模式沒有「反向證據」這一方，這一段改成談限制
+export const CLAIM_COUNTER_TITLE = '研究限制與尚待驗證之處';
 const half = (x) => Math.round(x * 2) / 2; // 時間以 0.5 分鐘為單位
 
 /**
@@ -69,7 +79,7 @@ const half = (x) => Math.round(x * 2) / 2; // 時間以 0.5 分鐘為單位
  * @param {{talkMin?:number, rubric?:{name:string,pct:number}[], speakers:string[]}} o
  * @returns {{total:number, segments:{id:string,title:string,min:number,speaker:string}[]}}
  */
-export function planFlow({ talkMin = DEFAULT_MIN, rubric = [], speakers = [] } = {}) {
+export function planFlow({ talkMin = DEFAULT_MIN, rubric = [], speakers = [], mode = 'procon' } = {}) {
   const total = Math.max(MIN_MIN, Math.min(MAX_MIN, Number(talkMin) || DEFAULT_MIN));
   const w = SEGMENTS.map((sg) => {
     const bonus = (rubric || []).filter((it) => sg.kw.some((k) => String(it.name || '').includes(k))).reduce((a, it) => a + (Number(it.pct) || 0) / 100, 0);
@@ -81,7 +91,7 @@ export function planFlow({ talkMin = DEFAULT_MIN, rubric = [], speakers = [] } =
   const diff = half(total - mins.reduce((a, b) => a + b, 0));
   const big = mins.indexOf(Math.max(...mins));
   mins[big] = Math.max(0.5, half(mins[big] + diff));
-  const talk = SEGMENTS.map((sg, i) => ({ id: sg.id, title: sg.title, min: mins[i], speaker: '' }));
+  const talk = SEGMENTS.map((sg, i) => ({ id: sg.id, title: sg.id === 'counter' && mode === 'claim' ? CLAIM_COUNTER_TITLE : sg.title, min: mins[i], speaker: '' }));
   const sp = (speakers || []).filter(Boolean);
   if (sp.length) {
     const body = talk.filter((x) => x.id !== 'qa');

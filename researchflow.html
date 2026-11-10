@@ -146,6 +146,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .tgh{display:flex;align-items:center;gap:8px;margin:16px 0 2px;font-size:13.5px}.tgh .mute:last-child{margin-left:auto;font-size:12px}
 .tk{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:8px 0 8px 3px;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.5}
 .tk input{width:auto;margin-top:5px}.tk>button{border:0;padding:2px;color:var(--mute);background:none}.tk.done>div>div:first-child{color:var(--mute)}
+.tqk{width:24px;height:24px;padding:0;display:inline-grid;place-items:center;border-radius:50%;flex:none}.tqk svg{width:14px;height:14px}.tqk[aria-expanded="true"]{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tqc{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px 32px}.tqc button{font-size:12.5px;padding:3px 10px;border-radius:999px}.tqc button svg{width:12px;height:12px;margin-right:3px}
 .tk .tclaim{font-size:12.5px;padding:2px 10px;margin-top:5px}
 .tadd{display:grid;gap:6px;margin:10px 0 4px}.tadd div{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
 #tm{width:min(1040px,96vw)}.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}.tgrid h3:first-child{margin-top:8px}
@@ -315,7 +317,12 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
   <div id="todo"></div>
   <div class="home">
     <div class="big"><div class="bh"><span class="badge"><i data-i="folder"></i></span><div><h3>我的研究／報告</h3><div class="sm mute" id="cnt"></div></div></div><div id="plist"></div></div>
-    <div class="homeR"><div class="big" id="boxB"><div class="bh"><span class="badge"><i data-i="plus"></i></span><div><h3>建立或加入研究／報告</h3><div class="sm mute" id="boxBs">有老師給的課程代碼：輸入後選組別加入；沒有就直接建立，你會成為 Project Owner</div></div></div>
+    <div class="homeR">
+    <div class="big hide" id="boxR"><div class="bh"><span class="badge"><i data-i="clock"></i></span><div><h3>排演室</h3><div class="sm mute">報告前，Agent 依你們自己的內容排報告流程與互動建議，不代寫講稿</div></div></div>
+      <label for="rhp">選擇研究</label><select id="rhp"></select>
+      <div class="acts" style="margin-top:14px"><button class="pri" id="rhgo"><i data-i="clock"></i>進入排演室</button></div>
+    </div>
+    <div class="big" id="boxB"><div class="bh"><span class="badge"><i data-i="plus"></i></span><div><h3>建立或加入研究／報告</h3><div class="sm mute" id="boxBs">有老師給的課程代碼：輸入後選組別加入；沒有就直接建立，你會成為 Project Owner</div></div></div>
       <div id="form">
         <label for="f0">課程代碼（選填，老師給的 6 碼）</label><input id="f0" placeholder="例如：EDU7K3" autocomplete="off" maxlength="9" style="text-transform:uppercase;letter-spacing:.08em"><div id="f0s" class="cstat" aria-live="polite"></div><div id="f0aw" class="hide"><label for="f0a">這份研究是哪一份作業</label><select id="f0a"></select></div><div id="f0gw" class="hide"><label>選擇組別</label><div id="f0g"></div></div>
         <div id="fnew"><label for="f1">報告／研究名稱</label><input id="f1" value="AI 與學生學習研究">
@@ -328,10 +335,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
       </div>
       <p id="tnote" class="hide mute sm">老師帳號不建立研究專案。進入左側的研究後，可檢視進度與 AI 使用歷程、設定 AI 權限；畫布內容為唯讀。</p>
     </div>
-    <div class="big hide" id="boxR"><div class="bh"><span class="badge"><i data-i="clock"></i></span><div><h3>排演室</h3><div class="sm mute">報告前，Agent 依你們自己的內容排報告流程與互動建議，不代寫講稿</div></div></div>
-      <label for="rhp">選擇研究</label><select id="rhp"></select>
-      <div class="acts" style="margin-top:14px"><button class="pri" id="rhgo"><i data-i="clock"></i>進入排演室</button></div>
-    </div></div>
+    </div>
   </div>
 </section>
 
@@ -369,7 +373,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-5";
+window.RF_VER = "2026.11.10-6";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -1615,10 +1619,12 @@ function tasksHTML(){const T=window.RFTEAM,ids=studs(),ts=p.tasks||[],sum=T.task
    ${free&&can&&!t.assignee?`<button class="tclaim" data-tk="claim" data-id="${esc(t.id)}">我來負責</button>`:""}</div>
    ${can&&(own||t.by===ME)?`<button data-tk="del" data-id="${esc(t.id)}" aria-label="刪除任務" title="刪除任務">${I("trash")}</button>`:"<span></span>"}</div>`};
  const free=ts.filter(t=>!ids.includes(t.assignee));
- return `<h3>分工清單</h3><p class="sm mute tsub">完成狀態由負責人自己勾選，系統沒有驗證；每一次標記都會記下時間，並留在「歷程」裡。</p>`
-  +(can?`<div class="tadd"><input id="tkn" maxlength="120" placeholder="新增任務，例如：上台報告第二段"><div><select id="tkt" aria-label="任務類型">${T.TASK_TYPES.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select><select id="tku" aria-label="負責人">${ids.map(u=>`<option value="${esc(u)}" ${u===ME?"selected":""}>${esc(uname(u))}</option>`).join("")}<option value="">尚未決定</option></select><input type="date" id="tkd" aria-label="截止日（選填）" title="截止日（選填）"><button class="pri" data-tk="add">新增</button></div></div>`:"")
+ return `<h3>分工清單</h3><p class="sm mute tsub">${can?"按名字左邊的 ＋ 一鍵指派常見工作；其他工作再用下面的欄位自己輸入。":""}完成狀態由負責人自己勾選，系統沒有驗證；每一次標記都會記下時間，並留在「歷程」裡。</p>`
+  +(can?`<div class="tadd"><input id="tkn" maxlength="120" placeholder="其他工作：自己輸入，例如：上台報告第二段"><div><select id="tkt" aria-label="任務類型">${T.TASK_TYPES.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select><select id="tku" aria-label="負責人">${ids.map(u=>`<option value="${esc(u)}" ${u===ME?"selected":""}>${esc(uname(u))}</option>`).join("")}<option value="">尚未決定</option></select><input type="date" id="tkd" aria-label="截止日（選填）" title="截止日（選填）"><button class="pri" data-tk="add">新增</button></div></div>`:"")
   +ids.map((u,i)=>{const mine=ts.filter(t=>t.assignee===u),duty=(p.members.find(m=>m.u===u)||{}).duty;
-   return `<div class="tgh">${av(u,22)}<b>${esc(uname(u))}</b>${duty?`<span class="sm mute">${esc(duty)}</span>`:""}<span class="mute">${mine.length?`自行標記完成 ${sum.rows[i].done}／${mine.length}`:"還沒有任務"}</span></div>${mine.map(row).join("")}`}).join("")
+   const qk=can?`<button class="tqk" data-tk="quick" data-id="${esc(u)}" aria-expanded="${tkOpen===u}" aria-label="幫 ${esc(uname(u))} 新增工作" title="幫 ${esc(uname(u))} 新增工作">${I("plus")}</button>`:"";
+   const chips=can&&tkOpen===u?`<div class="tqc">${T.TASK_TYPES.filter(x=>x.id!=="other").map(x=>{const has=mine.some(t=>t.type===x.id);return `<button data-tk="qadd" data-id="${esc(u+"|"+x.id)}" ${has?"disabled":""}>${has?I("check"):""}${x.name}</button>`}).join("")}<button data-tk="qother" data-id="${esc(u)}">其他（自己輸入）</button></div>`:"";
+   return `<div class="tgh">${qk}${av(u,22)}<b>${esc(uname(u))}</b>${duty?`<span class="sm mute">${esc(duty)}</span>`:""}<span class="mute">${mine.length?`自行標記完成 ${sum.rows[i].done}／${mine.length}`:"還沒有任務"}</span></div>${chips}${mine.map(row).join("")}`}).join("")
   +(free.length?`<div class="tgh"><b>還沒有人負責</b><span class="mute">${free.length} 項</span></div>${free.map(row).join("")}`:"")
   +(!ts.length?`<p class="sm mute" style="margin-top:12px">${can?"還沒有任務。把每個人負責的工作列出來，包含上台報告、海報這類不會出現在畫布上的工作。":"小組還沒有建立分工清單。"}</p>`:"")
   +T.taskAlerts(ts,ids).map(tAlert).join("")}
@@ -1634,11 +1640,17 @@ function renderTeam(){if(!p)return;const d=$("#tm"),keep=r=>{const n=r.querySele
   put=(r,k)=>{const n=r.querySelector("#tkn");if(!n||!k)return;n.value=k.v;r.querySelector("#tkt").value=k.t;r.querySelector("#tku").value=k.u;const dd=r.querySelector("#tkd");if(dd)dd.value=k.d;if(k.f)n.focus()};
  if(pane==="team"){const el=$("#pane"),k=keep(el);renderPane();put(el,k)}
  if(d.open){const k=keep(d);fillTeam();put(d,k)}}
+let tkOpen=""; // 分工清單裡展開「一鍵指派」的那位組員
 function teamAct(k,id,r){const ts=p.tasks=p.tasks||[],t=ts.find(x=>x.id===id),live=LIVE()&&p.fid,me=U[ME].n,
   fail=e=>{console.error("[ResearchFlow] 分工清單更新失敗：",e);alert("沒有成功，請檢查網路或權限後再試一次。");renderTeam()};
  if(k==="wide"){fillTeam();$("#tm").showModal();return}
  if(k==="close"){$("#tm").close();return}
  if(!canEdit())return;
+ if(k==="quick"){tkOpen=tkOpen===id?"":id;renderTeam();return}
+ if(k==="qother"){tkOpen="";renderTeam();const n=r.querySelector("#tkn");if(!n)return;r.querySelector("#tku").value=id;r.querySelector("#tkt").value="other";n.focus();return}
+ if(k==="qadd"){const [u,ty]=id.split("|"),nm=RFTEAM.typeOf(ty).name;if((p.tasks||[]).some(t=>t.assignee===u&&t.type===ty))return;
+  const d={title:nm,type:ty,assignee:u,due:""};log(me,`新增任務「${nm}」，負責人：${uname(u)}。`);
+  if(live)RFDB.addTask(p.fid,d,ME).catch(fail);else ts.push({id:"t"+Date.now(),...d,by:ME,done:false,doneBy:"",doneAt:0,at:Date.now()});renderTeam();todoTick();return}
  if(k==="add"){const n=r.querySelector("#tkn"),title=n.value.trim().slice(0,120);if(!title){n.focus();return}
   const d={title,type:r.querySelector("#tkt").value,assignee:r.querySelector("#tku").value,due:r.querySelector("#tkd")?.value||""};n.value="";const dd=r.querySelector("#tkd");if(dd)dd.value="";
   log(me,`新增任務「${title}」（${RFTEAM.typeOf(d.type).name}），負責人：${d.assignee?uname(d.assignee):"尚未決定"}${d.due?"，截止 "+d.due:""}。`);
@@ -1749,7 +1761,7 @@ function rehExtra(q){return [...(q.fb||[]).filter(f=>f.kind==="rehearsal").map(f
 // 報告時間：最近一則要求裡有「N 分鐘」就照它，否則照老師設定，再沒有就 10 分鐘
 function rehMin(q){const ex=rehExtra(q).slice().sort((a,b)=>(b.at||0)-(a.at||0)).find(e=>/(\d{1,2})\s*分鐘/.test(e.text));return ex?+ex.text.match(/(\d{1,2})\s*分鐘/)[1]:talkOf(q).min||RFREH.DEFAULT_MIN}
 function rehRoles(q){return RFREH.rolesOf(q.tasks||[],studsOf(q))}
-function rehFlow(q){const r=rehRoles(q);return RFREH.planFlow({talkMin:rehMin(q),rubric:(rubricOfP(q)||{}).items||[],speakers:r.speakers})}
+function rehFlow(q){const r=rehRoles(q);return RFREH.planFlow({talkMin:rehMin(q),rubric:(rubricOfP(q)||{}).items||[],speakers:r.speakers,mode:modeOf(q)})}
 function rehInput(q,flow){const st=q.S||{},ev=window.RFAGENT?RFAGENT.outlineEvidence(st.ev||[]):[];
  return {question:st.rq||"",claim:st.claim||"",talkMin:flow.total,segments:flow.segments.map(x=>({id:x.id,title:x.title,min:x.min,speaker:uname(x.speaker)})),
   evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:q.req||"",extra:rehExtra(q).map(e=>({by:e.by,text:e.text})),people:studsOf(q).length,goal:(q.R||{}).goal||""}}
@@ -1782,7 +1794,7 @@ function rehTick(){const q=rehQ;if(!q)return;const el=$("#rhclock");if(!el){rehS
  el.textContent=mmss(ms)+" / "+mmss(tot);el.classList.toggle("over",ms>tot);let acc=0,cur="";for(const x of flow.segments){acc+=x.min*60e3;if(ms<acc){cur=x.id;break}}
  $$("#v-reh [data-seg]").forEach(r=>r.classList.toggle("on",!!rehT.start&&r.dataset.seg===cur));const lab=$("#rhnow");if(lab)lab.textContent=ms>tot?"已超過報告時間":rehT.start?"現在：「"+(flow.segments.find(x=>x.id===cur)||{}).title+"」":rehT.acc?"已暫停":"按「開始」計時"}
 function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contains("hide")||!window.RFREH)return;
- const ids=studsOf(q),rd=RFREH.readiness({step:(q.S||{}).step||0,reportUrl:q.reportUrl,ev:(q.S||{}).ev||[],tasks:q.tasks||[],memberIds:ids}),roles=rehRoles(q),flow=rehFlow(q),R=q.R||{},L=q.LV,edit=canEdit(),ev=window.RFAGENT?RFAGENT.outlineEvidence((q.S||{}).ev||[]):[];
+ const ids=studsOf(q),rd=RFREH.readiness({step:(q.S||{}).step||0,reportUrl:q.reportUrl,ev:(q.S||{}).ev||[],tasks:q.tasks||[],memberIds:ids,mode:modeOf(q)}),roles=rehRoles(q),flow=rehFlow(q),R=q.R||{},L=q.LV,edit=canEdit(),ev=window.RFAGENT?RFAGENT.outlineEvidence((q.S||{}).ev||[]):[];
  const evT=n=>{const e=ev.find(x=>x.n===n);return e?`[${n}] ${e.t}`:""},refsT=r=>(r||[]).map(evT).filter(Boolean),agt=x=>`<span class="agt" title="${esc(x.by)}">Agent 建議</span><span class="sm mute"> ${esc(x.by)}・${esc(fmtAt(x.at))}</span>`;
  const iSpeak=roles.speakers.includes(ME),iSeen=RFREH.deckSeen(q.tasks||[],ME,q.reportUrl),know=id=>((R.flow&&R.flow.data.segments)||[]).find(x=>x.id===id)?.know||[];
  const pts=id=>((R.outline&&R.outline.data.segments)||[]).find(x=>x.id===id)?.points||[];
@@ -1800,7 +1812,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  el.innerHTML=`<div class="thead" style="margin-top:8px"><button id="rhback">${I("back")}返回</button><h1 style="font-size:26px">排演室・${esc(q.name)}</h1></div>
   <p class="sm mute" style="margin:0">Agent 依你們自己的研究問題、證據、分工與老師要求給建議，不寫逐字稿、不寫結論。報告時間 ${flow.total} 分鐘${talkOf(q).date?"・上台日 "+esc(talkOf(q).date):""}。</p>
   <section class="tcard"><div class="tch"><h2>準備度檢查</h2><span class="tag ${rd.ok?"":"blk"}">${rd.ok?"可以開始排演":"還不能排演"}</span></div>
-   ${rd.missing.map(missRow).join("")||`<p class="sm mute" style="margin:0">研究已整理完成、簡報已完成、證據足夠（支持 ${rd.counts.s}／反向 ${rd.counts.c}），也有指派講者。</p>`}
+   ${rd.missing.map(missRow).join("")||`<p class="sm mute" style="margin:0">內容已準備好（${rd.via.map(v=>({step:"研究已整理完成",report:"已設定小組報告連結",evidence:"證據搜尋完畢"})[v]).join("、")}；支持 ${rd.counts.s}${rd.mode==="claim"?"":"／反向 "+rd.counts.c}），也有指派講者。</p>`}
    <div class="rhcard"><b>講者是否看過簡報</b>${rd.speakers.length?`<ul>${rd.speakers.map(x=>`<li>${esc(uname(x.u))}：${x.seen?"已看過":"還沒看過"}</li>`).join("")}</ul>`:`<p class="sm mute" style="margin:4px 0 0">還沒有講者。</p>`}
     ${iSpeak&&q.reportUrl?`<div class="acts" style="margin-top:8px"><button id="rhopen">${I("ext")}開啟簡報</button>${iSeen?'<span class="sm mute" style="align-self:center">你已經看過這一版</span>':'<button class="pri" id="rhseen">已看過</button>'}</div>`:""}</div></section>
   <section class="tcard"><div class="tch"><h2>計時</h2><span class="sm mute" id="rhnow"></span></div><div class="rhtimer" id="rhclock">00:00</div>

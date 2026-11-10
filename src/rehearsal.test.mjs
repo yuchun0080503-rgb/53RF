@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { REQ, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent, GOALS, FORMATS, inferGoal, pickFormats, rulePlan, formatOf } from './rehearsal.mjs';
+import { REQ, CLAIM_COUNTER_TITLE, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent, GOALS, FORMATS, inferGoal, pickFormats, rulePlan, formatOf } from './rehearsal.mjs';
 import { buildXlsx, zipStore, crc32, colName } from './xlsx.mjs';
 
 const task = (assignee, type, o = {}) => ({ id: assignee + type, title: type, type, assignee, done: false, ...o });
@@ -25,15 +25,30 @@ test('deckSeen：講者看過「目前的」報告連結才算；連結換了要
   assert.equal(deckSeen(ts, 'B', URL1), false);
 });
 
-test('readiness：進度不足時列出正確的缺項與跳轉位置；講者是否看過簡報只顯示、不擋', () => {
+test('readiness：內容三擇一（整理完成／報告連結／證據搜尋完畢）；講者是否看過簡報只顯示、不擋', () => {
   const none = readiness({ step: 4, reportUrl: '', ev: ev(1, 0), tasks: [], memberIds: ['A'] });
   assert.equal(none.ok, false);
-  assert.deepEqual(none.missing.map((m) => [m.key, m.tab]), [['step', 'agent'], ['report', 'settings'], ['support', 'ev'], ['counter', 'ev'], ['speaker', 'team']]);
-  assert.match(none.missing[2].text, new RegExp(`1 篇，至少要 ${REQ.support} 篇`));
+  assert.deepEqual(none.missing.map((m) => [m.key, m.tab]), [['content', 'settings'], ['speaker', 'team']]);
+  assert.match(none.missing[0].text, new RegExp(`支持證據 1／${REQ.support} 篇、反向證據 0／${REQ.counter} 篇`));
   const ok = readiness({ step: 6, reportUrl: URL1, ev: ev(2, 1), tasks: [task('A', 'present'), task('B', 'present', { seenUrl: URL1 })], memberIds: ['A', 'B'] });
-  assert.equal(ok.ok, true);
+  assert.equal(ok.ok, true); assert.deepEqual(ok.via, ['step', 'report', 'evidence']);
   assert.deepEqual(ok.speakers, [{ u: 'A', seen: false }, { u: 'B', seen: true }]);
-  assert.deepEqual(readiness({ step: 6, reportUrl: URL1, ev: ev(2, 0), tasks: [task('A', 'present')], memberIds: ['A'] }).missing.map((m) => m.key), ['counter']);
+  const sp = [task('A', 'present')];
+  // 只有報告連結、研究狀態沒到整理完成、證據也不夠：可以排演
+  assert.equal(readiness({ step: 3, reportUrl: URL1, ev: [], tasks: sp, memberIds: ['A'] }).ok, true);
+  // 沒有報告連結，但證據搜尋完畢：可以排演
+  assert.equal(readiness({ step: 5, reportUrl: '', ev: ev(2, 1), tasks: sp, memberIds: ['A'] }).ok, true);
+});
+
+test('readiness：主張論證模式不要求反向證據；正反例證模式要', () => {
+  const sp = [task('A', 'present')];
+  assert.equal(readiness({ step: 5, ev: ev(2, 0), tasks: sp, memberIds: ['A'], mode: 'claim' }).ok, true);
+  const pc = readiness({ step: 5, ev: ev(2, 0), tasks: sp, memberIds: ['A'], mode: 'procon' });
+  assert.deepEqual(pc.missing.map((m) => m.key), ['content']);
+  const cl = readiness({ step: 5, ev: ev(1, 0), tasks: sp, memberIds: ['A'], mode: 'claim' });
+  assert.doesNotMatch(cl.missing[0].text, /反向/);
+  assert.equal(planFlow({ speakers: ['A'], mode: 'claim' }).segments.find((x) => x.id === 'counter').title, CLAIM_COUNTER_TITLE);
+  assert.equal(planFlow({ speakers: ['A'] }).segments.find((x) => x.id === 'counter').title, '反向證據與限制');
 });
 
 test('planFlow：每段時間合計剛好等於報告時間；只有 1 位講者時所有段落都給他', () => {
