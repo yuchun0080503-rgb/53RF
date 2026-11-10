@@ -485,6 +485,24 @@ export async function readImage(imageBase64, name = '', fetchImpl) {
   return clip(out.text, 200);
 }
 
+/**
+ * 重新分析新增內容時：不重新聚焦題目，只說明這次新增了什麼，並建議要不要重新聚焦（由學生決定）。
+ * @returns {Promise<{summary:string, suggest:'keep'|'refocus', reason:string}>}
+ */
+export async function reviewAdditions({ question, added = [] }, fetchImpl) {
+  const out = await chatJSON({
+    action: 'analyzeScope',
+    system: '你是協助大學生做小組研究報告的研究助理。小組已經有研究問題，之後又在白板上新增了內容。' +
+      '請用繁體中文寫：summary＝這次新增了什麼（一句，40 字以內，只描述，不評論）；' +
+      'suggest＝keep（新增內容仍在原本研究問題的範圍內，或只是補充細節）或 refocus（新增內容改變了研究對象、原因或結果，原本的研究問題已經涵蓋不了）；' +
+      'reason＝為什麼（一句，40 字以內）。不要替學生決定，只給建議。',
+    user: `目前的研究問題：${clip(question, 200)}\n新增的內容：${added.map((t) => clip(t, 200)).slice(0, 8).join('；') || '（無）'}`,
+    schema: { type: 'object', required: ['summary', 'suggest', 'reason'], properties: { summary: str, suggest: { type: 'string', enum: ['keep', 'refocus'] }, reason: str } },
+    maxTokens: 250,
+  }, fetchImpl);
+  return { summary: clip(out.summary, 80), suggest: out.suggest === 'refocus' ? 'refocus' : 'keep', reason: clip(out.reason, 80) };
+}
+
 // 關鍵字查證（組員設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
 // 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」；
 // AI 原本的說法有人用就直接用，否則把有人用的候選連同論文標題交給 AI，依意思選論文用法相符的說法（pickTerms）。
