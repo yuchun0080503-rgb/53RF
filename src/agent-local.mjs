@@ -629,9 +629,22 @@ export function classifyWork(work, kind, keywords = [], claimNeg = false) {
 // fromYear：英文文獻的出版年份下限（buildQueries 依輪次給，見 fromYearOf）；中文文獻再往前 5 年，最晚 2015 年起。
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const SRC_NAME = (key) => (key === 'openalex' ? 'OpenAlex' : key === 'crossref' ? 'Crossref' : key === 'zhweb' ? '華藝／臺灣博碩士論文網（網路搜尋）' : key === 'jstage' ? 'J-STAGE' : SOURCES[key]?.name || key);
+const FETCH_TIMEOUT = 25000, WEB_TIMEOUT = 75000;
+export function withTimeout(f) {
+  return (url, init = {}) => {
+    if (typeof AbortController !== 'function' || init.signal) return f(url, init);
+    const ctl = new AbortController(), ms = String(url).includes('/api/zhsearch') ? WEB_TIMEOUT : FETCH_TIMEOUT;
+    const t = setTimeout(() => ctl.abort(), ms);
+    return Promise.resolve(f(url, { ...init, signal: ctl.signal })).finally(() => clearTimeout(t));
+  };
+}
 export async function searchEvidence({ queries, kind, keywords, core, scope, excludeIds, zhQueries, keywordsZh, coreZh, claimNeg = false, limit = 10, sources = [], sourcesLocked = false, discipline = '', routeText = '', ja = false, web = false, fromYear = 2020 }, fetchImpl = fetch) {
   const en = clampQueries(queries, 300), zh = clampQueries(zhQueries);
   if (!en.length && !zh.length) throw new Error('沒有可用的搜尋關鍵字，請先在上一步新增關鍵字。');
+  // 每個外部請求都設逾時：2026-11-10 評測時有一次某個資料庫一直不回應，整個搜尋卡住超過 5 分鐘（畫面一直顯示處理中）。
+  // 逾時的那個來源當作失敗，其他資料庫的結果照常使用。中文網路搜尋本身要 20～35 秒，給長一點。
+  const isRealFetch = fetchImpl === fetch;
+  fetchImpl = withTimeout(fetchImpl);
   const zhFrom = Math.min(2015, fromYear - 5);
   const getJson = async (url, name, init) => {
     const res = await (init ? fetchImpl(url, init) : fetchImpl(url));
@@ -663,7 +676,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const auth = token ? { headers: { Authorization: `Bearer ${token}` } } : null;
   const useJa = Boolean(ja && route.jstage && jaKeys.length && auth);
   const jaText = jaKeys.slice(0, 2).join(' ');
-  const wait = (ms) => pause(fetchImpl === fetch ? ms : 0);
+  const wait = (ms) => pause(isRealFetch ? ms : 0);
   // 中文網路搜尋要 20～35 秒，所以最先送出、跟其他資料庫同時進行，最後才等它的結果。
   // 帶 projectId：後端跟 /api/ai 一樣檢查研究成員、AI 權限、全站每日次數（functions/proxy.js 的 makeCheck）
   const webQ = `網路搜尋（華藝、臺灣博碩士論文網）：${zhKeys.join(' ')}`;
