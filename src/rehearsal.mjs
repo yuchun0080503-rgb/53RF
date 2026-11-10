@@ -197,10 +197,124 @@ export function ruleContent(action, inp = {}) {
     const opts = [s.t, ...wrong].slice(0, 4);
     quiz.push({ q: '下面哪一篇研究的結果支持我們的主張？', options: opts, correct: [1], sec: 30 });
   }
+  const g = inp.goal && GOALS[inp.goal] ? { goal: inp.goal, why: ['小組指定的互動目的'], hints: inferGoal(inp).hints } : inferGoal(inp);
+  const picks = pickFormats(g.goal, { talkMin: inp.talkMin, people: inp.people, hints: g.hints });
+  const needQuiz = picks.some((x) => (formatOf(x.id) || {}).goal === 'check');
   return {
+    goal: g.goal, goalWhy: g.why.join('；'),
+    picks: picks.map((x) => ({ id: x.id, why: x.why.join('、') })),
+    plans: picks.map((x) => rulePlan(x.id, inp)),
+    ...(needQuiz ? {} : { noQuiz: true }),
     qa: [...sup.slice(0, 2), ...con.slice(0, 2)].map((e) => ({ q: short(e.k === 's' ? `「${short(e.t, 24)}」發現了什麼？` : `「${short(e.t, 24)}」和我們的主張有什麼不同？`, 60), points: [short(e.point || e.t)], refs: [e.n] })),
-    quiz,
+    quiz: needQuiz ? quiz : [],
     opener: inp.question ? { q: short(`你覺得：${inp.question}`, 80), options: ['會', '不會', '不確定'] } : null,
     by: 'rule',
   };
+}
+
+// ---------------- 互動：先判斷「為什麼要互動」，再選最適合的形式（不限 Kahoot） ----------------
+// 目的三種：ideas 讓台下多提出想法／check 測試台下有沒有聽懂（對錯）／fun 老師要求有趣（演戲、辯論、拍影片…）
+export const GOALS = { ideas: '讓台下多提出想法', check: '測試台下有沒有聽懂（對錯）', fun: '讓報告有趣（演戲、辯論、拍影片）' };
+// 形式清單（後端 functions/rehearsal.js 有同樣的 id 與目的，由測試檢查一致）。
+// device：台下需不需要手機；min：大約要幾分鐘；people：至少要幾位組員；prep：要事先準備
+export const FORMATS = [
+  { id: 'wordcloud', goal: 'ideas', name: '文字雲／即時投票', device: true, min: 2, tools: [{ n: 'Mentimeter', u: 'https://www.mentimeter.com' }, { n: 'Slido', u: 'https://www.slido.com' }], desc: '台下用手機輸入一個詞或投票，結果即時投影，適合收集大家的直覺想法。' },
+  { id: 'board', goal: 'ideas', name: '意見牆', device: true, min: 3, tools: [{ n: 'Padlet', u: 'https://padlet.com' }], desc: '台下把想法或身邊的例子貼在共用的牆上，報告者挑幾則回應。' },
+  { id: 'corners', goal: 'ideas', name: '選邊站', device: false, min: 3, tools: [], desc: '丟出一個有爭議的說法，台下站到「同意／不同意」兩邊，各請一位說理由。不需要手機。' },
+  { id: 'pair', goal: 'ideas', name: '兩兩討論再分享', device: false, min: 3, tools: [], desc: '給一個問題，旁邊兩人討論 1 分鐘，再請幾組分享。不需要手機。' },
+  { id: 'kahoot', goal: 'check', name: 'Kahoot 搶答', device: true, min: 3, tools: [{ n: 'Kahoot', u: 'https://kahoot.com' }], exportKahoot: true, desc: '四選一搶答、有排行榜，氣氛熱烈；題目可以直接匯出成 Kahoot 的檔案。' },
+  { id: 'selfpaced', goal: 'check', name: '遊戲化測驗（各自作答）', device: true, min: 3, tools: [{ n: 'Wayground（原 Quizizz）', u: 'https://wayground.com' }, { n: 'Blooket', u: 'https://www.blooket.com' }, { n: 'Gimkit', u: 'https://www.gimkit.com' }, { n: 'Wordwall', u: 'https://wordwall.net' }], desc: '每個人照自己的速度作答，比搶答輕鬆；題目可以複製貼上。' },
+  { id: 'plickers', goal: 'check', name: '舉卡作答', device: false, min: 3, tools: [{ n: 'Plickers', u: 'https://get.plickers.com' }], desc: '台下舉印好的卡片作答，只有報告者要用手機掃描，適合台下不方便用手機時。' },
+  { id: 'handsup', goal: 'check', name: '舉手是非題', device: false, min: 1, tools: [], desc: '念一個說法，大家舉手猜對或錯，再用你們的證據公布答案。最省時間。' },
+  { id: 'debate', goal: 'fun', name: '正反小辯論', device: false, min: 4, people: 2, tools: [], desc: '組員分成正反兩方，各用支持與反向證據說 1 分鐘，再請台下投票。' },
+  { id: 'roleplay', goal: 'fun', name: '情境短劇', device: false, min: 3, people: 2, tools: [], desc: '用 1–2 分鐘演出研究問題的一個情境，再接到你們的發現。' },
+  { id: 'video', goal: 'fun', name: '短影片開場', device: false, min: 2, prep: true, tools: [], desc: '報告前先拍 1 分鐘以內的短片（訪問同學、情境重現），開場播放。需要事先準備。' },
+];
+export const formatOf = (id) => FORMATS.find((f) => f.id === id) || null;
+
+// 要求文字裡的關鍵字 → 目的或指定形式
+const KW = [
+  { re: /演戲|戲劇|短劇|話劇|角色扮演|演出/, goal: 'fun', hint: 'roleplay', why: '演戲' },
+  { re: /辯論|正反方/, goal: 'fun', hint: 'debate', why: '辯論' },
+  { re: /影片|拍片|短片|錄影|影像/, goal: 'fun', hint: 'video', why: '影片' },
+  { re: /有趣|好玩|生動|活潑|創意|吸引/, goal: 'fun', why: '有趣' },
+  { re: /kahoot|搶答/i, goal: 'check', hint: 'kahoot', why: '搶答' },
+  { re: /測驗|小考|檢核|對錯|是非|理解|複習|記住|聽懂/, goal: 'check', why: '測驗' },
+  { re: /文字雲|投票|民調/, goal: 'ideas', hint: 'wordcloud', why: '投票' },
+  { re: /討論|想法|意見|發想|腦力激盪|參與|分享|回饋|提問/, goal: 'ideas', why: '討論' },
+];
+const OPEN_Q = /應該|是否|會不會|好不好|值不值得|能不能|嗎[？?]?$/;
+
+/**
+ * 依報告內容判斷互動目的。老師的要求（作業要求、標成排演要求的回饋）分量最重，其次學生的要求，最後看研究問題與證據。
+ * @param {{teacherReq?:string, extra?:{by:string,text:string}[], question?:string, claim?:string, evidence?:{k:string}[]}} inp
+ * @returns {{goal:string, why:string[], hints:string[]}}
+ */
+export function inferGoal(inp = {}) {
+  const score = { ideas: 0, check: 0, fun: 0 }, why = [], hints = [];
+  const srcs = [
+    ...(inp.extra || []).filter((e) => e.by === 'teacher').map((e) => ({ t: e.text, w: 3, who: '老師要求' })),
+    { t: inp.teacherReq || '', w: 3, who: '作業要求' },
+    ...(inp.extra || []).filter((e) => e.by !== 'teacher').map((e) => ({ t: e.text, w: 2, who: '小組要求' })),
+  ];
+  for (const s of srcs) {
+    for (const k of KW) {
+      if (!k.re.test(s.t || '')) continue;
+      score[k.goal] += s.w;
+      if (k.hint && !hints.includes(k.hint)) hints.push(k.hint);
+      const w = `${s.who}提到「${k.why}」`;
+      if (!why.includes(w)) why.push(w);
+    }
+  }
+  const sup = (inp.evidence || []).filter((e) => e.k === 's').length, con = (inp.evidence || []).filter((e) => e.k === 'c').length;
+  if (OPEN_Q.test(String(inp.question || '').trim())) { score.ideas += 1; why.push('研究問題是開放的看法題，適合聽聽台下的想法'); }
+  if (sup >= 3) { score.check += 1; why.push(`有 ${sup} 篇支持證據，研究發現可以出成題目`); }
+  if (con >= 1 && sup >= 1 && !hints.includes('debate')) hints.push('debate');
+  const goal = ['ideas', 'check', 'fun'].reduce((a, b) => (score[b] > score[a] ? b : a), OPEN_Q.test(String(inp.question || '').trim()) || !sup ? 'ideas' : 'check');
+  if (!why.length) why.push('沒有特別的要求，依研究問題判斷');
+  return { goal, why, hints };
+}
+
+/**
+ * 依目的選最適合的 3 種形式：符合目的、被要求點名的優先；考慮報告時間（互動不超過約 1/4）、組員人數、是否需要事先準備。
+ * 推薦結果至少有一種台下不需要手機的。
+ * @returns {{id:string, why:string[]}[]}
+ */
+export function pickFormats(goal, { talkMin = DEFAULT_MIN, people = 1, hints = [] } = {}) {
+  const budget = Math.max(1, Math.round((Number(talkMin) || DEFAULT_MIN) / 4));
+  const scored = FORMATS.map((f, i) => {
+    const why = [];
+    let s = 0;
+    if (f.goal === goal) { s += 5; why.push(`符合「${GOALS[goal]}」`); }
+    // 被點名的形式：目的相同時排最前面；目的不同（例如小組改了目的）只稍微加分，不會蓋過符合目的的形式
+    if (hints.includes(f.id)) { s += f.goal === goal ? 6 : 2; why.push('要求裡有提到'); }
+    if (f.min > budget) { s -= 3; why.push(`約 ${f.min} 分鐘，報告時間偏緊`); } else why.push(`約 ${f.min} 分鐘`);
+    if (f.people && people < f.people) s -= 10;
+    if (!f.device) { s += 0.5; why.push('台下不需要手機'); }
+    if (f.prep) why.push('要事先準備');
+    return { id: f.id, s: s - i / 100, why, device: f.device };
+  }).sort((a, b) => b.s - a.s);
+  const top = scored.slice(0, 3);
+  if (top.every((x) => x.device)) { const alt = scored.find((x) => !x.device && x.s > 0); if (alt) top[2] = alt; }
+  return top.map(({ id, why }) => ({ id, why }));
+}
+
+// 沒有 AI 時，每種形式的執行步驟與要問台下的題目（短劇、影片只給情境與分鏡重點，不寫台詞）
+export function rulePlan(id, inp = {}) {
+  const q = inp.question || '你們的研究問題', claim = inp.claim || q;
+  const sup = evOf(inp, 's'), con = evOf(inp, 'c');
+  const P = {
+    wordcloud: { steps: ['開場前把連結或 QR code 投影出來', '請台下用手機輸入一個詞', '挑 2–3 個詞回應，接到你們的發現'], prompts: [`用一個詞形容你的看法：${q}`] },
+    board: { steps: ['報告前開好意見牆並投影 QR code', '給台下 2 分鐘貼想法', '挑 2 則和證據呼應的來回應'], prompts: [`你身邊有沒有和「${claim}」有關的例子？`] },
+    corners: { steps: ['念出說法，請台下站到同意／不同意兩邊', '兩邊各請一位說理由', '用你們的證據補充兩邊的說法'], prompts: [`同意或不同意：${claim}`] },
+    pair: { steps: ['投影問題，請旁邊兩人討論 1 分鐘', '請 2–3 組分享', '用你們的發現回應'], prompts: [q] },
+    kahoot: { steps: ['匯出題目檔並在 Kahoot 匯入', '報告最後投影遊戲 PIN', '每題公布答案時說出是哪一篇證據'], prompts: [] },
+    selfpaced: { steps: ['把題目複製到測驗平台', '報告最後投影加入代碼', '看全班答錯最多的題目再解釋一次'], prompts: [] },
+    plickers: { steps: ['事先印好 Plickers 卡片發給台下', '投影題目，請台下舉卡', '用手機掃描後公布結果'], prompts: [] },
+    handsup: { steps: ['念一個說法，請大家舉手猜對或錯', '公布答案並說是哪一篇證據'], prompts: [...sup.slice(0, 2), ...con.slice(0, 1)].map((e) => `是非：${short(e.point || e.t, 50)}`) },
+    debate: { steps: ['主持人念辯題', '正方用支持證據、反方用反向證據各說 1 分鐘', '請台下舉手投票，報告者總結兩邊的證據'], prompts: [`辯題：${claim}`], roles: ['主持', '正方（支持證據）', '反方（反向證據）', '計時'] },
+    roleplay: { steps: ['設定一個和研究問題有關的生活情境', '演出 1–2 分鐘，停在需要做決定的地方', '問台下：如果是你會怎麼做？再接到你們的發現'], prompts: [`情境：${short(q, 50)}`], roles: ['主角', '朋友或老師', '旁白'] },
+    video: { steps: ['分鏡一：提出研究問題', '分鏡二：訪問 2–3 位同學的看法', '分鏡三：帶出你們要報告的發現', '剪成 1 分鐘以內，開場播放'], prompts: [`訪問題目：${short(q, 50)}`] },
+  };
+  return { id, ...(P[id] || { steps: [], prompts: [] }) };
 }

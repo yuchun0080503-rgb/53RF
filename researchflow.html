@@ -1752,7 +1752,9 @@ function rehRoles(q){return RFREH.rolesOf(q.tasks||[],studsOf(q))}
 function rehFlow(q){const r=rehRoles(q);return RFREH.planFlow({talkMin:rehMin(q),rubric:(rubricOfP(q)||{}).items||[],speakers:r.speakers})}
 function rehInput(q,flow){const st=q.S||{},ev=window.RFAGENT?RFAGENT.outlineEvidence(st.ev||[]):[];
  return {question:st.rq||"",claim:st.claim||"",talkMin:flow.total,segments:flow.segments.map(x=>({id:x.id,title:x.title,min:x.min,speaker:uname(x.speaker)})),
-  evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:q.req||"",extra:rehExtra(q).map(e=>({by:e.by,text:e.text}))}}
+  evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:q.req||"",extra:rehExtra(q).map(e=>({by:e.by,text:e.text})),people:studsOf(q).length,goal:(q.R||{}).goal||""}}
+// 互動：網頁先用規則判斷目的與候選形式，一起送給 Agent 參考
+function rehInterInput(q,inp){const g=RFREH.inferGoal(inp);return {...inp,goalGuess:g.goal,goalWhy:g.why.join("；"),candidates:RFREH.pickFormats(inp.goal||g.goal,{talkMin:inp.talkMin,people:inp.people,hints:g.hints}).map(x=>x.id)}}
 // 主頁右側的入口：只列自己是學生的研究
 function rehHome(){const box=$("#boxR"),sel=$("#rhp");if(!box||!sel)return;const mine=projects.filter(q=>roleIn(q)!=="Teacher");
  box.classList.toggle("hide",ROLE==="t"||!mine.length);const keep=sel.value;
@@ -1761,14 +1763,14 @@ $("#rhgo").onclick=()=>{const q=projects.find(x=>pidOf(x)===$("#rhp").value);if(
 function openReh(q){rehQ=q;p=q;S=q.S;attachLiveState(q);show("reh");renderReh();scrollTo({top:0})}
 function rehStop(){clearInterval(rehT.timer);rehT.timer=0;if(rehT.start){rehT.acc+=Date.now()-rehT.start;rehT.start=0}}
 function saveR(q){const j=JSON.stringify(q.R||{});q._rj=j;if(LIVE()&&q.fid&&RFDB.saveRehearsal)RFDB.saveRehearsal(q.fid,j,ME).catch(err=>{console.error(err);alert("排演室的內容沒有存成功："+(err?.message||err))})}
-const RH_N={rehearsalFlow:"報告流程、交接卡與問答分工",rehearsalOutline:"講稿大綱",rehearsalInteraction:"台下互動題"};
+const RH_N={rehearsalFlow:"報告流程、交接卡與問答分工",rehearsalOutline:"講稿大綱",rehearsalInteraction:"互動建議"};
 const RH_K={rehearsalFlow:"flow",rehearsalOutline:"outline",rehearsalInteraction:"inter"};
 // 產生建議：線上用 Agent（後端組提示詞），沒有 AI 時用規則式；被權限擋下就停止、不改用規則式
-async function rehGen(q,action){const flow=rehFlow(q),inp=rehInput(q,flow);rehBusy=action;renderReh();let data=null,by="";
+async function rehGen(q,action){const flow=rehFlow(q),base=rehInput(q,flow),inp=action==="rehearsalInteraction"?rehInterInput(q,base):base;rehBusy=action;renderReh();let data=null,by="";
  try{if(LIVE()&&RFDB.rehearse&&window.RFLLM&&(await RFLLM.detect()).ok){try{data=await RFDB.rehearse(q.fid,action,inp);by=AIN()}catch(err){if(/拒絕|Level|403/.test(String(err?.message||err)))throw err;console.warn("[ResearchFlow] 排演室 Agent 失敗，改用規則式：",err)}}
   if(!data){data=RFREH.ruleContent(action,inp);by="規則式整理（沒有使用 AI）";
    if(LIVE()&&q.fid)traceLive(q.fid,"Agent",`排演室：Agent 建議（${RH_N[action]}；${by}）。`,"ai");else (q.trace=q.trace||[]).push({t:nowT(),w:"Agent",x:`排演室：Agent 建議（${RH_N[action]}；${by}）。`,k:"ai",at:Date.now()})}
-  q.R={...(q.R||{}),[RH_K[action]]:{data,by,at:Date.now(),min:flow.total}};saveR(q)}
+  q.R={...(q.R||{}),[RH_K[action]]:{data,by,at:Date.now(),min:flow.total,goalSet:inp.goal||""}};saveR(q)}
  catch(err){alert(err?.message||err)}
  finally{rehBusy="";renderReh()}}
 function rehMarkSeen(q){const ids=(q.tasks||[]).filter(t=>t.type==="present"&&t.assignee===ME).map(t=>t.id);if(!ids.length||!q.reportUrl)return;
@@ -1785,6 +1787,14 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const iSpeak=roles.speakers.includes(ME),iSeen=RFREH.deckSeen(q.tasks||[],ME,q.reportUrl),know=id=>((R.flow&&R.flow.data.segments)||[]).find(x=>x.id===id)?.know||[];
  const pts=id=>((R.outline&&R.outline.data.segments)||[]).find(x=>x.id===id)?.points||[];
  const missRow=m=>`<div class="rhmiss"><i class="dot r"></i><span>${esc(m.text)}</span><button data-rgo="${esc(m.tab)}">前往</button></div>`;
+ const g0=RFREH.inferGoal(rehInput(q,flow));
+ // 一種互動形式的卡片：名稱、平台連結、需不需要手機、時間、理由，以及 Agent 寫的步驟／題目／角色
+ const fmtCard=(x,i,pl)=>{const f=RFREH.formatOf(x.id);if(!f)return "";return `<div class="rhcard"><div class="rbh"><b>${esc(f.name)}</b>${i===0?'<span class="tag">最推薦</span>':""}<span class="sm mute">${f.device?"台下要用手機":"台下不需要手機"}・約 ${f.min} 分鐘${f.prep?"・要事先準備":""}</span></div>
+  <div class="sm" style="margin-top:4px">${esc(f.desc)}</div>${f.tools.length?`<div class="sm" style="margin-top:4px">可以用：${f.tools.map(t=>`<a href="${esc(t.u)}" target="_blank" rel="noopener">${esc(t.n)}</a>`).join("、")}</div>`:""}
+  ${x.why?`<div class="sm mute" style="margin-top:4px">為什麼適合：${esc(x.why)}</div>`:""}
+  ${pl&&pl.steps.length?`<div class="sm" style="margin-top:6px"><b>怎麼進行</b><ol style="margin:4px 0 0;padding-left:20px">${pl.steps.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>`:""}
+  ${pl&&(pl.prompts||[]).length?`<div class="sm" style="margin-top:6px"><b>要問台下</b><ul style="margin:4px 0 0">${pl.prompts.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`:""}
+  ${pl&&(pl.roles||[]).length?`<div class="sm" style="margin-top:6px"><b>角色</b>：${esc(pl.roles.join("、"))}</div>`:""}</div>`};
  const ex=rehExtra(q),handoff=RFREH.needHandoff(roles),qa=R.flow?RFREH.assignQA(R.flow.data.qa||[],{speakers:roles.speakers,researchers:roles.researchers}):[],side=RFREH.sideRoles(ids,roles.speakers);
  const btn=(a,need,label)=>L<need?`<button disabled title="需要 AI 權限 Level ${need}">${label}（需要 Level ${need}）</button>`:`<button class="${R[RH_K[a]]?"":"pri"}" data-rgen="${a}" ${rehBusy||!edit?"disabled":""}>${rehBusy===a?"產生中…（約 20 秒）":(R[RH_K[a]]?"重新產生":"產生")+label}</button>`;
  el.innerHTML=`<div class="thead" style="margin-top:8px"><button id="rhback">${I("back")}返回</button><h1 style="font-size:26px">排演室・${esc(q.name)}</h1></div>
@@ -1808,13 +1818,19 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
   ${R.flow?`<section class="tcard"><div class="tch"><h2>問答分工</h2>${agt(R.flow)}</div><p class="sm mute" style="margin:0">預測台下可能的提問，以及建議由誰回答（做內容的人也可以回答）。</p>
    ${qa.map(x=>`<div class="rhmiss"><span>${esc(x.q)}${refsT(x.refs).length?`<span class="sm mute">（${esc(refsT(x.refs).join("、"))}）</span>`:""}</span><b class="sm">${x.who?esc(uname(x.who)):"—"}</b></div>`).join("")}</section>`:""}
   <section class="tcard"><div class="tch"><h2>排演時的分工</h2></div>${side.length?`<ul style="margin:0;padding-left:18px">${side.map(x=>`<li>${esc(uname(x.u))}：${x.role}</li>`).join("")}</ul>`:`<p class="sm mute" style="margin:0">每個人都要上台，排演時輪流計時、扮演台下提問者。</p>`}</section>
-  <section class="tcard"><div class="tch"><h2>互動建議</h2><span class="acts">${btn("rehearsalInteraction",2,"互動題")}</span></div>
-   ${R.inter?`<p class="sm" style="margin:0">${agt(R.inter)}</p>
-    ${R.inter.data.opener?`<div class="rhcard"><b>開場提問／投票</b><div>${esc(R.inter.data.opener.q)}</div>${(R.inter.data.opener.options||[]).length?`<div class="sm mute">選項：${esc(R.inter.data.opener.options.join("／"))}</div>`:""}</div>`:""}
-    ${(R.inter.data.qa||[]).length?`<div class="rhcard"><b>台下問答題</b><ul>${R.inter.data.qa.map(x=>`<li>${esc(x.q)}<div class="sm mute">答案要點：${esc((x.points||[]).join("；"))}${refsT(x.refs).length?"（"+esc(refsT(x.refs).join("、"))+"）":""}</div></li>`).join("")}</ul></div>`:""}
-    ${(R.inter.data.quiz||[]).length?`<div class="rhcard"><b>互動遊戲題</b><ol style="margin:6px 0 0;padding-left:20px">${R.inter.data.quiz.map(x=>`<li>${esc(x.q)}<div class="sm mute">${x.options.map((o,i)=>((x.correct||[]).includes(i+1)?"✔ ":"")+esc(o)).join("／")}</div></li>`).join("")}</ol>
-     <div class="acts" style="margin-top:8px"><button id="rhkh">${I("ext")}匯出 Kahoot（.xlsx）</button></div><p class="sm mute" style="margin:6px 0 0">依 Kahoot 官方範本格式。到 Kahoot 建立 kahoot →「新增」→「匯入」→「匯入試算表」上傳。</p></div>`:""}`
-   :`<p class="sm mute" style="margin:0">產生台下問答題（答案只用你們自己的證據）、可以匯出到 Kahoot 的互動遊戲題，以及開場提問。</p>`}</section>`}`;
+  <section class="tcard"><div class="tch"><h2>互動建議</h2><span class="acts">${btn("rehearsalInteraction",2,"互動建議")}</span></div>
+   <div class="rhcard" style="margin-top:0"><label for="rhgoal" style="margin:0">這次報告的互動目的</label>
+    <select id="rhgoal" style="margin-top:6px" ${edit?"":"disabled"}><option value="">自動判斷（目前判斷：${esc(RFREH.GOALS[g0.goal])}）</option>${Object.entries(RFREH.GOALS).map(([k,n])=>`<option value="${k}" ${R.goal===k?"selected":""}>${esc(n)}</option>`).join("")}</select>
+    <div class="sm mute" style="margin-top:6px">${R.goal?"小組指定的目的。":"判斷依據："+esc(g0.why.join("；"))}${R.inter&&R.inter.goalSet!==(R.goal||"")?"　改了目的，請按「重新產生互動建議」。":""}</div></div>
+   ${R.inter&&R.inter.data.picks?`<p class="sm" style="margin:12px 0 0">${agt(R.inter)}</p>
+    <p style="margin:6px 0 0"><b>${esc(RFREH.GOALS[R.inter.data.goal]||"")}</b>${R.inter.data.goalWhy?`<span class="sm mute">：${esc(R.inter.data.goalWhy)}</span>`:""}</p>
+    ${R.inter.data.picks.map((x,i)=>fmtCard(x,i,(R.inter.data.plans||[]).find(pl=>pl.id===x.id))).join("")}`
+   :`<p class="sm mute" style="margin:12px 0 4px">初步建議的形式（按「產生互動建議」後，Agent 會依你們的內容選定並寫好步驟與題目）：</p>${RFREH.pickFormats(R.goal||g0.goal,{talkMin:flow.total,people:ids.length,hints:g0.hints}).map((x,i)=>fmtCard({id:x.id,why:x.why.join("、")},i,null)).join("")}`}
+   ${R.inter&&(R.inter.data.quiz||[]).length?`<div class="rhcard"><b>測驗題目</b><ol style="margin:6px 0 0;padding-left:20px">${R.inter.data.quiz.map(x=>`<li>${esc(x.q)}<div class="sm mute">${x.options.map((o,i)=>((x.correct||[]).includes(i+1)?"✔ ":"")+esc(o)).join("／")}</div></li>`).join("")}</ol>
+     <div class="acts" style="margin-top:8px">${(R.inter.data.picks||[]).some(x=>x.id==="kahoot")?`<button id="rhkh">${I("ext")}匯出 Kahoot（.xlsx）</button>`:""}<button id="rhcp">${I("copy")}複製題目</button></div>
+     ${(R.inter.data.picks||[]).some(x=>x.id==="kahoot")?`<p class="sm mute" style="margin:6px 0 0">Kahoot 檔案依官方範本格式：到 Kahoot 建立 kahoot →「新增」→「匯入」→「匯入試算表」上傳。其他平台用「複製題目」貼上。</p>`:""}</div>`:""}
+   ${R.inter&&R.inter.data.opener?`<div class="rhcard"><b>開場提問／投票</b><div>${esc(R.inter.data.opener.q)}</div>${(R.inter.data.opener.options||[]).length?`<div class="sm mute">選項：${esc(R.inter.data.opener.options.join("／"))}</div>`:""}</div>`:""}
+   ${R.inter&&(R.inter.data.qa||[]).length?`<div class="rhcard"><b>台下問答題</b><ul>${R.inter.data.qa.map(x=>`<li>${esc(x.q)}<div class="sm mute">答案要點：${esc((x.points||[]).join("；"))}${refsT(x.refs).length?"（"+esc(refsT(x.refs).join("、"))+"）":""}</div></li>`).join("")}</ul></div>`:""}</section>`}`;
  $("#rhback").onclick=()=>{rehQ=null;goHome()};
  el.querySelectorAll("[data-rgo]").forEach(b=>b.onclick=()=>{const t=b.dataset.rgo;goTodoS({pid:pidOf(q),act:{tab:t}})});
  const op=$("#rhopen");if(op)op.onclick=()=>{const u=fixUrl(q.reportUrl);if(u)window.open(u,"_blank","noopener")};
@@ -1825,6 +1841,8 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  el.querySelectorAll("[data-rgen]").forEach(b=>b.onclick=()=>rehGen(q,b.dataset.rgen));
  const xs=$("#rhxs");if(xs){const add=()=>{const t=$("#rhx").value.trim();if(!t)return;q.R={...(q.R||{}),extra:[...((q.R||{}).extra||[]),{text:t.slice(0,200),uid:ME,at:Date.now()}].slice(-10)};saveR(q);log(U[ME].n,"在排演室加入要求：「"+t.slice(0,200)+"」。");renderReh()};xs.onclick=add;$("#rhx").onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)add()}}
  el.querySelectorAll("[data-rx]").forEach(b=>b.onclick=()=>{q.R={...(q.R||{}),extra:((q.R||{}).extra||[]).filter(e=>String(e.at)!==b.dataset.rx)};saveR(q);renderReh()});
+ const gs=$("#rhgoal");if(gs)gs.onchange=()=>{q.R={...(q.R||{}),goal:gs.value};saveR(q);log(U[ME].n,"在排演室把互動目的設為「"+(RFREH.GOALS[gs.value]||"自動判斷")+"」。");renderReh()};
+ const cp=$("#rhcp");if(cp)cp.onclick=()=>{const t=(R.inter.data.quiz||[]).map((x,i)=>`${i+1}. ${x.q}\n`+x.options.map((o,k)=>`  ${(x.correct||[]).includes(k+1)?"（正確）":""}${o}`).join("\n")).join("\n\n");try{navigator.clipboard.writeText(t);cp.textContent="已複製"}catch(e){alert(t)}};
  const kh=$("#rhkh");if(kh)kh.onclick=()=>{const {sheet,count,dropped}=RFREH.kahootSheet(R.inter.data.quiz,"ResearchFlow 排演室："+q.name);if(!count){alert("沒有可以匯出的題目。");return}
   const b=new Blob([RFXLSX.buildXlsx(sheet)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),a=document.createElement("a");
   a.href=URL.createObjectURL(b);a.download=(q.name.replace(/[\\/:*?"<>|]/g,"_")||"排演室")+"-Kahoot.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);if(dropped)alert(`已匯出 ${count} 題；${dropped} 題格式不符 Kahoot 規定（例如少於 2 個選項），沒有匯出。`)};

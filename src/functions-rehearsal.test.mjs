@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import rehearsal from '../functions/rehearsal.js';
 import proxy from '../functions/proxy.js';
+import { GOALS, FORMATS } from './rehearsal.mjs';
 
 const { build, clean, cleanInput, CONCLUSION_PROMPTS, LIM, isServerAction } = rehearsal;
 const input = {
@@ -44,7 +45,7 @@ test('clean：模型寫了長篇講稿也會被截成短重點；結論段一律
   assert.ok(o.segments[0].points[0].text.length <= LIM.point);
   assert.deepEqual(o.segments[1].points.map((p) => p.text), CONCLUSION_PROMPTS);
   assert.deepEqual(o.segments[2].points, []);
-  const it = clean('rehearsalInteraction', { quiz: [{ q: 'Q', options: ['a', 'b'], correct: [3] }, { q: 'Q2', options: ['a', 'b', 'c'], correct: [2, 2], sec: 30 }], qa: [], opener: { q: '你每天用 AI 嗎？', options: ['是', '否'] } }, inp);
+  const it = clean('rehearsalInteraction', { goal: 'check', picks: [{ id: 'kahoot', why: '' }], quiz: [{ q: 'Q', options: ['a', 'b'], correct: [3] }, { q: 'Q2', options: ['a', 'b', 'c'], correct: [2, 2], sec: 30 }], qa: [], opener: { q: '你每天用 AI 嗎？', options: ['是', '否'] } }, inp);
   assert.deepEqual(it.quiz.map((q) => [q.q, q.correct]), [['Q2', [2]]]); // 正確答案不在選項裡的題目丟掉
   assert.equal(it.opener.q, '你每天用 AI 嗎？');
 });
@@ -79,4 +80,34 @@ test('/api/ai：Level 2 從後端直接呼叫講稿大綱（rehearsalOutline）�
   res = mkRes();
   await proxy.handle(mkReq({ action: 'rehearsalInteraction', projectId: 'p1', input }), res, deps({ fetchImpl: f, check: c1 }));
   assert.equal(res.code, 403); // Level 1：排演室只有準備度檢查與手動計時
+});
+
+// ---------------- 互動目的與形式（伺服器端） ----------------
+test('互動形式：伺服器和網頁的形式清單、目的完全一致', () => {
+  assert.deepEqual(rehearsal.FORMATS.map((f) => [f.id, f.goal]), FORMATS.map((f) => [f.id, f.goal]));
+  assert.deepEqual(Object.keys(rehearsal.GOALS), Object.keys(GOALS));
+});
+
+test('rehearsalInteraction 提示詞：先判斷目的、從清單挑形式、短劇與影片不寫台詞；小組指定目的時照指定', () => {
+  const a = build('rehearsalInteraction', { ...input, goalGuess: 'fun', goalWhy: '老師要求提到「演戲」', candidates: ['roleplay', 'hack'], people: 3 }).req.user;
+  assert.match(a, /先判斷這份報告的互動目的/); assert.match(a, /網頁的初步判斷：fun/); assert.match(a, /roleplay/);
+  assert.match(a, /不要寫台詞或對白/); assert.match(a, /只有挑了測驗類/);
+  assert.doesNotMatch(a, /hack/);
+  assert.match(build('rehearsalInteraction', { ...input, goal: 'ideas' }).req.user, /小組已指定目的為 ideas/);
+});
+
+test('clean（互動）：目的與形式只留清單裡的；小組指定的目的不能被模型改掉；沒挑測驗類形式就不留四選一題目', () => {
+  const inp = cleanInput({ ...input, goal: 'fun' });
+  const out = clean('rehearsalInteraction', {
+    goal: 'check', goalWhy: 'x', picks: [{ id: 'roleplay', why: '老師要演戲' }, { id: 'hack', why: '' }, { id: 'roleplay', why: '重複' }],
+    plans: [{ id: 'roleplay', steps: ['設定情境', '台詞：大家好我是……'.repeat(10)], roles: ['主角', '一個非常非常非常長的角色名稱超過二十字了吧對吧'] }, { id: 'kahoot', steps: ['x'] }],
+    quiz: [{ q: 'Q', options: ['a', 'b'], correct: [1] }], qa: [],
+  }, inp);
+  assert.equal(out.goal, 'fun'); assert.equal(out.goalWhy, '小組指定的互動目的');
+  assert.deepEqual(out.picks.map((x) => x.id), ['roleplay']);
+  assert.deepEqual(out.plans.map((x) => x.id), ['roleplay']);
+  assert.ok(out.plans[0].steps[1].length <= LIM.point); assert.ok(out.plans[0].roles[1].length <= 20);
+  assert.deepEqual(out.quiz, []);
+  const free = clean('rehearsalInteraction', { goal: 'nope', picks: [], quiz: [] }, cleanInput({ ...input, goalGuess: 'check' }));
+  assert.equal(free.goal, 'check'); // 模型給了不認得的目的：用網頁的判斷
 });

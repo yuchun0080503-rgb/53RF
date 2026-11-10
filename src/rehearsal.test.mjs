@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { REQ, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent } from './rehearsal.mjs';
+import { REQ, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent, GOALS, FORMATS, inferGoal, pickFormats, rulePlan, formatOf } from './rehearsal.mjs';
 import { buildXlsx, zipStore, crc32, colName } from './xlsx.mjs';
 
 const task = (assignee, type, o = {}) => ({ id: assignee + type, title: type, type, assignee, done: false, ...o });
@@ -122,7 +122,54 @@ test('ruleContent：沒有 AI 時只用小組自己的證據；結論段是引�
   assert.ok(f.qa.some((q) => q.about === 'counter' && q.refs[0] === 2));
   const o = ruleContent('rehearsalOutline', inp);
   assert.ok(o.segments.every((s) => s.points.every((p) => p.text.length <= 40)));
-  const it = ruleContent('rehearsalInteraction', inp);
+  const it = ruleContent('rehearsalInteraction', { ...inp, extra: [{ by: 'teacher', text: '最後做個小測驗' }] });
+  assert.equal(it.goal, 'check');
   assert.deepEqual(it.quiz[0].options, ['Kasneci 2023', 'Smith 2021']); assert.deepEqual(it.quiz[0].correct, [1]);
   assert.equal(kahootRows(it.quiz).rows.length, 1);
+});
+
+// ---------------- 互動目的與形式 ----------------
+test('inferGoal：老師要求「演戲／辯論／影片／有趣」→ 讓報告有趣，並記下被點名的形式', () => {
+  const a = inferGoal({ extra: [{ by: 'teacher', text: '報告要有趣一點，可以演戲' }], question: 'AI 會影響學習嗎？' });
+  assert.equal(a.goal, 'fun'); assert.ok(a.hints.includes('roleplay')); assert.match(a.why.join(), /老師要求提到「演戲」/);
+  assert.equal(inferGoal({ teacherReq: '需要正反方辯論' }).goal, 'fun');
+  assert.ok(inferGoal({ teacherReq: '拍一段短片' }).hints.includes('video'));
+});
+
+test('inferGoal：要求測驗、對錯 → 測試對錯；要求討論、意見 → 讓台下提想法；老師的要求比學生的重', () => {
+  assert.equal(inferGoal({ teacherReq: '最後要檢核同學是否理解' }).goal, 'check');
+  assert.equal(inferGoal({ extra: [{ by: 'student', text: '想聽聽大家的意見' }] }).goal, 'ideas');
+  const both = inferGoal({ extra: [{ by: 'teacher', text: '要有小測驗' }, { by: 'student', text: '想讓大家討論' }] });
+  assert.equal(both.goal, 'check');
+});
+
+test('inferGoal：沒有要求時看研究內容：開放的看法題 → 提想法；證據多的事實題 → 出題測驗；有正反證據就提示可以辯論', () => {
+  const open = inferGoal({ question: '大學生應該用 AI 寫報告嗎？', evidence: [{ k: 's' }, { k: 'c' }] });
+  assert.equal(open.goal, 'ideas'); assert.ok(open.hints.includes('debate')); assert.match(open.why.join(), /開放的看法題/);
+  assert.equal(inferGoal({ question: '睡眠時間與成績的關係', evidence: [{ k: 's' }, { k: 's' }, { k: 's' }] }).goal, 'check');
+});
+
+test('pickFormats：選 3 種符合目的的形式；被點名的排第一；報告時間太短時避開耗時的；人數不夠不選辯論；至少一種不需要手機', () => {
+  const fun = pickFormats('fun', { talkMin: 12, people: 3, hints: ['video'] });
+  assert.equal(fun[0].id, 'video'); assert.ok(fun.every((x) => formatOf(x.id)));
+  assert.ok(!pickFormats('fun', { talkMin: 12, people: 1 }).some((x) => x.id === 'debate' || x.id === 'roleplay'));
+  const check = pickFormats('check', { talkMin: 10, people: 3 });
+  assert.ok(check.every((x) => formatOf(x.id).goal === 'check'));
+  assert.ok(check.some((x) => !formatOf(x.id).device));
+  assert.ok(pickFormats('check', { talkMin: 4 })[0].id === 'handsup'); // 只有 4 分鐘：最省時間的排第一
+  // 老師提過演戲，但小組把目的改成測驗：測驗類的形式要排在前面
+  assert.ok(pickFormats('check', { talkMin: 10, people: 3, hints: ['roleplay'] }).slice(0, 2).every((x) => formatOf(x.id).goal === 'check'));
+  const ideas = pickFormats('ideas', { talkMin: 10, people: 3 });
+  assert.ok(ideas.every((x) => formatOf(x.id).goal === 'ideas'));
+});
+
+test('rulePlan／ruleContent：每種形式都有步驟；短劇與辯論有角色但沒有台詞；只有測驗類形式才出四選一題目', () => {
+  const inp = { question: 'AI 會影響自主判斷嗎？', claim: '會降低', evidence: [{ n: 1, k: 's', t: 'A', point: '依賴 AI 較少查證' }, { n: 2, k: 'c', t: 'B' }], talkMin: 10, people: 3 };
+  for (const f of FORMATS) assert.ok(rulePlan(f.id, inp).steps.length, f.id);
+  assert.deepEqual(rulePlan('debate', inp).roles.slice(1, 3), ['正方（支持證據）', '反方（反向證據）']);
+  const fun = ruleContent('rehearsalInteraction', { ...inp, extra: [{ by: 'teacher', text: '要演戲' }] });
+  assert.equal(fun.goal, 'fun'); assert.equal(fun.picks[0].id, 'roleplay'); assert.deepEqual(fun.quiz, []);
+  const picked = ruleContent('rehearsalInteraction', { ...inp, goal: 'check' });
+  assert.equal(picked.goal, 'check'); assert.match(picked.goalWhy, /指定/);
+  assert.deepEqual(Object.keys(GOALS), ['ideas', 'check', 'fun']);
 });

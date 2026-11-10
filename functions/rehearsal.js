@@ -11,7 +11,23 @@ const SEG_IDS = ['open', 'method', 'finding', 'counter', 'conclusion', 'qa'];
 const ABOUT = ['support', 'counter', 'method', 'scope'];
 // 結論段不代寫：固定的引導問題（和 src/agent-local.mjs 的 CONCLUSION_PROMPTS 相同）
 const CONCLUSION_PROMPTS = ['證據是否足以支持主張？最有力的是哪一篇？', '有哪些限制或反面證據要說明？', '小組自己的結論是什麼？（請小組撰寫）'];
-const LIM = { point: 40, q: 60, quizQ: 120, opt: 75, openerQ: 80, openerOpt: 30, tip: 60 };
+const LIM = { point: 40, q: 60, quizQ: 120, opt: 75, openerQ: 80, openerOpt: 30, tip: 60, role: 20, title: 30 };
+// 互動目的與形式（和 src/rehearsal.mjs 的 GOALS／FORMATS 相同 id，由 src/functions-rehearsal.test.mjs 檢查一致）
+const GOALS = { ideas: '讓台下多提出想法', check: '測試台下有沒有聽懂（對錯）', fun: '讓報告有趣（演戲、辯論、拍影片）' };
+const FORMATS = [
+  { id: 'wordcloud', goal: 'ideas', name: '文字雲／即時投票（Mentimeter、Slido，台下用手機）' },
+  { id: 'board', goal: 'ideas', name: '意見牆（Padlet，台下用手機）' },
+  { id: 'corners', goal: 'ideas', name: '選邊站（同意／不同意站兩邊，不需要手機）' },
+  { id: 'pair', goal: 'ideas', name: '兩兩討論再分享（不需要手機）' },
+  { id: 'kahoot', goal: 'check', name: 'Kahoot 搶答（四選一，台下用手機）' },
+  { id: 'selfpaced', goal: 'check', name: '遊戲化測驗各自作答（Wayground、Blooket、Gimkit、Wordwall，台下用手機）' },
+  { id: 'plickers', goal: 'check', name: '舉卡作答（Plickers，只有報告者用手機）' },
+  { id: 'handsup', goal: 'check', name: '舉手是非題（不需要手機，最省時間）' },
+  { id: 'debate', goal: 'fun', name: '正反小辯論（組員分正反方，至少 2 人）' },
+  { id: 'roleplay', goal: 'fun', name: '情境短劇（1–2 分鐘，至少 2 人）' },
+  { id: 'video', goal: 'fun', name: '短影片開場（1 分鐘以內，要事先拍）' },
+];
+const FMT_IDS = FORMATS.map((f) => f.id);
 
 const str = (v, n) => { const s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 const arr = (v, n) => (Array.isArray(v) ? v.slice(0, n) : []);
@@ -26,6 +42,12 @@ function cleanInput(raw) {
     rubric: arr(x.rubric, 12).map((r) => ({ name: str(r && r.name, 30), pct: Math.max(0, Math.min(100, Math.round(Number(r && r.pct) || 0))), to: ['all', 'speaker', 'maker'].includes(r && r.to) ? r.to : 'all' })).filter((r) => r.name),
     teacherReq: str(x.teacherReq, 300),
     extra: arr(x.extra, 6).map((e) => ({ by: e && e.by === 'teacher' ? 'teacher' : 'student', text: str(e && e.text, 200) })).filter((e) => e.text),
+    // 互動：小組指定的目的（空白＝由 Agent 判斷）、網頁規則式判斷的參考、組員人數
+    goal: GOALS[x.goal] ? x.goal : '',
+    goalGuess: GOALS[x.goalGuess] ? x.goalGuess : '',
+    goalWhy: str(x.goalWhy, 200),
+    candidates: arr(x.candidates, 3).filter((id) => FMT_IDS.includes(id)),
+    people: Math.max(1, Math.min(12, Number(x.people) || 1)),
   };
 }
 
@@ -66,8 +88,21 @@ const SPECS = {
     maxTokens: 1400,
   },
   rehearsalInteraction: {
-    task: '設計互動：3–5 題台下問答題（附答案要點，只能用證據清單裡的內容並標證據編號）；3–5 題四選一的互動遊戲題（題目 120 字內、選項 75 字內，標出正確選項編號 1–4，建議作答秒數）；1 題開場提問或投票題。',
-    schema: { type: 'object', required: ['qa', 'quiz'], properties: {
+    task: (inp) => [
+      '設計報告時的互動。步驟：',
+      `1. 先判斷這份報告的互動目的：ideas＝${GOALS.ideas}、check＝${GOALS.check}、fun＝${GOALS.fun}。`
+        + (inp.goal ? `小組已指定目的為 ${inp.goal}，照這個目的。` : `依老師要求、額外要求、研究問題判斷（網頁的初步判斷：${inp.goalGuess || '無'}；${inp.goalWhy || ''}），用一句話說明理由。`),
+      `2. 從下面的形式清單挑 1–3 個最適合的（考慮報告時間 ${inp.talkMin} 分鐘、組員 ${inp.people} 人、台下是否方便用手機；網頁初步建議：${inp.candidates.join('、') || '無'}），每個說明理由：`,
+      FORMATS.map((f) => `- ${f.id}：${f.name}（目的 ${f.goal}）`).join('\n'),
+      '3. 為每個挑選的形式寫執行步驟（每點 40 字內）、要問台下的題目；辯論與短劇列出角色；短劇與影片只寫情境、角色與分鏡重點，不要寫台詞或對白。',
+      '4. 只有挑了測驗類（check）形式時，才出 3–5 題四選一題目（題目 120 字內、選項 75 字內、標正確選項編號 1–4、建議秒數）；答案只能來自證據清單。',
+      '5. 另外出 3–5 題台下問答題（附答案要點並標證據編號），以及 1 題開場提問或投票題。',
+    ].join('\n'),
+    schema: { type: 'object', required: ['goal', 'picks', 'plans', 'qa'], properties: {
+      goal: { type: 'string', enum: Object.keys(GOALS) },
+      goalWhy: S(LIM.q),
+      picks: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'object', required: ['id', 'why'], properties: { id: { type: 'string', enum: FMT_IDS }, why: S(LIM.q) } } },
+      plans: { type: 'array', maxItems: 3, items: { type: 'object', required: ['id', 'steps'], properties: { id: { type: 'string', enum: FMT_IDS }, steps: { type: 'array', maxItems: 6, items: S(LIM.point) }, prompts: { type: 'array', maxItems: 5, items: S(LIM.q) }, roles: { type: 'array', maxItems: 4, items: S(LIM.role) } } } },
       qa: { type: 'array', maxItems: 5, items: { type: 'object', required: ['q', 'points'], properties: { q: S(LIM.q), points: { type: 'array', maxItems: 3, items: S(LIM.point) }, refs } } },
       quiz: { type: 'array', maxItems: 5, items: { type: 'object', required: ['q', 'options', 'correct'], properties: { q: S(LIM.quizQ), options: { type: 'array', minItems: 2, maxItems: 4, items: S(LIM.opt) }, correct: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 4 }, minItems: 1, maxItems: 4 }, sec: { type: 'integer' } } } },
       opener: { type: 'object', properties: { q: S(LIM.openerQ), options: { type: 'array', maxItems: 4, items: S(LIM.openerOpt) } } } } },
@@ -80,7 +115,8 @@ const isServerAction = (a) => Object.prototype.hasOwnProperty.call(SPECS, a);
 // 組成要送給 Claude 的 system／user／schema（交給 proxy.js 的 buildRequest）
 function build(action, rawInput) {
   const spec = SPECS[action], inp = cleanInput(rawInput);
-  return { input: inp, req: { tier: 'text', system: SYSTEM, user: `${context(inp)}\n\n任務：${spec.task}`, schema: spec.schema, maxTokens: spec.maxTokens } };
+  const task = typeof spec.task === 'function' ? spec.task(inp) : spec.task;
+  return { input: inp, req: { tier: 'text', system: SYSTEM, user: `${context(inp)}\n\n任務：${task}`, schema: spec.schema, maxTokens: spec.maxTokens } };
 }
 
 // 整理模型的輸出：截長度、留下存在的證據編號、結論段換成引導問題
@@ -101,15 +137,25 @@ function clean(action, data, inp) {
       segments: segs(d.segments, (s) => ({ id: s.id, points: s.id === 'conclusion' ? CONCLUSION_PROMPTS.map((t) => ({ text: t, refs: [] })) : s.id === 'qa' ? [] : arr(s.points, 4).map((p) => ({ text: str(p && p.text, LIM.point), refs: okRefs(p && p.refs) })).filter((p) => p.text) })),
     };
   }
+  // 互動目的：小組有指定就照指定；挑的形式只留清單裡的；只有挑了測驗類形式才保留四選一題目
+  const goal = inp.goal || (GOALS[d.goal] ? d.goal : inp.goalGuess || 'ideas');
+  const picks = [...new Map(arr(d.picks, 3).filter((x) => x && FMT_IDS.includes(x.id)).map((x) => [x.id, { id: x.id, why: str(x.why, LIM.q) }])).values()];
+  const picked = new Set(picks.map((x) => x.id));
+  const plans = arr(d.plans, 3).filter((x) => x && picked.has(x.id)).map((x) => ({
+    id: x.id, steps: arr(x.steps, 6).map((t) => str(t, LIM.point)).filter(Boolean),
+    prompts: arr(x.prompts, 5).map((t) => str(t, LIM.q)).filter(Boolean), roles: arr(x.roles, 4).map((t) => str(t, LIM.role)).filter(Boolean),
+  }));
+  const wantQuiz = picks.some((x) => (FORMATS.find((f) => f.id === x.id) || {}).goal === 'check');
   const opener = d.opener && typeof d.opener === 'object' ? { q: str(d.opener.q, LIM.openerQ), options: arr(d.opener.options, 4).map((o) => str(o, LIM.openerOpt)).filter(Boolean) } : null;
   return {
+    goal, goalWhy: inp.goal ? '小組指定的互動目的' : str(d.goalWhy, LIM.q), picks, plans,
     qa: arr(d.qa, 5).map((q) => ({ q: str(q && q.q, LIM.q), points: arr(q && q.points, 3).map((p) => str(p, LIM.point)).filter(Boolean), refs: okRefs(q && q.refs) })).filter((q) => q.q),
     quiz: arr(d.quiz, 5).map((q) => {
       const options = arr(q && q.options, 4).map((o) => str(o, LIM.opt)).filter(Boolean);
       return { q: str(q && q.q, LIM.quizQ), options, correct: [...new Set(arr(q && q.correct, 4).map(Number).filter((k) => k >= 1 && k <= options.length))], sec: Number(q && q.sec) || 20 };
-    }).filter((q) => q.q && q.options.length >= 2 && q.correct.length),
+    }).filter((q) => wantQuiz && q.q && q.options.length >= 2 && q.correct.length),
     opener: opener && opener.q ? opener : null,
   };
 }
 
-module.exports = { SEG_IDS, CONCLUSION_PROMPTS, LIM, SPECS, isServerAction, cleanInput, build, clean };
+module.exports = { SEG_IDS, CONCLUSION_PROMPTS, LIM, SPECS, GOALS, FORMATS, isServerAction, cleanInput, build, clean };
