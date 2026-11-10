@@ -711,3 +711,15 @@ export async function uploadImage(projectId, file) {
   await uploadBytes(r, file, { contentType: file.type, customMetadata: { uid: auth.currentUser.uid } });
   return { path, url: await getDownloadURL(r) };
 }
+
+// 畫布錄音也存在 Storage：路徑 projects/{研究}/audio/…（storage.rules 一樣只給這份研究的成員）
+export async function uploadMedia(projectId, file, kind) {
+  if (kind !== 'audio' && kind !== 'images') throw new Error('不支援的檔案種類');
+  if (kind === 'audio' && !/^audio\//.test(file.type)) throw new Error('只能上傳錄音檔');
+  if (file.size > IMAGE_MAX) throw new Error('檔案超過 20MB');
+  const ext = (file.name.match(/\.([a-z0-9]{2,5})$/i) || [, 'webm'])[1].toLowerCase();
+  const path = `projects/${projectId}/${kind}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const r = sRef(storage, path);
+  await uploadBytes(r, file, { contentType: file.type, customMetadata: { uid: auth.currentUser.uid } });
+  return { path, url: await getDownloadURL(r) };
+}

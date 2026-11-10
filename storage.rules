@@ -20,5 +20,23 @@ service firebase.storage {
       allow update: if false;
       allow delete: if canWrite();
     }
+    // 畫布錄音：規則跟圖片一樣，只是檔案要是錄音（audio/*）
+    match /projects/{projectId}/audio/{file} {
+      function memberDoc() {
+        return /databases/(default)/documents/projects/$(projectId)/members/$(request.auth.uid);
+      }
+      function isMember() {
+        return request.auth != null && firestore.exists(memberDoc());
+      }
+      function canWrite() {
+        return isMember() && firestore.get(memberDoc()).data.role in ['owner', 'editor'];
+      }
+      allow read: if isMember();
+      allow create: if canWrite()
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+      allow update: if false;
+      allow delete: if canWrite();
+    }
   }
 }
