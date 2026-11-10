@@ -411,7 +411,9 @@ function addTopicKw(text){if(!window.RFAGENT||!window.RFINK)return;
 // 內建對照表認得的詞用對照表的英文（人工校對過），模型給的說法併進同義詞；規劃期間學生自己加的關鍵字保留。
 let planBusy=false;
 function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBusy=true;const proj=p,before=S.kw.slice(),re=()=>{if(p===proj&&pane==="agent"&&S.step===4)renderPane()};
- const notes=rdItems().map(o=>o.text).filter(Boolean);
+ // 聚焦問題的選擇（對象、情境、要比較的結果）放在最前面：以前只進研究問題的文字，沒有進關鍵字規劃，搜尋就漏了「結果」那一半（例如行人體感溫度）
+ const focusNotes=QS().map(q=>S.scope[q[1]]?"聚焦選擇："+S.scope[q[1]]:"").filter(Boolean);
+ const notes=[...focusNotes,...rdItems().map(o=>o.text).filter(Boolean)];
  RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
   S.kwEn=S.kwEn||{};S.kwSyn={};
   const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
