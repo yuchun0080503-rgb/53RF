@@ -388,8 +388,12 @@ const kwBusy=new Set(); // 正在翻譯的關鍵字（只存在本機）
 //  2. 這段文字裡內建對照表認得的概念（整個詞組，例如「自主判斷能力」）；
 //  3. 詞庫斷出來的其他詞。
 // 研究對象（學生、老師）和太籠統的詞（學習）只在主題詞不到 2 個時才補上，否則當範圍詞。
+// 畫布上單獨寫的短詞（例如「量刑」「國民法官」）：直接當搜尋關鍵字，不用再逐個勾「納入搜尋關鍵字」。
+// 題目、主張、證據卡等有標籤的、含換行的長句不算；只取 2～8 個字的文字物件。
+const canvasTerms=()=>[...new Set(rdItems().filter(o=>o.type==="text"&&!o.tag).map(o=>String(o.text||"").trim().replace(/[。，,.!！?？、]+$/,"")).filter(t=>t.length>=2&&t.length<=8&&!/\s{2,}|\n/.test(t)))];
 function addTopicKw(text){if(!window.RFAGENT||!window.RFINK)return;
  S.kwEn=S.kwEn||{};S.kwV=2;
+ canvasTerms().forEach(t=>{if(!S.kw.includes(t)){S.kw.push(t);if(hasZh(t)&&!S.kwEn[t])translateKw(t)}});
  const put=x=>{const k=x.zh||x.en;if(x.zh&&!S.kwEn[x.zh])S.kwEn[x.zh]=x.en;if(!S.kw.includes(k))S.kw.push(k);return k};
  const enOf=k=>S.kwEn[k]||k,broad=k=>/students|teachers|children|adolescents|parents|^learning$/.test(enOf(k));
  const subj=RFAGENT.keywordPairs(((p&&p.name)||"").replace(/期[末中]|報告|作業|專題|研究|探討|分析|小論文/g," ")).map(put),named=RFAGENT.keywordPairs(text).map(put);
@@ -416,7 +420,9 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
   // 觀點詞：畫布上提到的其他概念（比較的條件、可能的機制、子問題），列出來讓小組看到有沒有漏掉，但不加進搜尋條件（加了會讓查詢太嚴）
   S.kwAspect=ks.filter(k=>k.aspect).map(k=>k.name);
-  S.kw=[...ks.map(k=>k.name),...mine];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
+  const cv=canvasTerms().filter(t=>!ks.some(x=>x.name===t)&&!mine.includes(t)); // 畫布短詞不會被模型規劃的結果蓋掉
+  cv.forEach(t=>{if(hasZh(t)&&!S.kwEn[t])translateKw(t)});
+  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
   aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
