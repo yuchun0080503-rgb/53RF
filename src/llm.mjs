@@ -47,6 +47,7 @@ export const modelLabel = (name = state.textModel || state.model) => {
 /**
  * 問模型並要求照 JSON 格式回答。
  * @param {object} o
+ * @param {string} o.action Agent 動作（harness.mjs 的 MIN_LEVEL 名稱）；後端依它檢查這份研究的 AI 權限 Level
  * @param {string} o.system 角色與規則
  * @param {string} o.user 這次的內容
  * @param {string[]} [o.images] base64 圖片（不含 data: 開頭），目前是 PNG
@@ -55,7 +56,8 @@ export const modelLabel = (name = state.textModel || state.model) => {
  * @param {number} [o.timeout] 毫秒（後端上限約 60 秒）
  * @returns {Promise<object>} 解析後的 JSON
  */
-export async function chatJSON({ system, user, images, schema, maxTokens = 900, timeout = 55000 }, fetchImpl = fetch) {
+export async function chatJSON({ action, system, user, images, schema, maxTokens = 900, timeout = 55000 }, fetchImpl = fetch) {
+  if (!action) throw new Error('缺少 Agent 動作（action），後端會拒絕');
   const st = await detect();
   if (!st.ok) throw new Error(st.reason);
   const tier = images && images.length ? 'ink' : 'text';
@@ -66,7 +68,7 @@ export async function chatJSON({ system, user, images, schema, maxTokens = 900, 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await getToken()) },
       // projectId：後端用它在伺服器上再查一次這份研究的 AI 權限與你的角色（網站設定 globalThis.RF_AI_PROJECT）
-      body: JSON.stringify({ tier, system, user, schema, maxTokens, projectId: String((typeof globalThis.RF_AI_PROJECT === 'function' ? globalThis.RF_AI_PROJECT() : globalThis.RF_AI_PROJECT) || ''), ...(tier === 'ink' ? { images } : {}) }),
+      body: JSON.stringify({ action, tier, system, user, schema, maxTokens, projectId: String((typeof globalThis.RF_AI_PROJECT === 'function' ? globalThis.RF_AI_PROJECT() : globalThis.RF_AI_PROJECT) || ''), ...(tier === 'ink' ? { images } : {}) }),
       signal: ctl.signal,
     });
   } catch (err) {

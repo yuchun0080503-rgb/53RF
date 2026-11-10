@@ -118,7 +118,7 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, now = Date.
   let input;
   try { input = parseBody(req.body); } catch (e) { return bad(res, 400, e.message); }
   if (check) {
-    const why = await check({ uid: user && user.uid, body: req.body });
+    const why = await check({ uid: user && user.uid, body: req.body, action: 'searchEvidence' }); // 中文文獻搜尋屬於「搜尋證據」（Level 1）
     if (why) return bad(res, why.status || 403, why.message || String(why));
   }
   const t0 = now();

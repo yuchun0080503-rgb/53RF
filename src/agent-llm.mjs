@@ -25,6 +25,7 @@ const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
  */
 export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
   const out = await chatJSON({
+    action: 'proposeKeywords',
     system:
       '你是協助大學生查證文獻的研究助理，熟悉人文、歷史、法律、社會科學、教育、商管、理工、醫護、藝術設計各領域的學術用語。' +
       '任務：根據報告題目與學生要查證的主張，決定到學術資料庫要用哪些關鍵字。\n' +
@@ -102,6 +103,7 @@ const KW_SCHEMA = {
  */
 export async function scopeFocus({ topic, items = [] }, fetchImpl) {
   const out = await chatJSON({
+    action: 'analyzeScope',
     system:
       '你是協助大學生做小組研究報告的研究助理。學生在白板上討論，你要判斷他們的研究範圍是不是太廣、還不能拿去搜尋文獻。\n' +
       '檢查三個面向有沒有交代：who 研究對象（哪一群人）、ctx 研究情境（在什麼情況下使用或發生）、out 主要結果（想知道對什麼的影響）。\n' +
@@ -135,6 +137,7 @@ export async function scopeFocus({ topic, items = [] }, fetchImpl) {
  */
 export async function draftQuestion({ topic, items = [], answers = [], must = [] }, fetchImpl) {
   const out = await chatJSON({
+    action: 'proposeQuestion',
     system: '你是協助大學生做研究報告的研究助理。根據題目、白板內容與小組選定的聚焦方向，寫出一句具體、可以拿去搜尋學術文獻的研究問題（繁體中文，40 字以內）。要包含研究對象、情境與結果；用「如何」「有什麼關聯」「差異為何」這類開放的問法，不要用「會不會」「是否」「嗎」寫成是非題，也不要預設答案。',
     user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(it.text, 80)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
     schema: { type: 'object', required: ['question'], properties: { question: str } },
@@ -157,6 +160,7 @@ export async function draftQuestion({ topic, items = [], answers = [], must = []
  */
 export async function reflectSearch({ claim, gap, keywords = [], found = [], queries = [] }, fetchImpl) {
   const out = await chatJSON({
+    action: 'searchEvidence',
     system:
       '你是協助學生查證文獻的研究助理。上一輪學術資料庫搜尋的證據不夠，你要檢討原因並決定下一輪的關鍵字。\n' +
       '規則：\n' +
@@ -181,6 +185,7 @@ export async function reflectSearch({ claim, gap, keywords = [], found = [], que
  */
 export async function translate(term, context = '', fetchImpl) {
   const out = await chatJSON({
+    action: 'proposeKeywords',
     system: '你是學術翻譯。把學生給的中文關鍵字翻成英文論文標題實際會使用的學術用語（1 到 3 個英文單字），依概念翻譯、不要逐字翻；另外給 1 到 3 個常用的英文同義詞。只處理這一個關鍵字。',
     user: `關鍵字：${clip(term, 40)}\n它出現的脈絡：${clip(context, 200) || '（無）'}`,
     schema: { type: 'object', required: ['en', 'synonyms'], properties: { en: str, synonyms: { type: 'array', items: str, maxItems: 3 } } },
@@ -230,6 +235,7 @@ const JUDGE_ABSTRACT_LEN = 2400;
 
 async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
   const out = await chatJSON({
+    action: 'searchEvidence',
     system:
       // 這裡原本的範例只適合教育題（「文獻談醫療、商業、司法…一律是 1」），網站服務各學院之後，
       // 法律題的司法研究、商管題的企業研究會被誤判成不切題，所以改成不分學科的說法。
@@ -303,6 +309,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
 export async function summarizeZh(title, abstract, fetchImpl) {
   if (clip(abstract, 1200).length < 60) return '';
   const out = await chatJSON({
+    action: 'readAbstract',
     system: '你是協助學生閱讀英文文獻的研究助理。請把下面這篇文獻的摘要整理成繁體中文（台灣用語，不可以用韓文、日文或英文作答），兩到三句、80 字以內，依序說明：研究對象與方法、主要發現。只能根據摘要，不要加入摘要沒有的內容；摘要沒有寫結果就照實說「摘要沒有寫出研究結果」。',
     user: `標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
     schema: { type: 'object', required: ['zh'], properties: { zh: str } },
@@ -351,6 +358,7 @@ export function fixLeakedFields(out) {
 export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
   if (clip(abstract, 1200).length < 60) return null;
   const out = await chatJSON({
+    action: 'readAbstract',
     system:
       '你是協助大學生閱讀文獻的研究助理。根據下面這篇文獻的標題與摘要，用繁體中文（台灣用語，不可以用韓文、日文或英文作答）寫重點整理，' +
       '讓學生不用讀原文就能判斷這篇對報告有沒有用。只能根據摘要，不要加入摘要沒有的內容；摘要沒寫的欄位就寫「摘要沒有說明」。\n' +
@@ -387,6 +395,7 @@ export async function slideOutline({ topic = '', question = '', claim = '', poin
   if (!items.length) throw new Error('還沒有可以引用的證據');
   const evText = items.map((x) => `[${x.n}] ${x.au ? x.au + '（' + x.y + '）' : '（' + x.y + '）'}〈${clip(x.t, 120)}〉｜${x.k === 's' ? '支持主張' : '限制／反面'}｜重點：${clip(x.point, 160) || '（沒有整理出重點）'}`).join('\n');
   const out = await chatJSON({
+    action: 'slideOutline',
     system:
       '你是協助大學生準備上台報告的助教。根據小組提供的研究內容，寫一份投影片的文字大綱（繁體中文、台灣用語）。\n' +
       '規則：\n' +
@@ -427,6 +436,7 @@ export function isZhText(t) {
  */
 export async function readInk(imageBase64, hint = '', fetchImpl) {
   const out = await chatJSON({
+    action: 'readHandwriting',
     system:
       '這張圖片是學生在白板上的手寫筆跡（白底黑字），內容通常是繁體中文的詞句，也可能夾雜英文或數字，主題多半跟課業報告、研究有關。' +
       '請把整段筆跡讀成一句通順的文字，照原本的書寫順序，不要一個字一個字分開，也不要加上任何說明或標點以外的內容。' +

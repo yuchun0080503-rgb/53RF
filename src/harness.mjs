@@ -12,10 +12,12 @@ export const DEFAULT_LEVEL = 2;
 export const TOKEN_BUDGET = 60000;
 
 // Level 0 No AI／1 Research Assistant／2 Thinking Assistant／3 Writing Assistant
+// 伺服器端（functions/actions.js）有一份一模一樣的表，/api/ai 依它拒絕；兩份由 functions-actions.test.mjs 檢查一致。
 export const MIN_LEVEL = {
   readHandwriting: 1,
   analyzeScope: 1,
   searchEvidence: 1,
+  readAbstract: 1, // 文獻摘要的中文重點整理（只整理摘要本身，不寫結論）
   proposeKeywords: 1, // 學生自己寫 Research Question，Agent 只產生搜尋關鍵字
   proposeQuestion: 2, // Agent 草擬 Research Question
   summarizeEvidence: 3,
