@@ -35,3 +35,29 @@ test('學號：去空白（含全形）、全形轉半形、轉大寫；英數�
   assert.match(checkSid('學號123').reason, /英文字母和數字/);
   assert.ok(SID_RE.test('A'.repeat(20)) && !SID_RE.test('a1234'));
 });
+
+test('reportTypeOf：從網址判斷小組報告的類型', async () => {
+  const { reportTypeOf, reportLabel, REPORT_TYPES } = await import('./course.mjs');
+  const cases = [
+    ['https://www.canva.com/design/DAF123/view', 'Canva'],
+    ['https://canva.link/abc', 'Canva'],
+    ['https://docs.google.com/presentation/d/1abc/edit', 'Google Slides'],
+    ['https://docs.google.com/document/d/1abc/edit', 'Google Docs'],
+    ['https://docs.google.com/spreadsheets/d/1abc', '其他'],
+    ['https://1drv.ms/p/s!abc', 'PowerPoint'],
+    ['https://ntnu365-my.sharepoint.com/:p:/g/personal/x', 'PowerPoint'],
+    ['https://example.com/files/talk.pptx', 'PowerPoint'],
+    ['https://www.notion.so/team/page-123', 'Notion'],
+    ['https://abc.notion.site/page', 'Notion'],
+    ['https://gamma.app/docs/xyz', 'Gamma'],
+    ['https://claude.ai/artifact/TLBNny3dFHpRFm6oaY3MTm', 'Claude 簡報'],
+    ['https://canva.com.evil.example/x', '其他'],
+    ['https://example.com', '其他'],
+    ['不是網址', ''], ['', ''], ['javascript:alert(1)', ''],
+  ];
+  for (const [u, t] of cases) assert.equal(reportTypeOf(u), t, u);
+  assert.ok(cases.every(([, t]) => !t || REPORT_TYPES.includes(t)));
+  assert.equal(reportLabel('PowerPoint', 'https://www.canva.com/design/x'), 'Canva'); // 舊資料選錯也顯示正確
+  assert.equal(reportLabel('Canva', 'https://example.com'), '報告');
+  assert.equal(reportLabel('Notion', ''), 'Notion');
+});

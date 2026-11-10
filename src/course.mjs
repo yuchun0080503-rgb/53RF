@@ -68,3 +68,35 @@ export function checkSid(input) {
   if (sid.length < 4 || sid.length > 20) return { ok: false, sid, reason: '學號要 4–20 碼。' };
   return { ok: true, sid };
 }
+
+// ---------------- 小組報告連結：從網址判斷是哪一種 ----------------
+// 學生貼上連結就自動選好類型，不用每次手動調整；判斷不出來時歸為「其他」（按鈕上顯示「報告」）。
+export const REPORT_TYPES = ['PowerPoint', 'Canva', 'Google Slides', 'Google Docs', 'Notion', 'Gamma', 'Claude 簡報', '其他'];
+const REPORT_RULES = [
+  ['Canva', /(^|\.)canva\.(com|link)$/, null],
+  ['Google Slides', /^docs\.google\.com$/, /^\/presentation\//],
+  ['Google Docs', /^docs\.google\.com$/, /^\/document\//],
+  ['PowerPoint', /(^|\.)(1drv\.ms|onedrive\.live\.com|sharepoint\.com|office\.com|officeapps\.live\.com|office\.net)$/, null],
+  ['Notion', /(^|\.)notion\.(so|site)$/, null],
+  ['Gamma', /(^|\.)gamma\.app$/, null],
+  ['Claude 簡報', /^claude\.ai$/, /^\/(code\/)?artifact\//],
+];
+/**
+ * @param {string} url
+ * @returns {string} REPORT_TYPES 之一；空字串表示不是網址（不要動使用者選的類型）
+ */
+export function reportTypeOf(url) {
+  let u;
+  try { u = new URL(String(url || '').trim()); } catch { return ''; }
+  if (!/^https?:$/.test(u.protocol)) return '';
+  const host = u.hostname.toLowerCase();
+  const hit = REPORT_RULES.find(([, h, path]) => h.test(host) && (!path || path.test(u.pathname)));
+  if (hit) return hit[0];
+  if (/\.(pptx?|ppsx?)$/i.test(u.pathname)) return 'PowerPoint';
+  return '其他';
+}
+// 按鈕上顯示的名稱：能從網址判斷就用判斷結果（舊資料選錯類型也會顯示正確），「其他」顯示為「報告」
+export function reportLabel(type, url) {
+  const t = reportTypeOf(url) || type || '';
+  return !t || t === '其他' ? '報告' : t;
+}

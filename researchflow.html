@@ -373,7 +373,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-6";
+window.RF_VER = "2026.11.10-7";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -884,8 +884,8 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  <select id="dmo" ${dis} style="margin-top:8px" aria-label="預設查證模式">${["procon","claim"].map(m=>`<option value="${m}" ${m===(q.mode||"procon")?"selected":""}>${MODE_N[m]}</option>`).join("")}</select>
  <h3 style="margin:20px 0 4px">AI 權限</h3><div class="sm mute">由老師設定 Agent 可以協助到什麼程度；設定由後端強制執行，組員無法自行調整。</div>
  <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><select id="dlv" ${teach?"":"disabled"} aria-label="AI 權限 Level">${LVN.map((n,l)=>`<option value="${l}" ${l===q.LV?"selected":""}>Level ${l}．${n}</option>`).join("")}</select><span class="sm mute" id="dlvs">${teach?"變更後立即生效":"只有老師可以調整"}</span></div>
- <h3 style="margin:20px 0 4px">小組報告</h3><div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，之後可在畫布上方一鍵開啟。</div>
- <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;margin-top:8px"><select id="d6" ${dis}>${["PowerPoint","Canva","Google Slides","Google Docs","Notion","其他"].map(t=>`<option ${t===(q.reportType||"PowerPoint")?"selected":""}>${t}</option>`).join("")}</select><input id="d7" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${dis}></div>
+ <h3 style="margin:20px 0 4px">小組報告</h3><div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，類型會自動判斷（判斷錯了再手動改）；之後可在畫布上方一鍵開啟。</div>
+ <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;margin-top:8px"><select id="d6" ${dis} aria-label="報告類型">${(window.RFCOURSE?RFCOURSE.REPORT_TYPES:["PowerPoint","Canva","Google Slides","Google Docs","Notion","其他"]).map(t=>`<option ${t===(rptType(q)||"PowerPoint")?"selected":""}>${t}</option>`).join("")}</select><input id="d7" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${dis}></div>
  <label>邀請連結</label><div style="display:flex;gap:8px"><input readonly value="${LIVE()?esc(q._lastInvite||""):"https://researchflow.app/join/"+q.code}" placeholder="${own?"在上方輸入 Email 並按「邀請」，會產生一次性連結":"只有 Owner 可以產生邀請連結"}" id="lk"><button id="cp">${I("copy")}複製</button></div>
  <div class="acts" style="justify-content:flex-end;margin-top:22px"><button id="dc">關閉</button>${own?'<button class="pri" id="ds">儲存變更</button>':""}</div>`;
  const live=LIVE();
@@ -941,10 +941,15 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
    return;
   }
   Object.assign(q,fields);q.trace.push({t:nowT(),w:U[ME].n,x:"更新研究檔案與組員設定。",k:"user"});d.close();renderProj();if(p===q){openWsUI();renderPane()}});
+ // 貼上或修改報告連結時自動選好類型；判斷不出來（不是網址）就不動
+ const d7=$("#d7"),d6=$("#d6");if(d7&&d6&&window.RFCOURSE)d7.oninput=()=>{const t=RFCOURSE.reportTypeOf(fixUrl(d7.value)||d7.value);if(t)d6.value=t};
  d.showModal()}
 $("#cfg").onclick=()=>openPD(projects.indexOf(p));
 // 網址沒寫 http(s):// 就補上；不是 http／https 的（例如 javascript:）一律不接受
 function fixUrl(v){v=String(v||"").trim();if(!v)return"";if(!/^[a-z][a-z0-9+.-]*:/i.test(v))v="https://"+v;try{const u=new URL(v);return /^https?:$/.test(u.protocol)&&u.hostname.includes(".")?u.href:""}catch(e){return""}}
+// 小組報告類型：能從網址判斷就用判斷結果（src/course.mjs 的 reportTypeOf），判斷不出來才用存的類型
+const rptType=q=>(window.RFCOURSE&&RFCOURSE.reportTypeOf(q.reportUrl))||q.reportType||"";
+const rptLabel=q=>window.RFCOURSE?RFCOURSE.reportLabel(q.reportType,q.reportUrl):(q.reportType||"報告");
 $("#rpt").onclick=()=>{const u=fixUrl(p.reportUrl);if(u){window.open(u,"_blank","noopener");return}
  if(!canEdit()||myRole()!=="Owner"){alert(p.reportUrl?"報告連結的格式不正確，請 Owner 到「研究檔案」重新貼上。":"還沒有設定報告連結。只有 Owner 可以在「研究檔案」裡設定。");return}
  openPD(projects.indexOf(p));setTimeout(()=>$("#d7")?.focus(),80)};
@@ -1083,8 +1088,8 @@ window.addEventListener("rf:llm",()=>{aiChip();if(p&&pane==="agent"&&!$("#v-ws")
 const aiLog=x=>{if(LIVE()&&p.fid)RFDB.addTrace(p.fid,{w:"Agent",x,k:"ai"},ME).catch(()=>{});else p.trace.push({t:nowT(),w:"Agent",x,k:"ai"})};
 function openWsUI(){aiChip();fbChip();if(window.RFLLM)RFLLM.detect().then(aiChip);$("#pt").textContent=p.name;$("#pst").textContent=p.stage;$("#rolelab").textContent=isT()?"老師：唯讀檢視．AI 權限 Level "+p.LV:myRole()==="Viewer"?"Viewer：唯讀":"AI 權限 Level "+p.LV;
  $("#pres").innerHTML=p.members.filter(m=>!U[m.u].pending).map(m=>av(m.u,26)).join("");
- $("#rpt").innerHTML=`${I("ext")}${p.reportUrl?(p.reportType||"報告"):"小組報告"}`;
- $("#rpt").title=p.reportUrl?"開啟「"+(p.reportType||"報告")+"」："+p.reportUrl:"尚未設定報告連結，點一下即可加入";
+ $("#rpt").innerHTML=`${I("ext")}${p.reportUrl?esc(rptLabel(p)):"小組報告"}`;
+ $("#rpt").title=p.reportUrl?"開啟「"+rptLabel(p)+"」："+p.reportUrl:"尚未設定報告連結，點一下即可加入";
  $$(".tools button:not(#undo):not(#redo)").forEach(b=>b.disabled=!canEdit()&&b.dataset.t&&!["hand","sel","pin"].includes(b.dataset.t));$("#pintool").classList.toggle("hide",!isT());$("#imgup").disabled=!canEdit();pinTab();$("#undo").disabled=$("#redo").disabled=!canEdit();$("#sim").classList.toggle("hide",isT()||LIVE())}
 function resize(){const r=$("#cvw").getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);p&&draw()} // 顯示大小由 CSS 決定（填滿外框），這裡只設定畫素數量
 addEventListener("resize",resize);
@@ -2032,7 +2037,7 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
    <section class="tcard"><h2>研究進度</h2><p class="sm mute">與學生端「進度檢核」相同：每一項依實際完成的事實判定，不使用百分比。</p>
     <div class="tprog">${cells.map(h=>`<div class="s-${h[1]}"><b>${h[0]}</b><span>${h[2]}</span></div>`).join("")}</div></section>
    <section class="tcard" id="tsec-report"><div class="tch"><h2>小組報告</h2><span class="sm mute">${q.gradedAt?"已於 "+esc(fmtAt(q.gradedAt))+" 標記已批改":q.reportUrl?"還沒有標記已批改":""}</span></div>
-    <div class="acts" style="align-items:center">${q.reportUrl&&fixUrl(q.reportUrl)?`<button id="trep">${I("ext")}開啟${esc(q.reportType||"報告")}</button>`:'<span class="sm mute">小組還沒有設定報告連結。</span>'}${q.reportUrl?`<button id="tgrade">${q.gradedAt?"取消已批改":"標記已批改"}</button>`:""}</div></section>
+    <div class="acts" style="align-items:center">${q.reportUrl&&fixUrl(q.reportUrl)?`<button id="trep">${I("ext")}開啟${esc(rptLabel(q))}</button>`:'<span class="sm mute">小組還沒有設定報告連結。</span>'}${q.reportUrl?`<button id="tgrade">${q.gradedAt?"取消已批改":"標記已批改"}</button>`:""}</div></section>
    <section class="tcard"><div class="tch"><h2>給這組的回饋</h2><span class="sm mute">組員會在研究清單和畫布上方看到</span></div>
     <textarea id="tfb" rows="3" maxlength="1000" placeholder="例如：反向證據還不夠，建議找 2 篇不同立場的研究；研究問題可以再聚焦到大學生。" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--fg)"></textarea>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:8px"><input type="checkbox" id="tfbk" style="width:auto;margin:0">這則是給排演室的要求（學生排演時會看到「老師要求」，Agent 也會參考）</label>
