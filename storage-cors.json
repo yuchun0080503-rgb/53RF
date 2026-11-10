@@ -1,0 +1,10 @@
+[
+  {
+    "origin": [
+      "https://researchflow-3dd2c.web.app",
+      "https://researchflow-3dd2c.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD"],
+    "maxAgeSeconds": 3600
+  }
+]
