@@ -154,6 +154,24 @@ export async function summarizeEvidence(projectId, { evidence }) {
   return { summary };
 }
 
+// 排演室（Level 2／3）：提示詞由伺服器組（functions/rehearsal.js），這裡只送資料；每次產生都寫一筆「Agent 建議」歷程
+const REHEARSAL_NAMES = { rehearsalFlow: '報告流程、交接卡與問答分工', rehearsalOutline: '講稿大綱', rehearsalInteraction: '互動建議' };
+export async function rehearse(projectId, action, input) {
+  if (!(action in REHEARSAL_NAMES)) throw new Error('未知的排演室動作');
+  const uid = await guard(projectId, action);
+  const data = await llm.serverJSON({ action, input });
+  await agentLog(projectId, uid, `排演室：Agent 建議（${REHEARSAL_NAMES[action]}；${llm.modelLabel()}）。`);
+  return data;
+}
+// 排演室最近一次的結果（全組共用）
+export async function saveRehearsal(projectId, json, uid) {
+  await setDoc(doc(db, 'projects', projectId, 'researchState', 'rehearsal'), { json, updatedBy: uid, updatedAt: serverTimestamp() });
+}
+// 講者按「已看過簡報」：記在自己的上台報告任務上（看的是哪一個報告連結）
+export async function markDeckSeen(projectId, taskIds, url) {
+  await Promise.all(taskIds.map((id) => updateDoc(doc(db, 'projects', projectId, 'tasks', id), { seenUrl: url, seenAt: serverTimestamp() })));
+}
+
 // 一定會被拒絕（guard 會留下歷程紀錄）：ResearchFlow 不代替學生完成整份報告。
 export async function generateReport(projectId) {
   await guard(projectId, 'generateReport');
@@ -342,11 +360,11 @@ async function claimCode(courseId, uid, expires) {
 
 // sources：Agent 加查的領域資料庫；zhLinks：給學生的中文資料庫連結；readings：老師指定的閱讀 [{title,url}]
 // assignments：一門課的多個作業 [{id,title,req,due}]；沒有的話，課程本身的老師要求與截止日就是唯一的作業
-export async function createCourse({ name, teacherReq = '', dueDate = '', defaultAiLevel = 2, codeExpires = '', sources = [], zhLinks = null, readings = [], assignments = [], requireSid = false }, uid, profile = {}) {
+export async function createCourse({ name, teacherReq = '', dueDate = '', defaultAiLevel = 2, codeExpires = '', sources = [], zhLinks = null, readings = [], assignments = [], requireSid = false, talkDate = '', talkMin = 0 }, uid, profile = {}) {
   const expires = codeExpires || semesterEnd();
   const ref = await addDoc(collection(db, 'courses'), {
     name: name || '未命名課程', teacherUid: uid, teacherName: profile.displayName || '老師',
-    teacherReq, dueDate, defaultAiLevel: +defaultAiLevel, code: '', codeExpires: expires, sources, zhLinks, readings: readings.slice(0, 30), assignments: assignments.slice(0, 20), requireSid: !!requireSid, createdAt: serverTimestamp(),
+    teacherReq, dueDate, defaultAiLevel: +defaultAiLevel, code: '', codeExpires: expires, sources, zhLinks, readings: readings.slice(0, 30), assignments: assignments.slice(0, 20), requireSid: !!requireSid, talkDate, talkMin: +talkMin || 0, createdAt: serverTimestamp(),
   });
   const code = await claimCode(ref.id, uid, expires);
   await updateDoc(ref, { code });
@@ -362,7 +380,7 @@ export function subscribeMyCourses(uid, onChange, onError) {
 // 改課程設定；改了期限的話，目前的代碼一起延長／縮短
 export async function updateCourse(course, fields) {
   const clean = {};
-  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments', 'requireSid', 'rubric', 'rubricHist']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
+  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments', 'requireSid', 'rubric', 'rubricHist', 'talkDate', 'talkMin']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
   await updateDoc(doc(db, 'courses', course.id), clean);
   if (clean.codeExpires && course.code && clean.codeExpires !== course.codeExpires) await updateDoc(doc(db, 'courseCodes', course.code), { expiresAt: codeExpiry(clean.codeExpires) });
 }
@@ -614,8 +632,9 @@ export function subscribeTrace(projectId, onChange, onError) {
 }
 
 // ---------------- 老師回饋（feedback）----------------
-export async function addFeedback(projectId, text, who) {
-  await addDoc(collection(db, 'projects', projectId, 'feedback'), { text: String(text).slice(0, 1000), uid: auth.currentUser.uid, by: who || '老師', at: serverTimestamp() });
+// kind：'rehearsal' 是老師給排演室的要求（排演室顯示「老師要求」，Agent 也會參考）
+export async function addFeedback(projectId, text, who, kind = '') {
+  await addDoc(collection(db, 'projects', projectId, 'feedback'), { text: String(text).slice(0, 1000), uid: auth.currentUser.uid, by: who || '老師', at: serverTimestamp(), ...(kind ? { kind } : {}) });
 }
 export async function deleteFeedback(projectId, id) {
   await deleteDoc(doc(db, 'projects', projectId, 'feedback', id));
@@ -624,7 +643,7 @@ export function subscribeFeedback(projectId, onChange, onError) {
   const q = query(collection(db, 'projects', projectId, 'feedback'), orderBy('at', 'desc'), limit(50));
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => {
     const x = d.data({ serverTimestamps: 'estimate' });
-    return { id: d.id, text: x.text, by: x.by, uid: x.uid, at: x.at?.toMillis ? x.at.toMillis() : Date.now() };
+    return { id: d.id, text: x.text, by: x.by, uid: x.uid, kind: x.kind || '', at: x.at?.toMillis ? x.at.toMillis() : Date.now() };
   })), onError);
 }
 
@@ -637,7 +656,7 @@ export function subscribeTasks(projectId, onChange, onError) {
     onChange(snap.docs.map((d) => {
       const t = d.data({ serverTimestamps: 'estimate' });
       const ms = (v) => (v?.toMillis ? v.toMillis() : 0);
-      return { id: d.id, title: t.title || '', type: t.type || 'other', assignee: t.assigneeUid || '', by: t.createdBy || '', done: !!t.done, doneBy: t.doneBy || '', doneAt: ms(t.doneAt), at: ms(t.createdAt), due: t.due || '' };
+      return { id: d.id, title: t.title || '', type: t.type || 'other', assignee: t.assigneeUid || '', by: t.createdBy || '', done: !!t.done, doneBy: t.doneBy || '', doneAt: ms(t.doneAt), at: ms(t.createdAt), due: t.due || '', seenUrl: t.seenUrl || '', seenAt: ms(t.seenAt) };
     }));
   }, onError);
 }

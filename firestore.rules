@@ -16,11 +16,12 @@ rules_version = '2';
 //   objects/{objectId}    Canvas Object（第六章欄位）
 //   researchState/current { json, updatedBy, updatedAt }   小組共用的 Agent 流程狀態（含 Evidence Map）
 //   researchState/canvas  { ver }                          共用的 Canvas 版本號
+//   researchState/rehearsal { json, updatedBy, updatedAt } 排演室最近一次的結果
 //   agentTrace/{traceId}  { w, x, k, uid, at }             k: user|sync|ai|sys；只能新增，不能修改或刪除
 //   feedback/{id}         { text, uid, by, at }   老師給小組的回饋；只有老師能寫，組員都看得到
 //   pins/{id}             { uid, by, oid, dx, dy, x, y, text, status(open|done|closed), n, at, lastAt, lastBy, doneBy, doneAt }   老師貼在畫布上的留言
 //   pins/{id}/msgs/{id}   { uid, by, text, at }   留言底下的回覆（老師、Owner、Editor 都能回）
-//   tasks/{taskId}        { title, type, assigneeUid, createdBy, createdAt, done, doneBy, doneAt, due? }   分工清單；done 只有負責人本人能改；due 選填 YYYY-MM-DD
+//   tasks/{taskId}        { title, type, assigneeUid, createdBy, createdAt, done, doneBy, doneAt, due? }   分工清單；done 只有負責人本人能改；due 選填 YYYY-MM-DD；seenUrl／seenAt：講者看過的簡報連結
 //   nudges/{id}           { kind, text, to:[uid], uid, by, at }   老師「提醒同學」；id 由事項決定（idle、unsubmitted、task-{taskId}、unselected…），同一件事 24 小時內只能寫一次
 //   project.gradedAt      老師標記「已批改」的時間（老師只能改 aiLevel 與 gradedAt）
 //
@@ -284,7 +285,7 @@ service cloud.firestore {
       // ---- research state：小組共用的 Agent 流程狀態與 Canvas 版本號，owner／editor 可寫 ----
       match /researchState/{docId} {
         allow read: if canRead(projectId);
-        allow write: if canWrite(projectId) && docId in ['current', 'canvas'];
+        allow write: if canWrite(projectId) && docId in ['current', 'canvas', 'rehearsal'];
         allow delete: if ownerDeleting(projectId);
       }
 
@@ -306,6 +307,13 @@ service cloud.firestore {
               && request.resource.data.done is bool
               && request.resource.data.doneBy == request.auth.uid
               && request.resource.data.doneAt == request.time
+            )
+            // 講者按「已看過簡報」：負責人本人記下看過的報告連結（時間必須是伺服器時間）
+            || (
+              resource.data.assigneeUid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenUrl', 'seenAt'])
+              && request.resource.data.seenUrl is string && request.resource.data.seenUrl.size() <= 500
+              && request.resource.data.seenAt == request.time
             )
             // 還沒有人負責的任務可以自己認領（只能填自己）
             || (

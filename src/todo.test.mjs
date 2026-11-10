@@ -226,3 +226,21 @@ test('老師待辦 A：作業或課程還沒有設定評分配比，前往該作
   assert.deepEqual(t.filter((x) => x.kind === 'noRubric').map((x) => [x.reason, x.act.rubric]), [['作業「期末」還沒有設定評分配比', 'a2'], ['課程還沒有設定評分配比', '']]);
   assert.equal(teacherTodos({ courses: [course({ rubric: r })], now: NOW }).filter((x) => x.kind === 'noRubric').length, 0);
 });
+
+test('講者待看簡報：學生端（我是講者、有報告連結、還沒看過）；看過或連結換了的判斷；老師端報告日前 2 天才可提醒', () => {
+  const URL1 = 'https://docs.google.com/p/1';
+  const tasks = [{ id: 'p', type: 'present', assignee: 'B', done: false, title: '上台' }, { id: 'd', type: 'poster', assignee: 'A', done: false, title: '簡報' }];
+  const q = proj({ reportUrl: URL1, tasks, talkDate: '2026-11-12', names: { B: '小明' } });
+  assert.deepEqual(studentTodos([q], { me: 'B', now: NOW }).map((x) => [x.kind, x.act.tab, x.btn, x.due]), [['task', 'team', '看分工', null], ['deck', 'rehearsal', '去排演', '2026-11-12']]);
+  assert.deepEqual(studentTodos([q], { me: 'A', now: NOW }).filter((x) => x.kind === 'deck'), []); // 不是講者
+  const seen = { ...q, tasks: [{ ...tasks[0], seenUrl: URL1 }, tasks[1]] };
+  assert.deepEqual(studentTodos([seen], { me: 'B', now: NOW }).filter((x) => x.kind === 'deck'), []);
+  assert.equal(studentTodos([{ ...seen, reportUrl: URL1 + '?v2' }], { me: 'B', now: NOW }).filter((x) => x.kind === 'deck').length, 1); // 簡報連結換了
+  assert.deepEqual(studentTodos([{ ...q, reportUrl: '' }], { me: 'B', now: NOW }).filter((x) => x.kind === 'deck'), []); // 簡報還沒完成
+  const t = teacherTodos({ projects: [q], now: NOW }).filter((x) => x.kind === 'deckUnseen');
+  assert.deepEqual(t.map((x) => [x.reason, x.nudge.to.join(), x.btn]), [['小明還沒有看過簡報', 'B', '提醒同學']]);
+  assert.equal(teacherTodos({ projects: [{ ...q, talkDate: '2026-11-13' }], now: NOW }).filter((x) => x.kind === 'deckUnseen').length, 0); // 3 天後才報告
+  assert.equal(teacherTodos({ projects: [seen], now: NOW }).filter((x) => x.kind === 'deckUnseen').length, 0);
+  const n = studentTodos([{ ...q, nudges: [{ id: 'deck-B', to: ['B'], at: NOW }] }], { me: 'B', now: NOW });
+  assert.deepEqual(n.filter((x) => /deck|nudge/.test(x.kind)).map((x) => x.kind), ['nudge']); // 老師提醒過就只顯示提醒
+});

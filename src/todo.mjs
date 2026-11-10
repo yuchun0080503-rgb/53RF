@@ -7,6 +7,8 @@
 //   { key, kind, pid?, cid?, name, reason, due: 'YYYY-MM-DD'|null, act: {…跳轉目標}, btn: '按鈕文字', nudge?: {...} }
 // sortTodos 之後每一項多了 color（red/orange/yellow/green）、label（給滑鼠移上去與螢幕報讀的文字）、snoozed、until。
 
+import { deckSeen } from './rehearsal.mjs';
+
 const DAY = 864e5;
 const TZ = 8 * 3600e3;
 
@@ -70,6 +72,7 @@ export function foldTodos(sorted, max = 5, open = false) {
 // ---------------- 學生該處理、老師可以提醒的事（T2 的 B 類；學生端也用它判斷老師的提醒還算不算數） ----------------
 export const IDLE_DAYS = 3; // 「需要注意」的「N 天沒有更新」，和老師端全班總覽相同
 export const TASK_LATE_DAYS = 3;
+export const DECK_WARN_DAYS = 2; // 報告日前 2 天，講者還沒看過簡報就提醒
 
 const students = (q) => (q.members || []).filter((m) => m.role !== 'teacher').map((m) => m.u);
 const idleDays = (q, now) => (q.lastAt ? Math.floor((now - q.lastAt) / DAY) : 0);
@@ -99,12 +102,20 @@ export function nudgeChecks(q, now = Date.now()) {
       if (!q.sids[u]) out.push({ id: `sid-${u}`, kind: 'sidMissing', to: [u], due: null, teacher: `${(q.names || {})[u] || '有組員'}還沒有填學號`, student: '這門課要求填寫學號，請到個人檔案設定填寫', tab: 'profile' });
     }
   }
+  // 講者未看簡報：報告日前 2 天內（含當天），簡報已完成（有報告連結），講者還沒按「已看過」
+  const td = daysUntil(q.talkDate, now);
+  if (q.reportUrl && td !== null && td >= 0 && td <= DECK_WARN_DAYS) {
+    const sp = [...new Set((q.tasks || []).filter((t) => t.type === 'present' && t.assignee && students(q).includes(t.assignee)).map((t) => t.assignee))];
+    for (const u of sp) {
+      if (!deckSeen(q.tasks, u, q.reportUrl)) out.push({ id: `deck-${u}`, kind: 'deckUnseen', to: [u], due: q.talkDate, teacher: `${(q.names || {})[u] || '講者'}還沒有看過簡報`, student: '報告前請先看過小組簡報，並在排演室按「已看過」', tab: 'rehearsal' });
+    }
+  }
   if (q.hasAssignments && !q.assignmentId && q.ownerUid) out.push({ id: 'unselected', kind: 'unselected', to: [q.ownerUid], due: null, teacher: '還沒有選作業', student: '還沒有選這份研究屬於哪一個作業', tab: 'settings' });
   return out;
 }
 
 // ---------------- 學生端 S1 ----------------
-const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定', profile: '去填寫', rubric: '看配比' };
+const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定', profile: '去填寫', rubric: '看配比', rehearsal: '去排演' };
 const WAIT_STEPS = { 1: '確認理解', 4: '確認策略' }; // 研究狀態七步驟中，停下來等學生確認的兩步
 
 /**
@@ -138,6 +149,9 @@ export function studentTodos(projects, { me, seen = {}, now = Date.now() } = {})
     for (const t of q.tasks || []) {
       if (t.assignee === me && !t.done && !nudged.has(`task-${t.id}`)) add(q, 'task', t.id, `我的分工：${t.title}`, t.due, { tab: 'team' });
     }
+    // 講者待看簡報：我被指派上台報告、簡報已完成（有報告連結），我還沒按「已看過」（老師提醒過就只顯示提醒）
+    const speaking = (q.tasks || []).some((t) => t.type === 'present' && t.assignee === me);
+    if (speaking && q.reportUrl && !deckSeen(q.tasks, me, q.reportUrl) && !nudged.has(`deck-${me}`)) add(q, 'deck', '', '簡報完成了，上台前請先看過', q.talkDate || null, { tab: 'rehearsal' });
     // 評分配比：老師新增或修改後（版本比我上次看過的新）
     const rv = q.rubric && Number(q.rubric.ver) || 0;
     if (rv > (Number(sn.rubric) || 0)) {

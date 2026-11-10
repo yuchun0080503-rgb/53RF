@@ -15,6 +15,10 @@ const MIN_LEVEL = {
   proposeQuestion: 2,
   summarizeEvidence: 3,
   slideOutline: 3,
+  // 排演室（提示詞在 functions/rehearsal.js，由伺服器組）：報告流程／交接卡／問答分工與互動題 Level 2，講稿大綱 Level 3
+  rehearsalFlow: 2,
+  rehearsalInteraction: 2,
+  rehearsalOutline: 3,
   generateReport: Infinity,
 };
 
