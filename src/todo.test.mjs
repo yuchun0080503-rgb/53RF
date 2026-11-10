@@ -211,3 +211,18 @@ test('學號未填：課程必填時，沒有學號的學生各一項（只提�
   assert.deepEqual(b.map((x) => [x.kind, x.act.tab, x.btn]), [['nudge', 'profile', '去填寫']]);
   assert.deepEqual(studentTodos([{ ...n, sids: { ...n.sids, B: 'B1234' } }], { me: 'B', now: NOW }), []);
 });
+
+test('評分配比：學生端在老師新增或修改後出現（第 1 版「公布」、之後「更新」並附日期），看過就消失', () => {
+  const r1 = { ver: 1, at: NOW - DAY }, r2 = { ver: 2, at: Date.parse('2026-11-09T10:00:00+08:00') };
+  assert.deepEqual(studentTodos([proj({ rubric: r1 })], { me: 'V', now: NOW }).map((x) => [x.kind, x.reason, x.act.tab, x.btn]), [['rubric', '老師公布了評分配比', 'rubric', '看配比']]);
+  assert.equal(studentTodos([proj({ rubric: r2 })], { me: 'A', now: NOW, seen: { p1: { rubric: 1 } } })[0].reason, '老師於 11/9 更新了評分配比');
+  assert.deepEqual(studentTodos([proj({ rubric: r2 })], { me: 'A', now: NOW, seen: { p1: { rubric: 2 } } }), []);
+  assert.deepEqual(studentTodos([proj()], { me: 'A', now: NOW }), []);
+});
+
+test('老師待辦 A：作業或課程還沒有設定評分配比，前往該作業的評分配比', () => {
+  const r = { ver: 1, items: [{ name: 'A', pct: 100 }] };
+  const t = teacherTodos({ courses: [course({ assignments: [{ id: 'a1', title: '期中', due: '2026-12-01', rubric: r }, { id: 'a2', title: '期末', due: '2027-01-10' }] }), course({ id: 'c2' })], now: NOW });
+  assert.deepEqual(t.filter((x) => x.kind === 'noRubric').map((x) => [x.reason, x.act.rubric]), [['作業「期末」還沒有設定評分配比', 'a2'], ['課程還沒有設定評分配比', '']]);
+  assert.equal(teacherTodos({ courses: [course({ rubric: r })], now: NOW }).filter((x) => x.kind === 'noRubric').length, 0);
+});

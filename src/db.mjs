@@ -362,7 +362,7 @@ export function subscribeMyCourses(uid, onChange, onError) {
 // 改課程設定；改了期限的話，目前的代碼一起延長／縮短
 export async function updateCourse(course, fields) {
   const clean = {};
-  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments', 'requireSid']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
+  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments', 'requireSid', 'rubric', 'rubricHist']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
   await updateDoc(doc(db, 'courses', course.id), clean);
   if (clean.codeExpires && course.code && clean.codeExpires !== course.codeExpires) await updateDoc(doc(db, 'courseCodes', course.code), { expiresAt: codeExpiry(clean.codeExpires) });
 }
@@ -382,6 +382,10 @@ export async function resetCourseCode(course, uid) {
 }
 
 // 學生端讀課程設定（指定閱讀、可信任資料庫）：任何登入者都能用 id 讀單一課程
+// 學生端即時讀課程設定：老師改了評分配比、指定閱讀，學生不用重新整理就看得到（待辦也會出現）
+export function subscribeCourse(id, onChange, onError) {
+  return onSnapshot(doc(db, 'courses', id), (s) => onChange(s.exists() ? { id: s.id, ...s.data() } : null), onError);
+}
 export async function getCourse(id) {
   const s = await getDoc(doc(db, 'courses', id));
   return s.exists() ? { id: s.id, ...s.data() } : null;

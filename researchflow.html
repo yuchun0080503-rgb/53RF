@@ -258,6 +258,14 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .tdr.snz{opacity:.45}
 .tdmore{margin-top:8px;font-size:13px}.tdempty{margin:8px 0 0}
 .tdwrap{grid-column:1/-1;min-width:0}.tdwrap .todo{margin:0}
+/* 評分配比：橫條圖（學生端與老師端預覽共用） */
+.rbars{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+.rbh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.rbh b{font-size:15px}.rbh .pct{margin-left:auto;font:600 18px/1 ui-monospace,Menlo,monospace}
+.rbt{height:12px;border-radius:6px;background:var(--soft);overflow:hidden;margin:6px 0 4px}.rbt i{display:block;height:100%;background:var(--ac);border-radius:6px}
+.rbe{display:grid;grid-template-columns:minmax(0,1fr) 76px 118px 36px;gap:6px;align-items:center;margin-top:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}.rbe input,.rbe select{margin:0;min-width:0}.rbe .rbd{grid-column:1/-1}
+.rbsum{margin-top:12px;font-weight:600}.rbsum.bad{color:var(--bad)}.rbsum.ok{color:var(--ok)}
+.rbtpl{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.rbtpl button{font-size:13px;padding:4px 12px}
+@media(max-width:560px){.rbe{grid-template-columns:minmax(0,1fr) 70px 36px}.rbe select{grid-column:1/3}}
 @media(max-width:860px){.ttab th{white-space:nowrap}.ttab td.sm{min-width:150px}}
 @media(max-width:640px){.tdr{flex-wrap:wrap;padding-left:0}.tdn{max-width:calc(100% - 20px)}.tdw{flex-basis:calc(100% - 20px);margin-left:17px}.tda{width:100%;justify-content:flex-end}}
 </style>
@@ -317,7 +325,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 
 <section id="v-ws" class="hide"><div id="ws">
   <div class="cv">
-    <div class="pbar"><button id="back"><i data-i="back"></i>返回</button><b id="pt"></b><span class="tag" id="pst"></span><span class="tag" id="rolelab"></span><span class="tag" id="pmode"></span><span class="tag" id="aimodel"></span><span class="sp"></span><span id="pres" class="stack"></span><button id="fbb" class="hide"><i data-i="clip"></i><span id="fbbt">老師回饋</span></button><button id="rdb" class="hide"><i data-i="folder"></i><span id="rdbt">指定閱讀</span></button><button id="rpt"><i data-i="ext"></i>小組報告</button><button id="cfg"><i data-i="gear"></i>研究檔案</button></div>
+    <div class="pbar"><button id="back"><i data-i="back"></i>返回</button><b id="pt"></b><span class="tag" id="pst"></span><span class="tag" id="rolelab"></span><span class="tag" id="pmode"></span><span class="tag" id="aimodel"></span><span class="sp"></span><span id="pres" class="stack"></span><button id="fbb" class="hide"><i data-i="clip"></i><span id="fbbt">老師回饋</span></button><button id="rdb" class="hide"><i data-i="folder"></i><span id="rdbt">指定閱讀</span></button><button id="rbb" class="hide"><i data-i="target"></i>評分配比</button><button id="rpt"><i data-i="ext"></i>小組報告</button><button id="cfg"><i data-i="gear"></i>研究檔案</button></div>
     <div class="cvw" id="cvw">
       <div class="tools" role="toolbar" aria-label="畫布工具">
         <button id="undo" title="返回上一個操作 (Ctrl+Z)" aria-label="返回上一個操作"><i data-i="undo"></i></button><button id="redo" title="取消返回 (Ctrl+Shift+Z)" aria-label="取消返回"><i data-i="redo"></i></button><span class="vr"></span>
@@ -345,7 +353,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-3";
+window.RF_VER = "2026.11.10-4";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -355,6 +363,7 @@ try { window.RFCOURSE = await import("./src/course.mjs"); } catch (err) { consol
 try { window.RFSRC = await import("./src/searchLogic.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 待辦列表（學生端與老師端共用的判斷、緊急程度顏色、排序、稍後提醒）
+try { window.RFRUB = await import("./src/rubric.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 rubric.mjs：", err?.message || err); }
 try { window.RFTODO = await import("./src/todo.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 todo.mjs：", err?.message || err); }
 // AI：Claude（經 Firebase Cloud Function 代理，見 functions/index.js）。登入後關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒登入或後端不可用就用規則式。
 try { window.RFLLM = await import("./src/llm.mjs"); window.RFAI = await import("./src/agent-llm.mjs"); window.RFLLM.detect().then(() => window.dispatchEvent(new Event("rf:llm"))); } catch (err) { console.info("[ResearchFlow] 無法載入 AI 模組：", err?.message || err); }
@@ -702,7 +711,10 @@ function attachLiveProjects(){
    // 沿用同一個本地 project 物件（畫布、Agent 狀態、復原歷史都掛在上面），只更新來自 Firestore 的欄位
    const q=projects.find(x=>x.fid===d.id)||mkP({fid:d.id,ver:0,objs:[]});
    // 老師回饋：學生的研究清單與畫布上方都會顯示，所以清單載入時就訂閱
-   if(d.courseId&&!courseCache[d.courseId]&&RFDB.getCourse){courseCache[d.courseId]={id:d.courseId};RFDB.getCourse(d.courseId).then(c=>{if(c){courseCache[d.courseId]=c;if(p&&p.courseId===d.courseId&&!$("#v-ws").classList.contains("hide"))fbChip()}}).catch(()=>{delete courseCache[d.courseId]})}
+   // 課程設定即時訂閱（老師改了評分配比、指定閱讀，學生不用重新整理）；舊版資料層沒有 subscribeCourse 時讀一次
+   if(d.courseId&&!courseCache[d.courseId]){courseCache[d.courseId]={id:d.courseId};const got=c=>{if(c){courseCache[d.courseId]=c;todoTick();if(p&&p.courseId===d.courseId&&!$("#v-ws").classList.contains("hide"))fbChip()}};
+    if(RFDB.subscribeCourse)RFDB.subscribeCourse(d.courseId,got,err=>{console.warn("[ResearchFlow] 讀取課程設定失敗：",err);delete courseCache[d.courseId]});
+    else if(RFDB.getCourse)RFDB.getCourse(d.courseId).then(got).catch(()=>{delete courseCache[d.courseId]})}
    if(!q._unsubFb&&RFDB.subscribeFeedback)q._unsubFb=RFDB.subscribeFeedback(d.id,rows=>{q.fb=rows;renderProj();todoTick();if(p===q&&!$("#v-ws").classList.contains("hide"))fbChip()},err=>console.error("[ResearchFlow] 讀取老師回饋失敗：",err));
    return Object.assign(q,{ownerUid:d.ownerUid||"",gradedAt:d.gradedAt?.toMillis?d.gradedAt.toMillis():0,mode:d.searchMode||"",name:d.name,course:d.course||"",courseId:d.courseId||"",groupName:d.groupName||"",assignmentId:d.assignmentId||"",assignmentTitle:d.assignmentTitle||"",req:d.teacherReq||"",due:d.dueDate||"",field:d.field||"",reportType:d.reportType||"",reportUrl:d.reportUrl||"",
     LV:Number.isInteger(d.aiLevel)?d.aiLevel:2,members:mem.map(m=>({u:m.uid,role:CAP(m.role),duty:m.task||""}))});
@@ -1008,7 +1020,8 @@ const AIN=()=>window.RFLLM?RFLLM.modelLabel():"";
 window.RF_AI_PROJECT=()=>p&&p.fid||"";
 // 畫布上方的「老師回饋」：有回饋才出現，點開看全部
 function fbChip(){const b=$("#fbb");if(!b||!p)return;const n=(p.fb||[]).length;b.classList.toggle("hide",!n);$("#fbbt").textContent="老師回饋（"+n+"）";
- const r=$("#rdb"),m=readingsOf(p).length;r.classList.toggle("hide",!m);$("#rdbt").textContent="指定閱讀（"+m+"）"}
+ const r=$("#rdb"),m=readingsOf(p).length;r.classList.toggle("hide",!m);$("#rdbt").textContent="指定閱讀（"+m+"）";
+ $("#rbb").classList.toggle("hide",!rubricOfP(p))}
 // 老師指定閱讀：可以打開原文，也可以加到畫布（標成「證據」，之後跟 Agent 找到的文獻一樣由小組判讀）
 $("#rdb").onclick=()=>{markSeen(p,{rd:readingsOf(p).map(rdKey)});const d=$("#pd"),rs=readingsOf(p),onCv=r=>p.objs.some(o=>o.type==="text"&&o.rd===(r.url||r.title));
  d.innerHTML=`<h2>指定閱讀</h2><p class="sm mute" style="margin:6px 0 0">老師為這門課指定的閱讀資料。加到畫布後會標成「證據」，由你們閱讀後判斷它支持或反駁哪個主張。</p>
@@ -1671,7 +1684,7 @@ function openCourse(c){const d=$("#pd"),isNew=!c,v=c||{name:"",teacherReq:"",due
  $("#ks").onclick=async()=>{const srcs=[...d.querySelectorAll("[data-src]")].filter(x=>x.checked).map(x=>x.dataset.src),zhs=[...d.querySelectorAll("[data-zh]")].filter(x=>x.checked).map(x=>x.dataset.zh);
   const f={name:$("#k1").value.trim(),teacherReq:$("#k2").value.trim(),dueDate:$("#k3").value,codeExpires:$("#k5").value||SEM_END,defaultAiLevel:+$("#k4").value,
    sources:srcs.length?srcs:null,zhLinks:zhs,readings:parseReadings($("#k7").value),requireSid:!!$("#k8")?.checked,
-   assignments:[...d.querySelectorAll("#kas [data-aid]")].map(r=>({id:r.dataset.aid,title:r.querySelector("[data-at]").value.trim(),req:r.querySelector("[data-ar]").value.trim(),due:r.querySelector("[data-ad]").value,groupCount:Math.max(0,Math.min(40,+r.querySelector("[data-ag]").value||0))})).filter(a=>a.title),
+   assignments:[...d.querySelectorAll("#kas [data-aid]")].map(r=>({...keepRubric(c,r.dataset.aid),id:r.dataset.aid,title:r.querySelector("[data-at]").value.trim(),req:r.querySelector("[data-ar]").value.trim(),due:r.querySelector("[data-ad]").value,groupCount:Math.max(0,Math.min(40,+r.querySelector("[data-ag]").value||0))})).filter(a=>a.title),
    groupCount:Math.max(0,Math.min(40,+$("#k8").value||0))}; // sources 為 null：交給系統依領域自動挑
   if(!f.name){alert("請填課程名稱。");$("#k1").focus();return}
   if(Date.parse(f.codeExpires+"T23:59:59+08:00")<Date.now()){alert("代碼有效期限不能早於今天。");$("#k5").focus();return}
@@ -1708,6 +1721,61 @@ function drawMini(c,q){if(!c)return;const d=devicePixelRatio||1,w=c.clientWidth,
   else if(o.type==="img")paintImg(x,o,col);
   else if(o.type==="audio")paintAudio(x,o,col);
   else{x.strokeStyle=col;x.lineWidth=o.w;x.beginPath();o.pts.forEach((k,i)=>i?x.lineTo(k[0],k[1]):x.moveTo(k[0],k[1]));x.stroke()}}}
+/* ---------------- 評分配比（T1；驗證與版本在 src/rubric.mjs） ---------------- */
+// 這份研究適用的評分配比（作業的或課程的）；沒有就是 null
+function rubricOfP(q){if(!q||!window.RFRUB)return null;return RFRUB.rubricFor(courseOfP(q),q.assignmentId).rubric}
+function rubricHistOfP(q){return q&&window.RFRUB?RFRUB.rubricFor(courseOfP(q),q.assignmentId).rubricHist:[]}
+// 課程設定重新組作業清單時，保留每份作業原本的評分配比
+function keepRubric(c,aid){const o=asgOf(c).find(x=>x.id===aid);return o&&o.rubric?{rubric:o.rubric,rubricHist:o.rubricHist||[]}:{}}
+const mdOf=t=>t?new Date(t).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"}):"";
+// 橫條圖：名稱、配比、適用對象、一句說明
+function rubricBars(items){return `<div class="rbars">${items.map(it=>`<div class="rbar"><div class="rbh"><b>${esc(it.name||"（未命名）")}</b><span class="tag">${esc(RFRUB.TARGETS[it.to]||RFRUB.TARGETS.all)}</span><span class="pct">${+it.pct||0}%</span></div><div class="rbt"><i style="width:${Math.max(0,Math.min(100,+it.pct||0))}%"></i></div>${it.desc?`<div class="sm mute">${esc(it.desc)}</div>`:""}</div>`).join("")}</div>`}
+// 學生端（老師也可以看）：這份研究的評分配比
+function openRubricView(q){const r=rubricOfP(q),d=$("#pd");if(!r)return;const hist=rubricHistOfP(q),ok=RFRUB.isValidRubric(r),diff=hist[0]?RFRUB.diffRubric(hist[0],r):[];
+ if(!isT())markSeen(q,{rubric:r.ver});
+ d.innerHTML=`<h2>評分配比</h2><p class="sm mute" style="margin:6px 0 0">${esc(q.assignmentTitle||q.course||"")}．老師評分時看重的項目與比例。</p>
+  ${r.ver>1?`<p class="advice">${I("clock")}老師於 ${esc(mdOf(r.at))} 更新評分配比（第 ${r.ver} 版）${diff.length?"：<span class=mute>"+esc(diff.join("；"))+"</span>":""}</p>`:""}
+  ${ok?rubricBars(r.items):`<p class="cstat bad">配比設定有誤（合計不是 100%），請洽老師。</p>`}
+  ${hist.length?`<details style="margin-top:16px"><summary class="sm">舊版本（${hist.length}）</summary>${hist.map(h=>`<div class="box sm"><b>第 ${h.ver} 版</b>．${esc(mdOf(h.at))}<div class="mute">${(h.items||[]).map(x=>esc(x.name)+" "+x.pct+"%").join("、")}</div></div>`).join("")}</details>`:""}
+  <div class="acts" style="justify-content:flex-end;margin-top:18px"><button class="pri" id="rbc">關閉</button></div>`;
+ $("#rbc").onclick=()=>d.close();d.showModal()}
+$("#rbb").onclick=()=>openRubricView(p);
+// 老師端：編輯某份作業（或課程）的評分配比。合計要剛好 100% 才能儲存；內容有改才會產生新版本、舊版本保留。
+function openRubricEdit(c,aid){if(!c||!window.RFRUB)return;const d=$("#pd"),asg=asgOf(c);
+ if(asg.length&&!asg.some(a=>a.id===aid))aid=asg[0].id;
+ const src=()=>asg.length?asg.find(a=>a.id===aid):c;
+ let rows=((src().rubric||{}).items||[]).map(x=>({...x}));
+ const sumHTML=()=>{const k=RFRUB.checkRubric(rows);return `<div class="rbsum ${k.ok?"ok":"bad"}" id="rbs" aria-live="polite">${k.ok?"合計 100%，可以儲存":esc(k.errors[0])}</div>`};
+ const rowHTML=(r,i)=>`<div class="rbe" data-ri="${i}"><input data-f="name" value="${esc(r.name||"")}" maxlength="${RFRUB.NAME_MAX}" placeholder="評分項目" aria-label="第 ${i+1} 項名稱"><input data-f="pct" type="number" min="1" max="100" step="1" value="${r.pct??""}" aria-label="第 ${i+1} 項配比（%）" placeholder="%"><select data-f="to" aria-label="第 ${i+1} 項適用對象">${Object.entries(RFRUB.TARGETS).map(([k,n])=>`<option value="${k}" ${k===(r.to||"all")?"selected":""}>${n}</option>`).join("")}</select><button data-rx="${i}" aria-label="刪除第 ${i+1} 項" title="刪除">${I("trash")}</button><input class="rbd" data-f="desc" value="${esc(r.desc||"")}" maxlength="${RFRUB.DESC_MAX}" placeholder="一句說明：老師想看到什麼" aria-label="第 ${i+1} 項說明"></div>`;
+ const draw=()=>{const cur=src().rubric,hist=src().rubricHist||[];
+  d.innerHTML=`<h2>評分配比：${esc(c.name)}</h2>
+   ${asg.length?`<label for="rba">作業</label><select id="rba">${asg.map(a=>`<option value="${esc(a.id)}" ${a.id===aid?"selected":""}>${esc(a.title)}${a.rubric?"":"（未設定）"}</option>`).join("")}</select>`:""}
+   <p class="sm mute" style="margin:8px 0 0">${cur?`目前是第 ${cur.ver} 版（${esc(mdOf(cur.at))}）。修改後會保留舊版本，學生會看到「老師更新評分配比」。`:"還沒有設定。儲存後學生的研究頁會出現「評分配比」，待辦也會提醒他們看。"}${hist.length?`已保留 ${hist.length} 個舊版本。`:""}</p>
+   <div class="rbtpl"><span class="sm mute" style="align-self:center">套用範本：</span>${RFRUB.TEMPLATES.map(t=>`<button data-tpl="${t.id}">${esc(t.name)}</button>`).join("")}</div>
+   <div id="rbrows">${rows.map(rowHTML).join("")}</div>
+   <div class="acts" style="margin-top:8px"><button id="rbadd" ${rows.length>=RFRUB.MAX_ITEMS?"disabled":""}>${I("plus")}新增項目</button></div>
+   ${sumHTML()}
+   <h3 style="margin:18px 0 0">學生看到的樣子</h3><div id="rbpv">${rubricBars(rows)}</div>
+   <div class="acts" style="justify-content:flex-end;margin-top:20px"><button id="rbcx">取消</button><button class="pri" id="rbsv">儲存</button></div>`;
+  bind()};
+ const upd=()=>{$("#rbs").outerHTML=sumHTML();$("#rbpv").innerHTML=rubricBars(rows);$("#rbsv").disabled=!RFRUB.checkRubric(rows).ok};
+ const bind=()=>{
+  d.querySelectorAll(".rbe [data-f]").forEach(el=>el.oninput=el.onchange=()=>{const i=+el.closest(".rbe").dataset.ri,f=el.dataset.f;rows[i][f]=f==="pct"?(el.value===""?"":+el.value):el.value;upd()});
+  d.querySelectorAll("[data-rx]").forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.rx,1);draw()});
+  d.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=async()=>{const t=RFRUB.TEMPLATES.find(x=>x.id===b.dataset.tpl);if(rows.length&&!(await ask("套用「"+t.name+"」會取代目前填的項目，確定嗎？")))return;rows=t.items.map(x=>({...x}));draw()});
+  $("#rbadd").onclick=()=>{rows.push({name:"",pct:"",desc:"",to:"all"});draw();const n=d.querySelectorAll('.rbe [data-f="name"]');n[n.length-1]?.focus()};
+  const sel=$("#rba");if(sel)sel.onchange=()=>{aid=sel.value;rows=((src().rubric||{}).items||[]).map(x=>({...x}));draw()};
+  $("#rbcx").onclick=()=>d.close();
+  $("#rbsv").disabled=!RFRUB.checkRubric(rows).ok;
+  $("#rbsv").onclick=async()=>{const n=RFRUB.nextRubric(src(),rows,Date.now());
+   if(n.errors){alert(n.errors.join("\n"));return}
+   if(!n.changed){d.close();return}
+   const b=$("#rbsv");b.disabled=true;b.textContent="儲存中…";
+   const fields=asg.length?{assignments:asg.map(a=>a.id===aid?{...a,rubric:n.rubric,rubricHist:n.rubricHist}:a)}:{rubric:n.rubric,rubricHist:n.rubricHist};
+   try{if(LIVE())await RFDB.updateCourse(c,fields);Object.assign(c,fields);d.close();tLast="";renderTeach()}
+   catch(err){alert("儲存評分配比失敗："+(err?.message||err));b.disabled=false;b.textContent="儲存"}}};
+ draw();d.showModal()}
+
 /* ---------------- 待辦列表（學生端 S1、老師端 T2；判斷與排序在 src/todo.mjs） ---------------- */
 const pidOf=q=>q.fid||q.id||q.name;
 const rdKey=r=>r.url||r.title;
@@ -1716,7 +1784,7 @@ function todoProj(q){const c=courseOfP(q);
  return {id:pidOf(q),name:q.name,groupName:q.groupName||"",ownerUid:q.ownerUid||(q.members.find(m=>m.role==="Owner")||{}).u||"",due:q.due||"",reportUrl:q.reportUrl||"",gradedAt:q.gradedAt||0,step:(q.S||{}).step||0,
   members:q.members.map(m=>({u:m.u,role:String(m.role||"").toLowerCase()})),lastAt:Math.max(0,...(q.trace||[]).map(t=>t.at||0)),
   fb:q.fb||[],pins:q.pins||[],readings:readingsOf(q).map(rdKey),tasks:q.tasks||[],nudges:q.nudges||[],trace:q.trace||[],hasAssignments:asgOf(c).length>0,assignmentId:q.assignmentId||"",
-  requireSid:!!(c&&c.requireSid),names:Object.fromEntries(q.members.map(m=>[m.u,(U[m.u]||{}).n||""])),
+  requireSid:!!(c&&c.requireSid),rubric:(r=>r?{ver:r.ver,at:r.at}:null)(rubricOfP(q)),names:Object.fromEntries(q.members.map(m=>[m.u,(U[m.u]||{}).n||""])),
   // 學號：老師端讀名冊（還沒讀到時不判斷）；學生端只知道自己的
   sids:ROLE==="t"?(rosterOf[q.courseId]?Object.fromEntries(Object.entries(rosterOf[q.courseId]).map(([u,r])=>[u,r.sid])):undefined):(myUser.loaded?{[ME]:myUser.sid}:undefined)}}
 // 每一份研究的待辦資料（研究狀態、歷程、分工、留言、老師提醒）在主頁就要訂閱
@@ -1758,12 +1826,13 @@ function bindTodo(root,items,role){const by=k=>items.find(x=>x.key===k);
 function goTodoS(it){const i=projects.findIndex(q=>pidOf(q)===it.pid);if(i<0)return;const tab=it.act.tab;
  if(tab==="settings"){openPD(i);return}
  if(tab==="profile"){openPF(courseOfP(projects[i])?.name||"");return}
+ if(tab==="rubric"){openWs(i);setTimeout(()=>openRubricView(projects[i]),60);return}
  openWs(i);
  setTimeout(()=>{if(tab==="feedback")$("#fbb").click();else if(tab==="readings")$("#rdb").click();else if(tab==="pin"&&it.act.id)goPin(it.act.id);
   else if(tab==="team"){const b=document.querySelector('.tabs button[data-p="team"]');if(b)b.click()}},60)}
 // 老師端「前往」：課程設定、某一組的頁面（報告、歷程）或畫布上的留言
 function goTodoT(it){const a=it.act;
- if(a.course){const c=courses.find(x=>x.id===a.course);if(!c)return;tCourse=c.id;tAsg="";tLast="";renderTeach();openCourse(c);return}
+ if(a.course){const c=courses.find(x=>x.id===a.course);if(!c)return;tCourse=c.id;tAsg="";tLast="";renderTeach();if("rubric" in a)openRubricEdit(c,a.rubric);else openCourse(c);return}
  const q=projects.find(x=>pidOf(x)===a.group);if(!q)return;
  tCourse=courses.some(c=>c.id===q.courseId)?q.courseId:"#other";tAsg="";tSel=q;tView="group";tLv=null;tLast="";renderTeach();
  if(a.pin){openWs(projects.indexOf(q));setTimeout(()=>goPin(a.pin),80);return}
@@ -1793,7 +1862,7 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
  const off=cur&&(cur.codeActive===false||codeExpired(cur));
  const codeBox=cur?`<div class="tcode ${off?"off":""}"><div class="sm mute">課程代碼・學生建立研究時輸入</div><div class="cd">${esc(cur.code||"產生中…")}</div>
    <div class="sm ${off?"idle":"mute"}">${cur.codeActive===false?"已停用：學生不能再用這組代碼加入":codeExpired(cur)?"已過期（"+cur.codeExpires+"）：到「課程設定」延長期限":"有效到 "+cur.codeExpires+"・新研究從 AI 權限 Level "+cur.defaultAiLevel+" 開始"}</div>
-   <div class="acts"><button id="tcopy">${I("copy")}複製</button><button id="tact">${cur.codeActive===false?"重新啟用":"停用"}</button><button id="tqr">QR code</button><button id="treset">換新代碼</button><button id="tedit">${I("gear")}課程設定</button></div></div>`:"";
+   <div class="acts"><button id="tcopy">${I("copy")}複製</button><button id="tact">${cur.codeActive===false?"重新啟用":"停用"}</button><button id="tqr">QR code</button><button id="treset">換新代碼</button><button id="tedit">${I("gear")}課程設定</button><button id="trub">${I("target")}評分配比</button></div></div>`:"";
  const side=`<aside class="tside"><div class="tcrow"><label for="tcs">課程</label><button id="tnew">${I("plus")}建立課程</button></div><select id="tcs" ${opts.length?"":"disabled"}>${opts.map(o=>`<option value="${esc(o.k)}" ${o.k===tCourse?"selected":""}>${esc(o.n)}</option>`).join("")||"<option>還沒有課程</option>"}</select>
   ${codeBox}${asg.length?`<label for="tas" style="margin-top:14px">作業</label><select id="tas"><option value="">全部作業</option>${asg.map(a=>`<option value="${esc(a.id)}" ${a.id===tAsg?"selected":""}>${esc(a.title)}${a.due?"（截止 "+esc(a.due)+"）":""}</option>`).join("")}<option value="#none" ${tAsg==="#none"?"selected":""}>還沒選作業的組</option></select>`:""}<div class="tlab">各組研究${cur||tCourse==="#other"?`（${list.length} 組）`:""}</div>
   ${list.length?`<button class="tgrp ${tView==="all"?"on":""}" id="tall"><b>全班總覽</b><span>各組並排・匯出 CSV</span></button>`:""}${list.map(q=>{const idle=tIdle(q);return `<button class="tgrp ${q===tSel?"on":""}" data-tg="${projects.indexOf(q)}"><b>${gl(q)}・${esc(q.name)}</b><span class="${idle>=3?"idle":""}">${STAGES[q.S.step]||STAGES[0]}・${idle>=3?idle+" 天無更新":"Level "+q.LV+"・Agent "+tAgentN(q)+" 次"}</span></button>`}).join("")
@@ -1849,6 +1918,7 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
   if(cur){
    $("#tcopy").onclick=()=>{try{navigator.clipboard.writeText(cur.code)}catch(e){}$("#tcopy").textContent="已複製"};
    $("#tedit").onclick=()=>openCourse(cur);
+   $("#trub").onclick=()=>openRubricEdit(cur,tAsg&&tAsg!=="#none"?tAsg:(asgOf(cur)[0]||{}).id||"");
    // QR code：學生用手機相機掃，會打開網站並自動填好課程代碼（適合上課時投影）
    $("#tqr").onclick=()=>{const d=$("#pd"),url=joinUrl(cur.code);let svg="";
     try{const q=RFQR(0,"M");q.addData(url);q.make();svg=q.createSvgTag({cellSize:8,margin:2,alt:"課程代碼 QR code"})}catch(e){svg='<p class="cstat bad">QR code 產生失敗，請改用 6 碼代碼。</p>'}
