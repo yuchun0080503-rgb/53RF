@@ -56,6 +56,33 @@ export const modelLabel = (name = state.textModel || state.model) => {
  * @param {number} [o.timeout] 毫秒（後端上限約 60 秒）
  * @returns {Promise<object>} 解析後的 JSON
  */
+/**
+ * 由伺服器組提示詞的動作（排演室）：網頁只送資料（input），提示詞、輸出格式、輸出整理都在後端（functions/rehearsal.js）。
+ * @returns {Promise<object>} 後端整理過的結果
+ */
+export async function serverJSON({ action, input, timeout = 55000 }, fetchImpl = fetch) {
+  if (!action) throw new Error('缺少 Agent 動作（action），後端會拒絕');
+  const st = await detect();
+  if (!st.ok) throw new Error(st.reason);
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
+  let res;
+  try {
+    res = await fetchImpl(endpoint(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await getToken()) },
+      body: JSON.stringify({ action, tier: 'text', input, projectId: String((typeof globalThis.RF_AI_PROJECT === 'function' ? globalThis.RF_AI_PROJECT() : globalThis.RF_AI_PROJECT) || '') }),
+      signal: ctl.signal,
+    });
+  } catch (err) {
+    throw new Error(err?.name === 'AbortError' ? 'AI 回應逾時' : '連不上 AI 後端：' + (err?.message || err));
+  } finally { clearTimeout(t); }
+  if (!res.ok) throw new Error(`AI 後端回應 ${res.status}：${(await res.text()).slice(0, 200)}`);
+  const body = await res.json();
+  if (!body || typeof body.data !== 'object' || body.data === null) throw new Error('模型沒有照格式回答');
+  if (body.model) state = { ...state, model: body.model, textModel: body.model };
+  return body.data;
+}
+
 export async function chatJSON({ action, system, user, images, schema, maxTokens = 900, timeout = 55000 }, fetchImpl = fetch) {
   if (!action) throw new Error('缺少 Agent 動作（action），後端會拒絕');
   const st = await detect();

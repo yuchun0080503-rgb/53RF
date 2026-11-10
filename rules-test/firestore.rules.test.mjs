@@ -149,3 +149,31 @@ test('學號：users 文件上的學號也要符合格式', async () => {
   await assertSucceeds(setDoc(doc(as('A'), 'users', 'A'), { sid: '' }, { merge: true }));
   await assertFails(setDoc(doc(as('A'), 'users', 'A'), { sid: 'b1' }, { merge: true }));
 });
+
+// ---------------- 排演室 ----------------
+test('講者「已看過簡報」：只有任務負責人本人能記，時間要是伺服器時間；別人不能代按', async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'projects', PID, 'tasks', 'tp'), { title: '上台', type: 'present', assigneeUid: 'B', createdBy: 'A', done: false }));
+  const t = (u) => doc(as(u), 'projects', PID, 'tasks', 'tp');
+  await assertSucceeds(updateDoc(t('B'), { seenUrl: 'https://docs.google.com/x', seenAt: serverTimestamp() }));
+  await assertFails(updateDoc(t('A'), { seenUrl: 'https://docs.google.com/x', seenAt: serverTimestamp() }));
+  await assertFails(updateDoc(t('T'), { seenUrl: 'https://docs.google.com/x', seenAt: serverTimestamp() }));
+  await assertFails(updateDoc(t('B'), { seenUrl: 'https://docs.google.com/x', seenAt: Timestamp.fromMillis(0) }));
+  await assertFails(updateDoc(t('B'), { seenUrl: 'https://x', seenAt: serverTimestamp(), title: '改名' }));
+});
+
+test('排演室結果（researchState/rehearsal）：Owner／Editor 可以存，Viewer 與老師不行，組員都看得到', async () => {
+  const r = (u) => doc(as(u), 'projects', PID, 'researchState', 'rehearsal');
+  const data = (u) => ({ json: '{}', updatedBy: u, updatedAt: serverTimestamp() });
+  await assertSucceeds(setDoc(r('B'), data('B')));
+  await assertFails(setDoc(r('V'), data('V')));
+  await assertFails(setDoc(r('T'), data('T')));
+  await assertSucceeds(getDoc(r('V')));
+  await assertSucceeds(getDoc(r('T')));
+  await assertFails(setDoc(doc(as('B'), 'projects', PID, 'researchState', 'other'), data('B')));
+});
+
+test('老師給排演室的要求：存成 feedback（kind: rehearsal），只有老師能寫', async () => {
+  const f = (u) => ({ text: '提高台下互動', uid: u, by: '王老師', kind: 'rehearsal', at: serverTimestamp() });
+  await assertSucceeds(addDoc(collection(as('T'), 'projects', PID, 'feedback'), f('T')));
+  await assertFails(addDoc(collection(as('A'), 'projects', PID, 'feedback'), f('A')));
+});

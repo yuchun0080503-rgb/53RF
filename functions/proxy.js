@@ -4,6 +4,7 @@
 // 要換模型只改下面的 MODELS：文字步驟（text）與手寫辨識（ink）分開設定，之後想讓手寫改用 Sonnet 只要改 ink 那一行。
 
 const { MIN_LEVEL, levelOf, isAction } = require('./actions');
+const rehearsal = require('./rehearsal');
 
 const MODELS = {
   text: 'claude-haiku-5-5', // 關鍵字規劃、翻譯、文獻判讀、反思、摘要
@@ -86,8 +87,10 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, check, onUs
   if (!m) return bad(res, 401, '請先登入');
   let user;
   try { user = await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
+  // 排演室的動作：不採用網頁送來的提示詞與格式，由伺服器依資料組成（見 rehearsal.js）
+  const server = req.body && rehearsal.isServerAction(req.body.action) ? rehearsal.build(req.body.action, req.body.input) : null;
   let body;
-  try { body = buildRequest(req.body); } catch (e) { return bad(res, 400, e.message); }
+  try { body = buildRequest(server ? server.req : req.body); } catch (e) { return bad(res, 400, e.message); }
   if (check) {
     const why = await check({ uid: user && user.uid, body: req.body });
     if (why) return bad(res, why.status || 403, why.message || String(why));
@@ -104,7 +107,10 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, check, onUs
   let json;
   try { json = await r.json(); } catch (e) { return bad(res, 502, '模型沒有照格式回答'); }
   if (onUsage && json && json.usage) { try { await onUsage(json.usage); } catch { /* 記錄失敗不影響回答 */ } }
-  try { return res.json({ data: extractAnswer(json), model: body.model }); } catch (e) { return bad(res, 502, e.message); }
+  try {
+    const data = extractAnswer(json);
+    return res.json({ data: server ? rehearsal.clean(req.body.action, data, server.input) : data, model: body.model });
+  } catch (e) { return bad(res, 502, e.message); }
 }
 
 module.exports = { MODELS, LIMITS, SITE_PER_DAY, buildRequest, extractAnswer, handle, makeCheck };

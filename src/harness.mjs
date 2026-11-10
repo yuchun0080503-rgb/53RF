@@ -22,6 +22,10 @@ export const MIN_LEVEL = {
   proposeQuestion: 2, // Agent 草擬 Research Question
   summarizeEvidence: 3,
   slideOutline: 3, // 投影片文字大綱：只整理小組自己的內容與證據，結論頁不代寫（寫作助理才開放）
+  // 排演室：提示詞由伺服器組（functions/rehearsal.js），不產生逐字稿與結論
+  rehearsalFlow: 2, // 報告流程、時間配額、交接卡、問答分工
+  rehearsalInteraction: 2, // 台下問答題、互動遊戲題、開場提問
+  rehearsalOutline: 3, // 講稿大綱（每段重點，不是逐字稿）
   generateReport: Infinity,
 };
 
