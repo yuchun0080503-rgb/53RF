@@ -465,6 +465,7 @@ export async function deleteProject(projectId, uid) {
   await wipe('agentTrace');
   await wipe('tasks');
   await wipe('feedback');
+  await wipe('nudges');
   // 畫布上的圖片檔（雲端儲存）：整個資料夾刪掉
   try { const l = await listAll(sRef(storage, `projects/${projectId}/images`)); await Promise.all(l.items.map((it) => deleteObject(it))); } catch (err) { console.warn('[ResearchFlow] 刪除圖片檔失敗：', err); }
   // 老師在畫布上的留言：每則留言底下的回覆要先刪（子集合不會跟著母文件一起刪）
@@ -603,7 +604,7 @@ export function subscribeTrace(projectId, onChange, onError) {
   return onSnapshot(q, (snap) => {
     onChange(snap.docs.map((d) => {
       const data = d.data({ serverTimestamps: 'estimate' });
-      return { w: data.w, x: data.x, k: data.k, uid: data.uid, at: data.at?.toMillis ? data.at.toMillis() : Date.now() };
+      return { w: data.w, x: data.x, k: data.k, uid: data.uid, blk: data.blk === true, at: data.at?.toMillis ? data.at.toMillis() : Date.now() };
     }));
   }, onError);
 }
@@ -632,15 +633,17 @@ export function subscribeTasks(projectId, onChange, onError) {
     onChange(snap.docs.map((d) => {
       const t = d.data({ serverTimestamps: 'estimate' });
       const ms = (v) => (v?.toMillis ? v.toMillis() : 0);
-      return { id: d.id, title: t.title || '', type: t.type || 'other', assignee: t.assigneeUid || '', by: t.createdBy || '', done: !!t.done, doneBy: t.doneBy || '', doneAt: ms(t.doneAt), at: ms(t.createdAt) };
+      return { id: d.id, title: t.title || '', type: t.type || 'other', assignee: t.assigneeUid || '', by: t.createdBy || '', done: !!t.done, doneBy: t.doneBy || '', doneAt: ms(t.doneAt), at: ms(t.createdAt), due: t.due || '' };
     }));
   }, onError);
 }
 
-export async function addTask(projectId, { title, type, assignee }, uid) {
+// due（選填）：截止日 YYYY-MM-DD；逾期 3 天以上老師端會出現「提醒同學」（見 todo.mjs）
+export async function addTask(projectId, { title, type, assignee, due }, uid) {
   await addDoc(collection(db, 'projects', projectId, 'tasks'), {
     title: String(title || '').trim().slice(0, 120), type: type || 'other', assigneeUid: assignee || '',
     createdBy: uid, createdAt: serverTimestamp(), done: false, doneBy: '', doneAt: null,
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(String(due || '')) ? { due } : {}),
   });
 }
 
@@ -656,6 +659,38 @@ export async function claimTask(projectId, taskId, uid) {
 
 export async function deleteTask(projectId, taskId) {
   await deleteDoc(doc(db, 'projects', projectId, 'tasks', taskId));
+}
+
+// ---------------- 待辦列表（todo.mjs）用到的資料 ----------------
+
+// 自己的使用者文件：seen（已讀時間）與 snooze（稍後提醒），只有本人讀寫得到
+export function subscribeMyUser(uid, onChange, onError) {
+  return onSnapshot(doc(db, 'users', uid), (snap) => onChange(snap.exists() ? snap.data() : {}), onError);
+}
+// 記錄「看過了」：patch 例如 { fb: Date.now() } 或 { rd: ['https://…'] }
+export async function markSeen(uid, projectId, patch) {
+  await setDoc(doc(db, 'users', uid), { seen: { [projectId]: patch } }, { merge: true });
+}
+// 稍後提醒：整份覆蓋（呼叫端先用 todo.pruneSnooze 清掉過期的）
+export async function saveSnooze(uid, snooze) {
+  await updateDoc(doc(db, 'users', uid), { snooze });
+}
+
+// 老師提醒同學：文件 id 由事項決定（todo.mjs 的 nudgeChecks），24 小時內重複送出會被 firestore.rules 拒絕
+export function subscribeNudges(projectId, onChange, onError) {
+  return onSnapshot(collection(db, 'projects', projectId, 'nudges'), (snap) => onChange(snap.docs.map((d) => {
+    const x = d.data({ serverTimestamps: 'estimate' });
+    return { id: d.id, kind: x.kind || '', text: x.text || '', to: Array.isArray(x.to) ? x.to : [], by: x.by || '', at: x.at?.toMillis ? x.at.toMillis() : 0 };
+  })), onError);
+}
+export async function sendNudge(projectId, { id, kind, text, to }, who) {
+  await setDoc(doc(db, 'projects', projectId, 'nudges', id), { kind, text: String(text).slice(0, 200), to: to.slice(0, 30), uid: auth.currentUser.uid, by: who || '老師', at: serverTimestamp() });
+  await addTrace(projectId, { w: who || '老師', x: `${text}（提醒 ${to.length} 位同學）`, k: 'sys' }, auth.currentUser.uid).catch(() => {});
+}
+
+// 老師標記報告「已批改」（on=false 取消）
+export async function setGraded(projectId, on) {
+  await updateDoc(doc(db, 'projects', projectId), { gradedAt: on ? serverTimestamp() : null });
 }
 
 // ---------------- util ----------------
@@ -684,6 +719,10 @@ export async function replyPin(projectId, pinId, text, who) {
 export async function setPinStatus(projectId, pinId, done, who) {
   await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), done ? { status: 'done', doneBy: who || '', doneAt: serverTimestamp() } : { status: 'open', doneBy: '', doneAt: null });
 }
+// 老師結案：學生標記已處理後，老師確認這則留言可以結束（只有老師能結案，firestore.rules 強制）
+export async function closePin(projectId, pinId) {
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), { status: 'closed', closedAt: serverTimestamp() });
+}
 export async function deletePin(projectId, pinId) {
   const m = await getDocs(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'));
   await Promise.all(m.docs.map((d) => deleteDoc(d.ref)));
@@ -693,7 +732,7 @@ export function subscribePins(projectId, onChange, onError) {
   const q = query(collection(db, 'projects', projectId, 'pins'), orderBy('at', 'asc'), limit(200));
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => {
     const x = d.data({ serverTimestamps: 'estimate' });
-    return { id: d.id, uid: x.uid, by: x.by, oid: x.oid || null, dx: x.dx || 0, dy: x.dy || 0, x: x.x || 0, y: x.y || 0, text: x.text || '', status: x.status === 'done' ? 'done' : 'open', n: x.n || 0, doneBy: x.doneBy || '', at: ms(x.at), lastAt: ms(x.lastAt) };
+    return { id: d.id, uid: x.uid, by: x.by, oid: x.oid || null, dx: x.dx || 0, dy: x.dy || 0, x: x.x || 0, y: x.y || 0, text: x.text || '', status: x.status === 'done' || x.status === 'closed' ? 'done' : 'open', closed: x.status === 'closed', n: x.n || 0, doneBy: x.doneBy || '', at: ms(x.at), lastAt: ms(x.lastAt) };
   })), onError);
 }
 export function subscribePinMsgs(projectId, pinId, onChange, onError) {

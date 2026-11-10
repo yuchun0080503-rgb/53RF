@@ -7,10 +7,13 @@
     "start": "node dev-server.mjs",
     "test": "node --test src/*.test.mjs",
     "deploy": "firebase deploy --only firestore:rules,functions,hosting",
-    "config": "node tools/make-config.mjs"
+    "config": "node tools/make-config.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-researchflow \"node --test rules-test/*.test.mjs\""
   },
   "license": "ISC",
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.2.0",
     "firebase-tools": "^15.33.0"
   }
 }

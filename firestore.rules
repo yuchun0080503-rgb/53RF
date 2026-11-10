@@ -17,9 +17,11 @@ rules_version = '2';
 //   researchState/canvas  { ver }                          共用的 Canvas 版本號
 //   agentTrace/{traceId}  { w, x, k, uid, at }             k: user|sync|ai|sys；只能新增，不能修改或刪除
 //   feedback/{id}         { text, uid, by, at }   老師給小組的回饋；只有老師能寫，組員都看得到
-//   pins/{id}             { uid, by, oid, dx, dy, x, y, text, status, n, at, lastAt, lastBy, doneBy, doneAt }   老師貼在畫布上的留言
+//   pins/{id}             { uid, by, oid, dx, dy, x, y, text, status(open|done|closed), n, at, lastAt, lastBy, doneBy, doneAt }   老師貼在畫布上的留言
 //   pins/{id}/msgs/{id}   { uid, by, text, at }   留言底下的回覆（老師、Owner、Editor 都能回）
-//   tasks/{taskId}        { title, type, assigneeUid, createdBy, createdAt, done, doneBy, doneAt }   分工清單；done 只有負責人本人能改
+//   tasks/{taskId}        { title, type, assigneeUid, createdBy, createdAt, done, doneBy, doneAt, due? }   分工清單；done 只有負責人本人能改；due 選填 YYYY-MM-DD
+//   nudges/{id}           { kind, text, to:[uid], uid, by, at }   老師「提醒同學」；id 由事項決定（idle、unsubmitted、task-{taskId}、unselected…），同一件事 24 小時內只能寫一次
+//   project.gradedAt      老師標記「已批改」的時間（老師只能改 aiLevel 與 gradedAt）
 //
 // 這個系統只用 Firebase 免費方案，沒有 Cloud Functions：所有「硬限制」都寫在這份規則裡，
 // 由 Firestore 伺服器強制執行，前端程式被改掉也繞不過去。
@@ -153,7 +155,7 @@ service cloud.firestore {
       // 例外：memberUids 欄位允許「本人透過合法邀請加入自己」這個特例（見下方 invites 的 redeemInvite 流程）
       allow update: if (
           hasRole(projectId, ['owner'])
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['aiLevel', 'ownerUid', 'teacherUid', 'courseId', 'courseCode'])
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['aiLevel', 'ownerUid', 'teacherUid', 'courseId', 'courseCode', 'gradedAt'])
           // 一旦標成刪除中就不能反悔：否則 Owner 可以「標記 → 清掉研究歷程 → 取消標記」來規避歷程不可刪除的限制
           && !(resource.data.get('deleting', false) == true && request.resource.data.get('deleting', false) != true)
         )
@@ -166,10 +168,13 @@ service cloud.firestore {
           && request.resource.data.memberUids == resource.data.memberUids.concat([request.resource.data.teacherUid])
           && codeOk(request.resource.data.courseCode, request.resource.data.courseId, request.resource.data.teacherUid)
         )
+        // 老師：只能改 AI 權限與「已批改」標記；已批改的時間必須是伺服器時間（取消標記時是 null）
         || (
           hasRole(projectId, ['teacher'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiLevel'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiLevel', 'gradedAt'])
           && request.resource.data.aiLevel in [0, 1, 2, 3]
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['gradedAt'])
+              || request.resource.data.gradedAt == request.time || request.resource.data.gradedAt == null)
         )
         || (
           isSignedIn()
@@ -268,7 +273,9 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.done == false
           && request.resource.data.type in ['research', 'data', 'present', 'poster', 'other']
-          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120;
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120
+          && (!('due' in request.resource.data) || request.resource.data.due == ''
+              || (request.resource.data.due is string && request.resource.data.due.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')));
         allow update: if canWrite(projectId) && (
             (
               resource.data.assigneeUid == request.auth.uid
@@ -299,9 +306,11 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
           && request.resource.data.status == 'open' && request.resource.data.n == 0
           && request.resource.data.at == request.time;
+        // 結案（closed）：學生標記已處理後，老師確認結案；只有老師能結案，結案後也只有老師能重新打開
         allow update: if hasRole(projectId, ['teacher', 'owner', 'editor'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneBy', 'doneAt', 'n', 'lastAt', 'lastBy'])
-          && request.resource.data.status in ['open', 'done']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneBy', 'doneAt', 'n', 'lastAt', 'lastBy', 'closedAt'])
+          && request.resource.data.status in ['open', 'done', 'closed']
+          && ((request.resource.data.status != 'closed' && resource.data.status != 'closed') || hasRole(projectId, ['teacher']) || request.resource.data.status == resource.data.status)
           && request.resource.data.n in [resource.data.n, resource.data.n + 1];
         allow delete: if (hasRole(projectId, ['teacher']) && resource.data.uid == request.auth.uid) || ownerDeleting(projectId);
         match /msgs/{msgId} {
@@ -313,6 +322,24 @@ service cloud.firestore {
             && request.resource.data.at == request.time;
           allow update: if false;
           allow delete: if hasRole(projectId, ['teacher']) || ownerDeleting(projectId);
+        }
+      }
+
+      // ---- nudges：老師「提醒同學」。只有這份研究的老師能寫；時間必須是伺服器時間；
+      //      同一件事（同一個文件 id）距離上次提醒不到 24 小時就拒絕。學生看得到；不能刪（研究刪除時一起清掉） ----
+      match /nudges/{nudgeId} {
+        allow read: if canRead(projectId);
+        allow create: if hasRole(projectId, ['teacher']) && nudgeOk();
+        allow update: if hasRole(projectId, ['teacher']) && nudgeOk()
+          && request.time > resource.data.at + duration.value(24, 'h');
+        allow delete: if ownerDeleting(projectId);
+        function nudgeOk() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['kind', 'text', 'to', 'uid', 'by', 'at'])
+            && d.uid == request.auth.uid && d.at == request.time
+            && d.kind is string && d.kind.size() <= 30
+            && d.text is string && d.text.size() > 0 && d.text.size() <= 200
+            && d.to is list && d.to.size() > 0 && d.to.size() <= 30;
         }
       }
 
