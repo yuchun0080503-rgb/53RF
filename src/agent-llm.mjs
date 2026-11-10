@@ -446,11 +446,27 @@ export async function readInk(imageBase64, hint = '', fetchImpl) {
   return clip(out.text, 120);
 }
 
-// 關鍵字查證（Fanny 設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
-// 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」，選真的有人這樣用的說法當主題詞。
-// 查不到（網路錯誤）時保留 AI 原本的詞，不影響流程。回傳新的 plan（keywords 已換過）與查證報告。
+// 關鍵字查證（組員設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
+// 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」；
+// AI 原本的說法有人用就直接用，否則把有人用的候選連同論文標題交給 AI，依意思選論文用法相符的說法（pickTerms）。
+// 查不到（網路錯誤）時保留 AI 原本的詞，不影響流程。回傳新的 plan（keywords 已換過）與查證報告（plan.grounding）。
 export async function groundPlan(plan, fetchImpl) {
   if (!plan || !Array.isArray(plan.keywords)) return plan;
-  const r = await groundPlanKeywords(plan.keywords, fetchImpl);
+  const r = await groundPlanKeywords(plan.keywords, fetchImpl, { pick: (items) => pickTerms(items, fetchImpl) });
   return { ...plan, keywords: r.keywords, grounding: r.report };
+}
+
+// items：[{ zh, meaning, descEn, options: [{ t, n, pair, with, titles }] }] → 每一項選中的說法（都不符時是空字串）
+export async function pickTerms(items, fetchImpl) {
+  const block = items.map((it, i) => `【概念 ${i + 1}】${clip(it.zh, 20)}：${clip(it.meaning, 120)}\n英文描述：${clip(it.descEn, 300)}\n` +
+    it.options.map((o) => `- "${o.t}"：${o.n} 篇論文的標題或摘要用到${Number.isFinite(o.pair) && o.with ? `，其中 ${o.pair} 篇也提到 "${o.with}"` : ''}；例：${(o.titles || []).map((t) => `「${clip(t, 120)}」`).join(' ') || '（沒有抓到標題）'}`).join('\n')).join('\n\n');
+  const out = await chatJSON({
+    system: '你在幫學生確認搜尋用的英文關鍵字。每個概念有幾個候選英文說法，附上用到它的論文篇數與論文標題例子。' +
+      '請看論文標題，判斷論文裡這個說法實際在講的事情，跟學生這個中文概念的意思是否相同；選意思相同、而且論文數較多的那個。' +
+      '意思不同（例如只是字面相近、講的是另一個現象、範圍大很多）就不要選；全部都不符時回答空字串。只回答候選中的原文說法。',
+    user: block,
+    schema: { type: 'object', required: ['picks'], properties: { picks: { type: 'array', items: str } } },
+    maxTokens: 200,
+  }, fetchImpl);
+  return (out.picks || []).map((s) => clip(s, 60).replace(/^["“]|["”]$/g, '').toLowerCase());
 }

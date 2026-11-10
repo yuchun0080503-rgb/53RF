@@ -441,7 +441,7 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
   cv.forEach(t=>{if(hasZh(t)&&!S.kwEn[t])translateKw(t)});
   S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=ks.filter(k=>k.weak).map(k=>k.name);S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
   aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);
-  (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?"都太少，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="pair"?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
+  (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?(g.how==="none"?"論文裡的用法跟這個意思都不同":"都太少人用")+"，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="ai"?"（看過論文標題，用法跟意思相符）":"")+(g.anchor&&Number.isFinite(g.pair)?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
 function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||!S.kw.length)return;
