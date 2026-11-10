@@ -2,9 +2,12 @@
 
 多人協作研究畫布 + Research Agent。小組在共同畫布上討論想法，Agent 協助整理研究範圍、搜尋正反證據，最後的判斷由學生決定。
 
-- **不需要任何密碼或 API 金鑰**，也**不需要付費**：只用 Firebase 免費方案（電子郵件／Google 登入、Firestore 資料庫、Hosting 網站代管）。
-- Agent 是**規則式**的，不呼叫生成式 AI 模型；文獻來自 OpenAlex 公開學術資料庫（免費、免金鑰）。
+- **AI**：Claude Haiku 5.5（Anthropic），只經由我們的 Firebase Cloud Function 呼叫，金鑰存在 Secret Manager，不在網頁或程式碼裡；AI 連不上時自動改用內建的規則式程式。
+- **文獻**：OpenAlex（後端帶金鑰）、Crossref、ERIC、Europe PMC、DOAJ、OpenAIRE、J-STAGE，中文文獻用 Claude 網路搜尋華藝與臺灣博碩士論文網；文獻都來自真實資料庫，AI 只負責判讀。
+- **雲端**：Firebase（Authentication、Firestore、Hosting、Cloud Functions、Storage），需要 Blaze 方案。
 - 沒有設定 Firebase 時，網頁會自動進入**展示模式**（內建示範資料、不儲存）。
+
+> **決賽文件**（技術文件、Agent 評測報告、第三方資源揭露表、資料與安全自評表）在 [`docs/`](docs/)。本 README 下方部分段落是早期版本的說明，以 `docs/技術文件.md` 為準。
 
 > `src/firebase-config.js` 裡有一個叫 `apiKey` 的欄位。它是 Firebase 用來辨識「這是哪一個專案」的公開代號，
 > 不是密碼——所有 Firebase 網站都會把它放在網頁原始碼裡，Google 官方文件也說明它不需要保密。

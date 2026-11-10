@@ -126,3 +126,14 @@ test('dedupeWorks 用 DOI 比對：OpenAlex 和 Crossref 找到同一篇只留�
   assert.equal(dedupeWorks([b], ['https://doi.org/10.1/ABC']).length, 0);
   assert.equal(dedupeWorks([{ id: 'ERIC:EJ1', doi: '' }, { id: 'ERIC:EJ2', doi: '' }]).length, 2);
 });
+
+test('外部請求逾時：一直不回應的來源會被中止，不會讓整個搜尋卡住', async () => {
+  const { withTimeout } = await import('./agent-local.mjs');
+  const hang = (url, init) => new Promise((ok, no) => init.signal.addEventListener('abort', () => no(new Error('aborted'))));
+  const t0 = Date.now();
+  const orig = globalThis.setTimeout;
+  globalThis.setTimeout = (fn) => orig(fn, 5); // 測試時把 25 秒縮短
+  try { await assert.rejects(withTimeout(hang)('https://api.openaire.eu/x'), /aborted/); }
+  finally { globalThis.setTimeout = orig; }
+  assert.ok(Date.now() - t0 < 2000);
+});

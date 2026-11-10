@@ -13,6 +13,7 @@ import {
   getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   collection, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment, Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL, listAll, deleteObject } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 import { firebaseConfig } from './firebase-config.js';
 import { checkAgentCall } from './harness.mjs';
@@ -24,6 +25,7 @@ import { refineEvidence, scopeFocus, draftQuestion, slideOutline as slideOutline
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+const storage = getStorage(app); // 畫布上的圖片：存原圖、不壓縮（Firestore 一筆最多 1MB，照片放不下）
 
 // AI 後端（functions/index.js，經由 Hosting 的 /api/ai）：llm.mjs 用這兩個全域值呼叫，沒登入時 token 是 null，AI 會退回規則式。
 globalThis.RF_AI_ENDPOINT = '/api/ai';
@@ -199,7 +201,9 @@ export function authErrorText(err) {
     'auth/missing-password': '請輸入密碼。',
     'auth/weak-password': '密碼至少需要 6 個字元。',
     'auth/email-already-in-use': '這個電子郵件已經註冊過了，請直接登入。',
-    'auth/invalid-credential': '電子郵件或密碼不正確。如果這個信箱當初是按「使用 Google 帳號登入」建立的，它沒有設定密碼，請改按「使用 Google 帳號登入」；如果還沒有帳號，請按「註冊新帳號」。',
+    // 用電子郵件註冊、但信箱還沒驗證過的帳號，之後只要用同一個 Gmail 按過一次 Google 登入，Firebase 會把原本的密碼拿掉（Google 被視為更可靠的身分證明），密碼就再也登不進去。
+    // 這時按「忘記密碼」重設一組密碼就好，之後 Google 和密碼兩種方式都能登入。
+    'auth/invalid-credential': '電子郵件或密碼不正確。如果你曾經用這個信箱按過「使用 Google 帳號登入」，原本的密碼會被 Firebase 取消：請直接按「使用 Google 帳號登入」，或按「忘記密碼」重設一組密碼（重設後兩種方式都能登入）。如果還沒有帳號，請按「註冊新帳號」。',
     'auth/user-not-found': '找不到這個帳號，請先註冊。',
     'auth/wrong-password': '密碼不正確。',
     'auth/too-many-requests': '嘗試次數過多，請稍後再試。',
@@ -461,6 +465,8 @@ export async function deleteProject(projectId, uid) {
   await wipe('agentTrace');
   await wipe('tasks');
   await wipe('feedback');
+  // 畫布上的圖片檔（雲端儲存）：整個資料夾刪掉
+  try { const l = await listAll(sRef(storage, `projects/${projectId}/images`)); await Promise.all(l.items.map((it) => deleteObject(it))); } catch (err) { console.warn('[ResearchFlow] 刪除圖片檔失敗：', err); }
   // 老師在畫布上的留言：每則留言底下的回覆要先刪（子集合不會跟著母文件一起刪）
   for (const pin of (await getDocs(collection(db, 'projects', projectId, 'pins'))).docs) {
     const ms = await getDocs(collection(db, 'projects', projectId, 'pins', pin.id, 'msgs'));
@@ -693,4 +699,29 @@ export function subscribePins(projectId, onChange, onError) {
 export function subscribePinMsgs(projectId, pinId, onChange, onError) {
   const q = query(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), orderBy('at', 'asc'), limit(200));
   return onSnapshot(q, (snap) => onChange(snap.docs.map((d) => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, uid: x.uid, by: x.by || '', text: x.text || '', at: ms(x.at) }; })), onError);
+}
+
+// ---------------- 畫布上的圖片（Firebase Storage）----------------
+// 存原圖、不壓縮。路徑 projects/{研究}/images/{亂數}.{副檔名}；storage.rules 限制只有這份研究的成員讀得到、Owner／Editor 才能上傳，單檔 20MB 以內、只能是圖片。
+export const IMAGE_MAX = 20 * 1024 * 1024;
+export async function uploadImage(projectId, file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('只能上傳圖片檔');
+  if (file.size > IMAGE_MAX) throw new Error('圖片超過 20MB');
+  const ext = (file.name.match(/\.([a-z0-9]{2,5})$/i) || [, (file.type.split('/')[1] || 'img')])[1].toLowerCase();
+  const path = `projects/${projectId}/images/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const r = sRef(storage, path);
+  await uploadBytes(r, file, { contentType: file.type, customMetadata: { uid: auth.currentUser.uid } });
+  return { path, url: await getDownloadURL(r) };
+}
+
+// 畫布錄音也存在 Storage：路徑 projects/{研究}/audio/…（storage.rules 一樣只給這份研究的成員）
+export async function uploadMedia(projectId, file, kind) {
+  if (kind !== 'audio' && kind !== 'images') throw new Error('不支援的檔案種類');
+  if (kind === 'audio' && !/^audio\//.test(file.type)) throw new Error('只能上傳錄音檔');
+  if (file.size > IMAGE_MAX) throw new Error('檔案超過 20MB');
+  const ext = (file.name.match(/\.([a-z0-9]{2,5})$/i) || [, 'webm'])[1].toLowerCase();
+  const path = `projects/${projectId}/${kind}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const r = sRef(storage, path);
+  await uploadBytes(r, file, { contentType: file.type, customMetadata: { uid: auth.currentUser.uid } });
+  return { path, url: await getDownloadURL(r) };
 }

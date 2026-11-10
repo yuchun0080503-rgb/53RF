@@ -368,7 +368,7 @@ export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
       'limits：限制或適用範圍（例如只研究某個國家、某個年齡層、樣本小），一句；摘要沒寫就寫「摘要沒有說明」。\n' +
       'use：對照學生的主張，說明這篇可以支持主張的哪一部分、哪裡不適用，一到兩句；沒有提供主張時寫這篇適合用在哪類報告。\n' +
       '全部合起來 300 到 450 字。',
-    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 1200)}`,
+    user: `學生的主張：${clip(claim, 300) || '（未提供）'}\n\n文獻標題：${clip(title, 200)}\n摘要：${clip(abstract, 2400)}`, // 研究結果通常在摘要最後面，切到 1200 字常看不到，重點就會寫「沒有說明結果」
     schema: { type: 'object', required: KP_FIELDS, properties: Object.fromEntries(KP_FIELDS.map((k) => [k, str])) },
     maxTokens: 1300, timeout: 90000,
   }, fetchImpl);

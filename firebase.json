@@ -96,5 +96,8 @@
         ]
       }
     ]
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
