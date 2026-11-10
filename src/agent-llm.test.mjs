@@ -301,7 +301,7 @@ test('summarizeZh：韓文或英文的摘要不採用', async () => {
   await assert.rejects(summarizeZh('t', ab, ko), /中文/);
 });
 
-import { slideOutline } from './agent-llm.mjs';
+import { slideOutline, fixLeakedFields } from './agent-llm.mjs';
 
 test('slideOutline：丟掉不存在的引用編號與空白頁；沒有證據或不是中文就報錯', async () => {
   const items = [{ n: 1, k: 's', t: '研究一', y: 2023, au: '林', point: '實驗組成績較高。' }, { n: 2, k: 'c', t: '研究二', y: 2021, au: 'Lee', point: '效果只在短期。' }];
@@ -319,4 +319,12 @@ test('slideOutline：丟掉不存在的引用編號與空白頁；沒有證據�
   await assert.rejects(slideOutline({ items: [] }, f), /還沒有可以引用的證據/);
   const en = fake({ slides: [1, 2, 3].map((i) => ({ title: `Slide ${i} about flipped classrooms`, bullets: ['Students did better in the experimental group'], cite: [] })) });
   await assert.rejects(slideOutline({ items }, en), /沒有寫出可用的大綱/);
+});
+
+test('fixLeakedFields：清掉 </process>、</takeaway> 殘留標記；重點說沒結果但主要發現有內容時，重點改用主要發現第一句', () => {
+  const kp = fixLeakedFields({ takeaway: '摘要沒有說明結果。', question: '', method: '', process: '先分組，再測驗。</process>', findings: '實驗組成績較高。差距約 5 分。', limits: '', use: '' });
+  assert.ok(!/<\/?process>/.test(kp.process));
+  assert.equal(kp.process, '先分組，再測驗。');
+  assert.equal(kp.takeaway, '實驗組成績較高。');
+  assert.equal(fixLeakedFields({ takeaway: '摘要沒有說明', findings: '摘要沒有寫出研究結果' }).takeaway, '摘要沒有說明', '兩邊都沒內容就照舊');
 });
