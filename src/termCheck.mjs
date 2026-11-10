@@ -68,53 +68,66 @@ export async function openAlexTitles(term, also = '', fetchImpl = fetch, n = 3) 
 }
 
 export const CAND_MIN = 3; // 候選說法至少要有幾篇論文用過，才拿去給 AI 比對用法
+export const PAIR_FEW = 10; // 一起出現少於這個數：意思再準也可能查不到夠多文獻，AI 選詞時要考慮
+
+// 一次查詢同時拿「篇數」和 3 篇論文標題（OpenAlex 每次查詢都算錢：一天 1 美元額度、每次 0.001 美元，
+// 所以不另外查標題）。失敗（含額度用完 429）回傳 n = NaN，呼叫端會保留原本的規劃。
+export async function openAlexProbe(term, also = '', fetchImpl = fetch) {
+  try {
+    const url = openAlexCountUrl(term, { also }).replace('per-page=1', 'per-page=3').replace('select=id', 'select=display_name');
+    const res = await fetchImpl(url, await openAlexInit(url));
+    if (!res.ok) return { n: NaN, titles: [] };
+    const j = await res.json();
+    return { n: Number(j?.meta?.count), titles: (j.results || []).map((w) => String(w.display_name || '').replace(/<[^>]+>/g, '').slice(0, 160)).filter(Boolean) };
+  } catch { return { n: NaN, titles: [] }; }
+}
 
 // keywords：planSearch 的輸出（core 會有 candidates、meaning）。主題詞的查證（依組員設計的流程）：
-// 1. 每個主題詞的候選說法＝AI 原本的 en＋candidates＋synonyms（最多 6 個），各查「單獨有幾篇論文的標題或摘要用到」
-// 2. 前兩個主題詞各取最常用的 3 個候選兩兩配對，查「一起出現幾篇」（兩邊都可能是 AI 自己組的詞，所以兩邊一起配對）
+// 1. 每個主題詞的候選說法＝AI 原本的 en＋前 3 個 candidates（沒有 candidates 才用 synonyms），各查「單獨有幾篇論文的標題或摘要用到」＋3 篇標題
+// 2. 前兩個主題詞各取最常用的 2 個候選兩兩配對，查「一起出現幾篇」＋標題（兩邊都可能是 AI 自己組的詞，所以兩邊一起配對）
 // 3. AI 原本的說法夠多人用（≥ MIN_USE 篇）而且跟另一個主題詞一起出現 ≥ PAIR_MIN 篇 → 直接用，不再花 AI
-// 4. 否則把有人用的候選（≥ CAND_MIN 篇）連同篇數與 3 篇論文標題交給 AI（pick），
-//    請它依「這個中文說法的意思」選論文用法相符的說法——只看篇數會選到很熱門但意思不同的詞（例：室友作息不同 → social jetlag）
-// 5. AI 說都不符，或沒有候選夠多人用 → 保留原詞並標 weak（用語待確認）；AI 失敗 → 依篇數選（一起出現最多，否則單獨最多）
-// 網路錯誤（查不到篇數）時保留原本的規劃。
-export async function groundPlanKeywords(keywords, fetchImpl = fetch, { count = openAlexCount, titles = openAlexTitles, pick = null, top = 3 } = {}) {
+// 4. 否則把有人用的候選（≥ CAND_MIN 篇）連同篇數與論文標題交給 AI（pick），依「中文說法的意思」選論文用法相符、而且夠多篇的說法
+//    ——只看篇數會選到熱門但意思不同的詞（室友作息不同 → social jetlag）；只看意思又可能選到太少篇的詞（事故 → patient safety incident 在長照只有 16 篇）
+// 5. AI 說都不符，或沒有候選夠多人用 → 保留原詞並標 weak（用語待確認）；AI 失敗（重試一次）→ 原詞有人用就保留，否則依篇數
+// 查詢次數：兩個主題詞約 8 次單獨＋4 次配對＝12 次。
+export async function groundPlanKeywords(keywords, fetchImpl = fetch, { probe = openAlexProbe, count = null, titles = null, pick = null } = {}) {
   const list = Array.isArray(keywords) ? keywords : [];
   const cores = list.filter((k) => k && k.role === 'core' && k.en);
   if (!cores.length) return { keywords: list, report: [] };
-  const c = (t, also = '') => count(t, also, fetchImpl);
+  // 測試可以只給 count（與 titles）：包成 probe
+  const pr = count ? async (t, also) => ({ n: await count(t, also, fetchImpl), titles: titles ? await titles(t, also, fetchImpl) : [] }) : (t, also = '') => probe(t, also, fetchImpl);
   const info = await Promise.all(cores.map(async (k) => {
-    const opts = [...new Set([k.en, ...(k.candidates || []), ...(k.synonyms || [])].map((s) => String(s || '').toLowerCase().trim()).filter(Boolean))].slice(0, 6);
-    const rows = await Promise.all(opts.map(async (t) => ({ t, n: await c(t), pair: NaN })));
+    const extra = (k.candidates || []).length ? k.candidates.slice(0, 3) : (k.synonyms || []).slice(0, 3);
+    const opts = [...new Set([k.en, ...extra].map((s) => String(s || '').toLowerCase().trim()).filter(Boolean))].slice(0, 4);
+    const rows = await Promise.all(opts.map(async (t) => { const r = await pr(t, ''); return { t, n: r.n, titles: r.titles || [], pair: NaN }; }));
     const ok = rows.filter((x) => Number.isFinite(x.n));
-    const best = ok.filter((x) => x.n >= CAND_MIN).sort((a, b) => b.n - a.n).slice(0, top);
+    const best = ok.filter((x) => x.n >= CAND_MIN).sort((a, b) => b.n - a.n).slice(0, 3);
     if (!best.some((x) => x.t === k.en)) { const o = ok.find((x) => x.t === k.en && x.n > 0); if (o) best.push(o); }
     return { k, rows, ok, best, pick: '', how: '', anchor: '' };
   }));
-  // 一起出現的篇數：每個候選記下「跟另一個主題詞的候選一起出現最多的篇數」與對象
-  const pairs = [];
+  // 一起出現：前兩個主題詞各取最常用的 2 個（AI 原詞若有人用一定放進去）；第三個以後的主題詞跟第一個的最常用說法配對
+  const top2 = (it) => { const b = it.best.slice(0, 2); const o = it.best.find((x) => x.t === it.k.en); if (o && !b.includes(o)) b[1] = o; return b.filter(Boolean); };
+  const jobs = [];
   if (info.length >= 2) {
-    const other = info.slice(1).map((it) => it.best.length ? it : null);
-    const jobs = [];
-    info[0].best.forEach((x) => info[1].best.forEach((y) => jobs.push([x, y])));
-    for (const it of other.slice(1)) if (it) info[0].best.forEach((x) => it.best.forEach((y) => jobs.push([x, y])));
-    for (const [x, y] of jobs) {
-      const n = await c(x.t, y.t);
-      if (!Number.isFinite(n)) continue;
-      pairs.push({ x, y, n });
-      if (!(x.pair >= n)) { x.pair = n; x.with = y.t; }
-      if (!(y.pair >= n)) { y.pair = n; y.with = x.t; }
-    }
+    top2(info[0]).forEach((x) => top2(info[1]).forEach((y) => jobs.push([x, y])));
+    const a = info[0].best[0];
+    if (a) for (const it of info.slice(2)) top2(it).forEach((y) => jobs.push([a, y]));
   }
+  await Promise.all(jobs.map(async ([x, y]) => {
+    const r = await pr(x.t, y.t);
+    if (!Number.isFinite(r.n)) return;
+    if (!(x.pair >= r.n)) { x.pair = r.n; x.with = y.t; if (r.titles?.length) x.titles = r.titles; }
+    if (!(y.pair >= r.n)) { y.pair = r.n; y.with = x.t; if (r.titles?.length) y.titles = r.titles; }
+  }));
   const solo = info.length < 2;
   const ask = [];
   for (const it of info) {
     const orig = it.ok.find((x) => x.t === it.k.en);
     if (orig && orig.n >= MIN_USE && (solo || orig.pair >= PAIR_MIN)) { it.pick = orig.t; it.how = 'original'; it.anchor = orig.with || ''; continue; }
-    const cand = it.best.slice().sort((a, b) => (b.pair || 0) - (a.pair || 0) || b.n - a.n).slice(0, top);
+    const cand = it.best.slice().sort((a, b) => (b.pair || 0) - (a.pair || 0) || b.n - a.n).slice(0, 3);
     if (cand.length) ask.push({ it, cand });
   }
   if (ask.length && pick) {
-    await Promise.all(ask.flatMap(({ cand }) => cand.map(async (x) => { x.titles = await titles(x.t, x.with || '', fetchImpl); })));
     let ans = null;
     const q = () => pick(ask.map(({ it, cand }) => ({ zh: it.k.zh, meaning: it.k.meaning || '', descEn: it.k.descEn || '', options: cand.map((x) => ({ t: x.t, n: x.n, pair: x.pair, with: x.with || '', titles: x.titles || [] })) })));
     try { ans = await q(); } catch { try { ans = await q(); } catch { ans = null; } } // 失敗重試一次
@@ -126,7 +139,6 @@ export async function groundPlanKeywords(keywords, fetchImpl = fetch, { count = 
   }
   for (const it of info) {
     if (it.pick || it.how === 'none') continue;
-    // 沒有 AI 可問或 AI 失敗：依篇數（一起出現最多，否則單獨最多且 ≥ MIN_USE）
     const p = it.best.filter((x) => x.pair >= PAIR_MIN).sort((a, b) => b.pair - a.pair)[0];
     const s = it.ok.filter((x) => x.n >= MIN_USE).sort((a, b) => b.n - a.n)[0];
     const o = it.ok.find((x) => x.t === it.k.en && x.n >= MIN_USE);
