@@ -378,14 +378,14 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-5";
+window.RF_VER = "2026.11.10-6";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
 try { window.RFQR = (await import("./src/vendor/qrcode.mjs")).default; } catch (err) { console.info("[ResearchFlow] 無法載入 QR code 產生器：", err?.message || err); }
 try { window.RFCOURSE = await import("./src/course.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 course.mjs：", err?.message || err); }
 // 各領域資料庫的清單與自動挑選（老師端勾選、學生端顯示會查哪些資料庫）
-try { window.RFSRC = await import("./src/searchLogic.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
+try { window.RFSRC = await import("./src/searchLogic.mjs"); window.RFROUTE = await import("./src/sources.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 待辦列表（學生端與老師端共用的判斷、緊急程度顏色、排序、稍後提醒）
 try { window.RFREH = await import("./src/rehearsal.mjs"); window.RFXLSX = await import("./src/xlsx.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入排演室模組：", err?.message || err); }
@@ -482,18 +482,20 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
  // 聚焦問題的選擇（對象、情境、要比較的結果）放在最前面：以前只進研究問題的文字，沒有進關鍵字規劃，搜尋就漏了「結果」那一半（例如行人體感溫度）
  const focusNotes=QS().map(q=>S.scope[q[1]]?"聚焦選擇："+S.scope[q[1]]:"").filter(Boolean);
  const notes=[...focusNotes,...rdItems().map(o=>o.text).filter(Boolean)];
- RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
+ // 規劃完再到 OpenAlex 查證主題詞（看候選說法實際有幾篇論文在用），查不到就用原本的規劃
+ RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>RFAI.groundPlan?RFAI.groundPlan(r).catch(()=>r):r).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
   S.kwEn=S.kwEn||{};S.kwSyn={};
-  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
+  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=!k.grounded&&k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
    if(known&&known.en.toLowerCase()!==en){syn=[en,...syn];en=known.en}
-   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect"}});
+   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect",weak:!!k.weak}});
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
   // 觀點詞：畫布上提到的其他概念（比較的條件、可能的機制、子問題），列出來讓小組看到有沒有漏掉，但不加進搜尋條件（加了會讓查詢太嚴）
   S.kwAspect=ks.filter(k=>k.aspect).map(k=>k.name);
   const cv=canvasTerms().filter(t=>!ks.some(x=>x.name===t)&&!mine.includes(t)); // 畫布短詞不會被模型規劃的結果蓋掉
   cv.forEach(t=>{if(hasZh(t)&&!S.kwEn[t])translateKw(t)});
-  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
-  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
+  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=ks.filter(k=>k.weak).map(k=>k.name);S.kwBy=AIN();S.focus=r.focus;if(S.discBy!=="學生")S.disc=r.discipline||"";S.kwV=2;
+  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);
+  (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?(g.how==="none"?"論文裡的用法跟這個意思都不同":"都太少人用")+"，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="ai"?"（看過論文標題，用法跟意思相符）":"")+(g.anchor&&Number.isFinite(g.pair)?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
 function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||!S.kw.length)return;
@@ -1330,9 +1332,20 @@ async function addImages(files,at){files=[...files].filter(f=>/^image\//.test(f.
   const o=mkO({type:"img",by:ME,x,y,iw,ih,url:"",name:f.name.slice(0,80),aiRead:"（圖片："+f.name.slice(0,40)+"）"});p.objs.push(o);draw();setStat("圖片上傳中…");
   try{if(LIVE()&&p.fid){const u=await RFDB.uploadImage(p.fid,f);o.url=u.url;o.path=u.path}
    else o.url=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=no;fr.readAsDataURL(f)});
-   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）")}
+   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）");readImgAI(o,f)}
   catch(err){p.objs=p.objs.filter(k=>k!==o);draw();alert("圖片上傳失敗："+(err?.message||err))}
   x+=24;y+=24}}
+// 圖片辨識：上傳後請 AI 看圖片內容寫成文字（放進「AI 讀取結果」，可修正），分析畫布時才會用到圖片裡的資訊。
+// 後端一次只收 1 張、base64 2MB 以內的 PNG，所以先縮到長邊 1280 像素，太大再縮。
+async function imgB64(f){const u=URL.createObjectURL(f);try{const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+ for(let side=1280;side>=400;side=Math.round(side*.75)){const k=Math.min(1,side/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.naturalWidth*k));c.height=Math.max(1,Math.round(im.naturalHeight*k));
+  const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const b=c.toDataURL("image/png").split(",")[1];if(b.length<1.9e6)return b}
+ return ""}finally{URL.revokeObjectURL(u)}}
+async function readImgAI(o,f){if(!AIV())return;const proj=p,ph="（圖片："+String(f.name).slice(0,40)+"）";
+ try{const b=await imgB64(f);if(!b)return;setStat("AI 讀取圖片內容中…");const txt=await RFAI.readImage(b,f.name);
+  if(p!==proj||!txt||!p.objs.includes(o)||o.aiRead!==ph)return; // 等待期間學生已經自己改了讀取結果就不覆蓋
+  o.aiRead=ph+txt;o.hwBy=AIN();o.mod=ME;o.ver++;draw();insp();syncObjsLive(false);aiLog(`${AIN()} 讀取圖片「${String(f.name).slice(0,40)}」：${txt.slice(0,60)}${txt.length>60?"…":""}`);setStat("已讀取圖片內容（可在右邊修正）");if(pane==="agent"&&S.step===1)renderPane()}
+ catch(e){console.warn("[ResearchFlow] AI 讀取圖片失敗，保留檔名：",e?.message||e);setStat("圖片已加入（AI 沒有讀到內容，可自己在右邊補充說明）")}}
 $("#imgup").onclick=()=>$("#imgf").click();
 $("#imgf").onchange=e=>{addImages(e.target.files);e.target.value=""};
 $("#cvw").addEventListener("dragover",e=>{if([...(e.dataTransfer?.items||[])].some(i=>i.kind==="file")){e.preventDefault();e.dataTransfer.dropEffect="copy"}});
@@ -1535,7 +1548,7 @@ function body(){const s=S.step,sc=S.scope;
    <div style="display:flex;gap:6px"><input id="cli" placeholder="或自行輸入要查證的主張" value="${esc(S.claim&&!cands.includes(S.claim)?S.claim:"")}"><button data-a="claimin">使用</button></div>`:"");
   return modeBox+`<h3>Research Question</h3><input id="rqi" value="${esc(S.rq)}"><h3>搜尋關鍵字</h3>${LIVE()?`<p class="sm mute" style="margin:0 0 8px">粗體是主題詞，搜尋結果一定會提到它們；虛線框是觀點詞，列出畫布上提到的其他概念，不加進搜尋條件。點關鍵字可以切換成主題詞，點英文可以修改。</p>`:""}${planBusy?`<p class="sm aiby">${I("spark")}${esc(AIN())} 正在依題目與主張規劃關鍵字（約 20 秒），完成後會自動換上…</p>`:S.kwBy?`<p class="sm aiby">${I("spark")}由 ${esc(S.kwBy)} 規劃${S.focus?"：查證重點是「"+esc(S.focus)+"」":""}</p>`:""}<div class="chips">${S.kw.map((k,i)=>`<span class="kwc ${kwIsCore(k)?"core":(S.kwAspect||[]).includes(k)?"asp":""}"><span class="kwn" data-a="kwcore" data-k="${i}" title="${kwIsCore(k)?"主題詞：結果必須提到。點一下改成範圍詞":(S.kwAspect||[]).includes(k)?"觀點詞：畫布上提到的其他概念，不加進搜尋條件。點一下改成主題詞":"範圍詞：用來縮小範圍。點一下改成主題詞"}">${esc(k)}</span>${hasZh(k)?`<span class="mute">→</span>${kwBusy.has(k)?`<span class="mute">翻譯中…</span>`:`<span class="kwt" data-a="kwen" data-k="${i}" title="點一下修改英文">${esc((S.kwEn||{})[k]||"未翻譯")}</span>`}`:""}<button data-a="kwx" data-k="${i}" aria-label="移除關鍵字 ${esc(k)}" title="移除">×</button></span>`).join("")}</div>
   <div style="display:flex;gap:6px"><input id="kwi" placeholder="新增關鍵字"><button data-a="kwa">${I("plus")}</button></div>
-  <h3>搜尋策略</h3>${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts"><button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button><button data-a="back3">修改範圍</button></div>`}
+  <h3>搜尋策略</h3>${discLine()}${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts"><button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button><button data-a="back3">修改範圍</button></div>`}
  if(s===5){const c=S.ev.filter(e=>e.k==="c").length,sp=S.ev.filter(e=>e.k==="s").length,uv=S.ev.filter(e=>!e.v).length,balanced=enoughOf(p);
  if(MODE()==="claim")return claimStep5();
  return `<h3>正反例證進度</h3><div class="box sm mode-procon"><b>正反例證模式</b><div class="mute" style="margin-top:3px">支持與反向的證據都要找；反向證據至少 3 筆才算平衡。</div><div class="bar" style="margin-top:8px"><i style="width:${sp+c?sp/(sp+c)*100:50}%;background:var(--ok)"></i><i style="width:${sp+c?c/(sp+c)*100:50}%;background:#e2662b"></i></div><span class="mute">支持 ${sp} 筆　｜　反向／限制 ${c} 筆</span></div>${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪查詢</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
@@ -1571,7 +1584,8 @@ function bind(r=document){r.querySelectorAll("details[data-ei]").forEach(d=>d.on
   const upd=()=>{const own=i.value.split(/[、,，]/).map(x=>x.trim()).filter(Boolean),nx=[...new Set([...scv(k).filter(x=>opts.includes(x)),...own])];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];
    i.parentNode.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",scv(k).includes(b.dataset.v)));
    r.querySelectorAll('[data-a="rq"],[data-a="myrq"]').forEach(b=>b.disabled=!!busy||QS().some(q=>!S.scope[q[1]]))};
-  i.oninput=upd;i.onchange=()=>{upd();saveS()};i.onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)i.blur()}});r.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>act(b.dataset.a,b.dataset.k))}
+  i.oninput=upd;i.onchange=()=>{upd();saveS()};i.onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)i.blur()}});
+ r.querySelectorAll("[data-disc]").forEach(x=>x.onchange=()=>{const old=S.disc;S.disc=x.value;S.discBy="學生";saveS();log(U[ME].n,`把研究領域從「${RFROUTE.DISCIPLINE_ZH[old]||"自動判斷"}」改成「${RFROUTE.DISCIPLINE_ZH[x.value]}」（會改變加查的資料庫）。`);renderPane()});r.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>act(b.dataset.a,b.dataset.k))}
 /* 進度檢核：每一項都是「數得出來的事實」，不評論內容寫得好不好。
    回傳三組 [標題, 列]；每一列是 [項目, 燈號 g/y/r, 說明, 補充說明的 HTML（可省略）]。
    整理階段的三項全部依畫布判定——系統讀不到學生放在 Google 文件／Canva 的報告本身。 */
@@ -2198,7 +2212,13 @@ const zhMore=()=>{/* 中文資料庫多半沒有開放 API，這裡把關鍵字�
 // 這份研究搜尋時查了哪些資料庫（老師指定的，或依領域自動選的）
 // 「這次查了」：搜尋過就列實際查到資料的資料庫（S.dbs，每輪搜尋結果的 dbNames 合起來，包含依學科自動加查、J-STAGE、中文網路搜尋）；
 // 還沒搜尋時列預定要查的（OpenAlex＋老師指定或依領域自動選的）
-const dbLine=()=>{if(!window.RFSRC)return"";const ks=srcOf(p),c=courseOfP(p),by=c&&Array.isArray(c.sources)?"老師指定":"依研究領域自動選";
+// 研究領域（AI 規劃關鍵字時判斷，S.disc）：決定加查哪些資料庫；顯示在確認策略頁，學生可以改。老師有勾選資料庫時以老師為準。
+const discDbs=()=>{const c=courseOfP(p),locked=!!(c&&Array.isArray(c.sources));if(locked)return{locked,ks:srcOf(p)};
+ const r=window.RFROUTE?RFROUTE.routeFor({discipline:S.disc||"",text:[S.rq,...(S.kw||[])].join(" ")}):{extra:[],discipline:""};return{locked,ks:[...new Set([...srcOf(p),...r.extra])],d:r.discipline}};
+function discLine(){if(!window.RFROUTE||!LIVE())return"";const {locked,ks,d}=discDbs(),Z=RFROUTE.DISCIPLINE_ZH,cur=d||S.disc||"social";
+ const names=["OpenAlex（跨領域）",...ks.map(k=>RFSRC.SOURCES[k]?RFSRC.SOURCES[k].name:k)];
+ return `<div class="hl sm"><span>研究領域</span><span><select data-disc aria-label="研究領域" style="font-size:13px;padding:2px 6px" ${canEdit()?"":"disabled"}>${RFROUTE.DISCIPLINES.map(x=>`<option value="${x}" ${x===cur?"selected":""}>${esc(Z[x])}</option>`).join("")}</select> <span class="mute">${S.discBy==="學生"?"小組選的":S.disc?"AI 判斷，可改":"依關鍵字判斷，可改"}</span></span></div><div class="hl sm"><span>會查的資料庫</span><span>${esc(names.join("、"))}${locked?"（老師指定）":""}</span></div>`}
+const dbLine=()=>{if(!window.RFSRC)return"";const ks=discDbs().ks,c=courseOfP(p),by=c&&Array.isArray(c.sources)?"老師指定":"依研究領域自動選";
  if(S.rounds&&(S.dbs||[]).length)return `<div class="sm mute" style="margin-top:14px">這次查了：${S.dbs.map(esc).join("、")}${c&&Array.isArray(c.sources)?"（加查的資料庫由老師指定）":""}</div>`;
  return `<div class="sm mute" style="margin-top:14px">這次查了：OpenAlex（跨領域）${ks.map(k=>"、"+esc(RFSRC.SOURCES[k].name)+"（"+esc(RFSRC.SOURCES[k].field)+"）").join("")}${ks.length?"・"+by:""}</div>`};
 // 例證的中文說明：模型整理的摘要（zh）優先，其次是模型判讀時寫的一句主要發現
