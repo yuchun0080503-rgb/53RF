@@ -254,6 +254,8 @@ export async function updateMyProfile(uid, { displayName, color }, projectIds = 
 export async function createProject({ name, course, teacherReq, dueDate, field, courseCode, assignmentId, group }, uid, profile = {}) {
   const c = courseCode ? await lookupCourseCode(courseCode) : null;
   if (c && !c.ok) throw new Error(c.reason);
+  // 規則不允許老師用自己的課程代碼建立研究（老師不能同時是學生）；先說清楚，不要只顯示權限錯誤
+  if (c && c.course.teacherUid === uid) throw new Error('這是你自己開的課程代碼。老師帳號不能用自己的代碼建立學生的研究，請用學生的帳號登入。');
   const a = c && assignmentId ? (c.course.assignments || []).find((x) => x.id === assignmentId) : null;
   const ref = await addDoc(collection(db, 'projects'), {
     name: name || '未命名研究',
