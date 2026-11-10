@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCode, normalizeCode, looksLikeCode, semesterEnd, endOfDayTW, codeStatus, CODE_CHARS } from './course.mjs';
+import { makeCode, normalizeCode, looksLikeCode, semesterEnd, endOfDayTW, codeStatus, CODE_CHARS, normalizeSid, checkSid, SID_RE } from './course.mjs';
 
 test('代碼：6 碼、不含容易看錯的字', () => {
   for (let i = 0; i < 200; i++) { const c = makeCode(); assert.equal(c.length, 6); assert.ok(looksLikeCode(c), c); assert.ok(!/[01OIL]/.test(c)); }
@@ -21,4 +21,17 @@ test('代碼狀態：有效、停用、過期、找不到', () => {
   assert.match(codeStatus({ active: true, expiresAt: exp }, Date.parse('2027-02-01T00:00:01+08:00')).reason, /過期/);
   assert.match(codeStatus({ active: false, expiresAt: exp }).reason, /停用/);
   assert.match(codeStatus(null).reason, /找不到/);
+});
+
+test('學號：去空白（含全形）、全形轉半形、轉大寫；英數字 4–20 碼；空白代表不填', () => {
+  assert.equal(normalizeSid(' b10 9 01234 '), 'B10901234');
+  assert.equal(normalizeSid('ｂ１０９　０１'), 'B10901');
+  assert.deepEqual(checkSid(''), { ok: true, sid: '' });
+  assert.deepEqual(checkSid('  '), { ok: true, sid: '' });
+  assert.deepEqual(checkSid('s1234'), { ok: true, sid: 'S1234' });
+  assert.equal(checkSid('abc').ok, false);
+  assert.equal(checkSid('A'.repeat(21)).ok, false);
+  assert.match(checkSid('B109-01').reason, /英文字母和數字/);
+  assert.match(checkSid('學號123').reason, /英文字母和數字/);
+  assert.ok(SID_RE.test('A'.repeat(20)) && !SID_RE.test('a1234'));
 });

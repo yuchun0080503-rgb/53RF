@@ -47,3 +47,24 @@ export function codeStatus(code, now = Date.now()) {
   if (code.expiresAt && now > code.expiresAt) return { ok: false, reason: '這組代碼已經過期，請向老師要新的代碼。' };
   return { ok: true };
 }
+
+// ---------------- 學號（個人檔案設定，選填；老師可以設定課程必填） ----------------
+// 只有本人與「該學生加入的課程的老師」看得到（courses/{id}/roster/{uid}，見 firestore.rules），組員看不到。
+export const SID_RE = /^[A-Z0-9]{4,20}$/;
+// 輸入容錯：去掉所有空白（含全形空白）、全形英數字轉半形、轉大寫
+export function normalizeSid(input) {
+  return String(input ?? '')
+    .replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, '')
+    .toUpperCase();
+}
+/**
+ * @returns {{ok:true, sid:string}|{ok:false, sid:string, reason:string}} 空白代表「不填」，算合法
+ */
+export function checkSid(input) {
+  const sid = normalizeSid(input);
+  if (!sid) return { ok: true, sid: '' };
+  if (!/^[A-Z0-9]+$/.test(sid)) return { ok: false, sid, reason: '學號只能有英文字母和數字。' };
+  if (sid.length < 4 || sid.length > 20) return { ok: false, sid, reason: '學號要 4–20 碼。' };
+  return { ok: true, sid };
+}

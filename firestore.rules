@@ -8,7 +8,8 @@ rules_version = '2';
 //   aiLevel: 0–3                        ← 老師設定的 AI 權限；只有老師能改，而且老師只能改這一個欄位
 //   courseId, courseCode, teacherUid    ← 用課程代碼建立／加入課程的研究才有；建立後不能改（老師也因此自動成為成員）
 //   assignmentId, assignmentTitle       ← 課程有多個作業時屬於哪一個；Owner 之後可以改選
-// courses/{courseId}     { name, teacherUid, teacherName, teacherReq, dueDate, defaultAiLevel, code, codeExpires }
+// courses/{courseId}     { name, teacherUid, teacherName, teacherReq, dueDate, defaultAiLevel, code, codeExpires, requireSid }
+//   roster/{uid}         { sid, sidAt, name }   學號名冊：只有本人與這門課的老師讀得到
 // courseCodes/{code}     { courseId, teacherUid, active, expiresAt }   學生用代碼查課程；過期或停用後不能再用來加入
 //   members/{uid}        { role, task, displayName, email, color, joinedAt }   role: owner|editor|viewer|teacher
 //   invites/{token}       { role, email, task, createdAt, status, redeemedBy }
@@ -100,6 +101,25 @@ service cloud.firestore {
         || resource.data.createdBy == request.auth.uid);
     }
 
+    // ---- 學號名冊：courses/{courseId}/roster/{uid} { sid, sidAt, name }
+    //      學號只有本人與這門課的老師讀得到（組員讀不到，所以不能放在全組都讀得到的 members 文件）。
+    //      只有本人能寫；學號必須是 4–20 碼大寫英數字或空白；sidAt 是修改學號的時間（不能是未來）。 ----
+    match /courses/{courseId}/roster/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid
+        || get(/databases/$(database)/documents/courses/$(courseId)).data.teacherUid == request.auth.uid);
+      allow list: if isSignedIn()
+        && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherUid == request.auth.uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/courses/$(courseId))
+        && request.resource.data.keys().hasOnly(['sid', 'sidAt', 'name'])
+        && request.resource.data.sid is string
+        && (request.resource.data.sid == '' || request.resource.data.sid.matches('^[A-Z0-9]{4,20}$'))
+        && (request.resource.data.sidAt == null
+            || (request.resource.data.sidAt is timestamp && request.resource.data.sidAt < request.time + duration.value(5, 'm')))
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // ---- courseCodes：代碼就是文件 id。只能一筆一筆查（不能列出全部代碼）；已存在的代碼別人不能蓋掉（等於撞號會被拒絕） ----
     match /courseCodes/{code} {
       allow get: if isSignedIn();
@@ -120,7 +140,10 @@ service cloud.firestore {
     match /users/{uid} {
       // 只能讀自己的個人檔案（組員的名字與顏色是從各專案的 member 文件讀，網站本來就不需要讀別人的 users 文件）
       allow read: if isSignedIn() && request.auth.uid == uid;
-      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      // 學號（選填）：4–20 碼大寫英數字或空白
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+        && (!('sid' in request.resource.data) || request.resource.data.sid == ''
+            || (request.resource.data.sid is string && request.resource.data.sid.matches('^[A-Z0-9]{4,20}$')));
       allow delete: if false;
     }
 

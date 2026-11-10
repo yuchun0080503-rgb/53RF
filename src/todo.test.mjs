@@ -196,3 +196,18 @@ test('老師待辦：學生自己能處理的事（未讀回饋、未開閱讀�
   const q = proj({ fb: [{ id: 'f', at: NOW }], readings: ['x'], step: 1 });
   assert.deepEqual(teacherTodos({ projects: [q], now: NOW }), []);
 });
+
+test('學號未填：課程必填時，沒有學號的學生各一項（只提醒本人）；名冊還沒讀到時不判斷', () => {
+  const q = proj({ requireSid: true, sids: { A: 'B10901234' }, names: { B: '小明', V: '小華' } });
+  const c = nudgeChecks(q, NOW).filter((x) => x.kind === 'sidMissing');
+  assert.deepEqual(c.map((x) => [x.id, x.to.join(), x.teacher]), [['sid-B', 'B', '小明還沒有填學號'], ['sid-V', 'V', '小華還沒有填學號']]);
+  assert.equal(nudgeChecks(proj({ requireSid: true }), NOW).length, 0); // sids 還沒讀到
+  assert.equal(nudgeChecks(proj({ requireSid: false, sids: {} }), NOW).length, 0);
+  const t = teacherTodos({ projects: [q], now: NOW }).filter((x) => x.kind === 'sidMissing');
+  assert.equal(t.length, 2); assert.equal(t[0].btn, '提醒同學');
+  // 學生端：老師提醒過，而且自己還沒填 → 出現；填了 → 消失
+  const n = { ...q, nudges: [{ id: 'sid-B', to: ['B'], at: NOW }] };
+  const b = studentTodos([n], { me: 'B', now: NOW });
+  assert.deepEqual(b.map((x) => [x.kind, x.act.tab, x.btn]), [['nudge', 'profile', '去填寫']]);
+  assert.deepEqual(studentTodos([{ ...n, sids: { ...n.sids, B: 'B1234' } }], { me: 'B', now: NOW }), []);
+});
