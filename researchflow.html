@@ -404,7 +404,9 @@ function addTopicKw(text){if(!window.RFAGENT||!window.RFINK)return;
  const lead=subj.filter(k=>!broad(k)&&!focus.includes(k)&&!covered(k)).slice(0,focus.length?1:2);
  let core=[...lead,...focus];
  if(core.length<2)core=[...core,...[...mine,...subj].filter(k=>!core.includes(k))].slice(0,2);
- if(!core.length)return;
+ // 規則式抽不到主題詞時也要交給 AI 規劃：以前在這裡直接 return，AI 關鍵字規劃整個沒跑，
+ // 只剩畫布短詞（例：「台灣」「社工與長照」）被當成主題詞，搜尋幾乎找不到東西（2026-11-10 實際發生）
+ if(!core.length){planKw(text);return}
  const old=(S.kwCore||[]).filter(k=>!core.includes(k)&&hasZh(k)&&!RFAGENT.keywordPairs(k).length&&!RFAGENT.extractZhTerms(k,RFINK.lexRank).length); // 舊版留下的零碎詞（能力、判斷…）
  S.kwCore=core;S.kw=[...core,...S.kw.filter(k=>!core.includes(k)&&!old.includes(k))];S.kwBy="";terms.forEach(t=>{if(!S.kwEn[t])translateKw(t)});planKw(text)}
 // 有本機模型時：規則式先給出一版（立刻看得到），模型再讀題目＋主張＋畫布內容重新規劃一次，約 20 秒後換上。
@@ -1888,6 +1890,8 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(a==="claim"||a==="claimin"){const c=a==="claim"?p.objs.filter(o=>o.type==="text"&&o.tag!=="evidence"&&o.tag!=="question").map(o=>o.text)[+k]:$("#cli").value.trim();
   if(!c){alert("請先輸入要查證的主張。");return}
   S.claim=c;S.rq=window.RFAGENT?RFAGENT.claimQuestion(c):"「"+c+"」這個主張成立嗎？";
+  // 主張要是一句肯定的話，AI 才判斷得出文獻是支持還是反對；寫成問句時提醒改寫（仍可繼續）
+  if(/[？?]\s*$|如何|是否|會不會/.test(c))setTimeout(()=>alert("小提醒：主張最好寫成一句肯定的話，例如「社工人員配置不足會提高長照機構的照顧事故發生率」。寫成問句時，Agent 比較難判斷文獻是支持還是反對。可以在上方重新輸入主張。"),50);
   if(window.RFAGENT){const pairs=RFAGENT.keywordPairs(c),ck=pairs.map(x=>x.zh||x.en);S.kwEn=S.kwEn||{};pairs.forEach(x=>{if(x.zh)S.kwEn[x.zh]=x.en});S.kw=[...ck,...S.kw.filter(x=>!ck.includes(x))];addTopicKw(c)} // 主張本身的關鍵字排最前面
   log(w,"選定要查證的主張："+c)}
  if(a==="go"){if(MODE()==="claim"&&!S.claim){alert("主張論證模式需要先選定一個要查證的主張。");return}

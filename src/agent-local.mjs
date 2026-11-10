@@ -289,7 +289,7 @@ export function proposeQuestion({ items, answers, ownQuestion }) {
   const strategy = [
     ['研究對象', byKey.who], ['研究情境', byKey.ctx], ['主要結果', byKey.out],
   ].filter((r) => r[1]).map(([label, value]) => ({ label, value }));
-  strategy.push({ label: '時間範圍', value: '國際文獻 2020 年至今；中文文獻 2015 年至今' }, { label: '資料來源', value: 'OpenAlex 學術資料庫' });
+  strategy.push({ label: '時間範圍', value: '國際文獻 2020 年至今；中文文獻 2015 年至今' }, { label: '資料來源', value: 'OpenAlex 跨領域文獻；依學科加查 ERIC、Europe PMC、OpenAIRE、J-STAGE；中文文獻查華藝、臺灣博碩士論文網' });
   return { researchQuestion, keywords, kwEn, strategy };
 }
 
@@ -340,7 +340,8 @@ export function claimIssues(claim, evidence, heldCount = 0) {
 }
 
 // 把「要查證的主張」寫成研究問題的草案
-export const claimQuestion = (claim) => `「${String(claim || '').trim().slice(0, 80)}」這個主張成立嗎？在什麼條件下成立，又有哪些限制？`;
+// 主張本身已經是問句時，直接當研究問題用，不再套「…？」這個主張成立嗎？」變成問句裡包問句
+export const claimQuestion = (claim) => { const c = String(claim || '').trim(); return /[？?]$/.test(c) ? c : `「${c.slice(0, 80)}」這個主張成立嗎？在什麼條件下成立，又有哪些限制？`; };
 
 // ---------------- 查詢怎麼組：讓結果一定跟題目有關 ----------------
 // 以前是把關鍵字用空白接起來丟給全文搜尋，只要沾到其中一兩個詞就會被找出來，結果常常離題。
