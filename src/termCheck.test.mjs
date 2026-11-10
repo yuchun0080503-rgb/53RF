@@ -63,7 +63,7 @@ test('AI 自組的詞沒人用：把有人用的候選與標題交給 AI 依意�
   const kw = [{ zh: '室友作息不同', en: 'roommate sleep schedule misalignment', role: 'core', candidates: ['chronotype mismatch', 'social jetlag'], meaning: '室友睡覺時間不同' }, { zh: '睡眠品質', en: 'sleep quality', role: 'core' }];
   let seen;
   const r1 = await groundPlanKeywords(kw, null, { ...opt, pick: async (items) => { seen = items; return ['chronotype mismatch']; } });
-  assert.equal(r1.keywords[0].en, 'chronotype mismatch'); assert.equal(seen.length, 1); assert.deepEqual(seen[0].options.map((o) => o.t), ['social jetlag', 'chronotype mismatch']);
+  assert.equal(r1.keywords[0].en, 'chronotype mismatch'); assert.equal(seen.length, 1); assert.deepEqual(seen[0].options.map((o) => o.t), ['social jetlag', 'chronotype mismatch']); // 一起出現 0 篇的也給 AI 看，由 AI 依意思判斷
   const r2 = await groundPlanKeywords(kw, null, { ...opt, pick: async () => [''] });
   assert.equal(r2.keywords[0].en, 'roommate sleep schedule misalignment'); assert.equal(r2.keywords[0].weak, true);
   const r3 = await groundPlanKeywords(kw, null, { ...opt, pick: async () => { throw new Error('AI down'); } });

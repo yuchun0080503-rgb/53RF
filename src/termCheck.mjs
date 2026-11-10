@@ -110,7 +110,7 @@ export async function groundPlanKeywords(keywords, fetchImpl = fetch, { count = 
   for (const it of info) {
     const orig = it.ok.find((x) => x.t === it.k.en);
     if (orig && orig.n >= MIN_USE && (solo || orig.pair >= PAIR_MIN)) { it.pick = orig.t; it.how = 'original'; it.anchor = orig.with || ''; continue; }
-    const cand = it.best.filter((x) => solo || !(x.pair === 0)).sort((a, b) => (b.pair || 0) - (a.pair || 0) || b.n - a.n).slice(0, top);
+    const cand = it.best.slice().sort((a, b) => (b.pair || 0) - (a.pair || 0) || b.n - a.n).slice(0, top);
     if (cand.length) ask.push({ it, cand });
   }
   if (ask.length && pick) {
@@ -128,6 +128,8 @@ export async function groundPlanKeywords(keywords, fetchImpl = fetch, { count = 
     // 沒有 AI 可問或 AI 失敗：依篇數（一起出現最多，否則單獨最多且 ≥ MIN_USE）
     const p = it.best.filter((x) => x.pair >= PAIR_MIN).sort((a, b) => b.pair - a.pair)[0];
     const s = it.ok.filter((x) => x.n >= MIN_USE).sort((a, b) => b.n - a.n)[0];
+    const o = it.ok.find((x) => x.t === it.k.en && x.n >= MIN_USE);
+    if (pick && o) { it.pick = o.t; it.how = 'keep'; continue; } // 問 AI 失敗：原本的說法有人用就先保留，不冒險換成意思可能不同的熱門詞
     if (p) { it.pick = p.t; it.how = 'pair'; it.anchor = p.with; } else if (s) { it.pick = s.t; it.how = 'single'; }
   }
   const report = [];
