@@ -593,6 +593,27 @@ const firstMatch = (table, text) => (table.find(([re]) => re.test(text)) || [nul
 // 證據力：統整多篇研究的回顧最高，其次是有對照的實驗與長期追蹤，問卷與訪談較低；方法不明就標「不明」。
 const LEVELS = { 文獻回顧: '高', 實驗研究: '高', 縱貫研究: '中', 問卷調查: '中', 量化比較: '中', 質性研究: '低' };
 export const evidenceLevel = (method) => LEVELS[method] || '不明';
+/**
+ * 兩個證據版本的差別（證據頁「證據版本」用）：base 是比較的基準（通常是 v1），cur 是正在看的版本。
+ * 版本物件：{ev, kw, rq, cv（鎖定分析時的畫布文字）, rounds}。同一篇文獻以 id 或網址認定（不同資料庫的 id 不同，網址相同）。
+ * hasCv：兩邊都有記錄畫布內容才比較畫布（舊專案沒有 cv）。lvOf：判斷證據力的函式，預設只看 lv 欄位。
+ */
+export function diffVersions(base, cur, lvOf = (e) => e.lv) {
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const same = (a, b) => Boolean((a.id && a.id === b.id) || (a.url && a.url === b.url));
+  const bEv = list(base?.ev), cEv = list(cur?.ev);
+  const added = cEv.filter((e) => !bEv.some((x) => same(e, x)));
+  const dropped = bEv.filter((x) => !cEv.some((e) => same(e, x)));
+  const tally = (ev) => ({ total: ev.length, s: ev.filter((e) => e.k === 's').length, c: ev.filter((e) => e.k === 'c').length, u: ev.filter((e) => e.k === 'u').length, high: ev.filter((e) => lvOf(e) === '高').length });
+  const sub = (a, b) => { const bs = new Set(list(b)); return list(a).filter((x) => !bs.has(x)); };
+  return {
+    kwAdded: sub(cur?.kw, base?.kw), kwRemoved: sub(base?.kw, cur?.kw),
+    cvAdded: sub(cur?.cv, base?.cv), cvRemoved: sub(base?.cv, cur?.cv), hasCv: list(base?.cv).length > 0 && list(cur?.cv).length > 0,
+    rqChanged: String(base?.rq || '') !== String(cur?.rq || ''),
+    added, dropped, kept: cEv.length - added.length,
+    base: tally(bEv), cur: tally(cEv), searched: Boolean(cEv.length || cur?.rounds),
+  };
+}
 // 從一段文字（例如 AI 整理的「對象與方法」）判斷研究方法，中英文規則都試；認不出來回傳 null。
 // 規則式分類看不出方法、但 AI 的重點整理有寫時，用它補判證據力。
 export const methodOf = (text) => { const s = String(text || ''); const hit = [...METHODS_ZH, ...METHODS].find(([re]) => re.test(s)); return hit ? hit[1] : null; };

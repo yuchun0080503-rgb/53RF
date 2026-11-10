@@ -394,3 +394,30 @@ test('zhTake／buildQueriesZh：有 2 個以上中文關鍵字時中文查詢至
   assert.equal(zhTake(['a', '量刑', '國民法官', '模擬法庭', '死刑'], 4), 3, '最多 3 個');
   assert.deepEqual(bqz2(['量刑', '國民法官'], 0, 'claim', 1), ['量刑 國民法官']);
 });
+
+import { diffVersions } from './agent-local.mjs';
+test('diffVersions：多找到的文獻、關鍵字與畫布的增減、支持與證據力的變化', () => {
+  const v1 = { ev: [{ id: 'a', t: 'A', k: 's', lv: '高' }, { id: 'b', url: 'https://doi.org/b', k: 'c', lv: '低' }], kw: ['國民法官', '量刑'], cv: ['國民法官', '量刑'], rq: 'Q1', rounds: 5 };
+  const v2 = {
+    ev: [{ id: 'a', k: 's', lv: '高' }, { id: 'zz', url: 'https://doi.org/b', k: 'c', lv: '低' }, { id: 'n1', t: 'N1', k: 's', lv: '中' }, { id: 'n2', t: 'N2', k: 'u', lv: '高' }],
+    kw: ['國民法官', '死刑'], cv: ['國民法官', '量刑', '死刑等重大判刑'], rq: 'Q2', rounds: 2,
+  };
+  const d = diffVersions(v1, v2);
+  assert.deepEqual(d.added.map((e) => e.id), ['n1', 'n2'], '不同 id 但網址相同的算同一篇');
+  assert.equal(d.kept, 2);
+  assert.deepEqual(d.dropped, []);
+  assert.deepEqual([d.kwAdded, d.kwRemoved], [['死刑'], ['量刑']]);
+  assert.deepEqual([d.cvAdded, d.cvRemoved, d.hasCv], [['死刑等重大判刑'], [], true]);
+  assert.equal(d.rqChanged, true);
+  assert.deepEqual(d.base, { total: 2, s: 1, c: 1, u: 0, high: 1 });
+  assert.deepEqual(d.cur, { total: 4, s: 2, c: 1, u: 1, high: 2 });
+  assert.equal(d.searched, true);
+});
+test('diffVersions：舊版沒有畫布記錄就不比畫布；還沒搜尋的版本 searched 為 false；v1 有、這版沒找到的列在 dropped', () => {
+  const d = diffVersions({ ev: [{ id: 'a' }, { id: 'b' }], kw: ['x'], rq: 'Q' }, { ev: [], kw: ['x'], rq: 'Q', rounds: 0 });
+  assert.equal(d.hasCv, false);
+  assert.equal(d.searched, false);
+  assert.deepEqual(d.dropped.map((e) => e.id), ['a', 'b']);
+  assert.equal(d.rqChanged, false);
+  assert.deepEqual([d.kwAdded, d.kwRemoved], [[], []]);
+});
