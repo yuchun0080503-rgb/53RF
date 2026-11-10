@@ -446,6 +446,27 @@ export async function readInk(imageBase64, hint = '', fetchImpl) {
   return clip(out.text, 120);
 }
 
+/**
+ * 讀學生放到畫布上的圖片（照片、截圖、圖表、手寫筆記），寫成文字，讓「分析整張畫布」也能用到圖片內容。
+ * 只描述圖片裡看得到的東西，不推論；看不出內容時回傳空字串。
+ * @param {string} imageBase64 PNG 的 base64（不含 data: 前綴）
+ * @returns {Promise<string>}
+ */
+export async function readImage(imageBase64, name = '', fetchImpl) {
+  const out = await chatJSON({
+    system:
+      '這張圖片是大學生放在小組報告白板上的資料，可能是照片、網頁或論文截圖、圖表、手寫筆記或海報。' +
+      '請用繁體中文寫：(1) 圖片裡的重要文字（照抄，英文保留原文）；(2) 圖片在呈現什麼（一到兩句，圖表要寫出變項與趨勢）。' +
+      '只寫圖片裡看得到的內容，不要推論或評論；合計不超過 150 字。看不出任何內容就回傳空字串。',
+    user: name ? `檔名：${clip(name, 60)}（檔名只供參考，以圖片內容為準）` : '請讀這張圖片。',
+    images: [imageBase64],
+    schema: { type: 'object', required: ['text'], properties: { text: str } },
+    maxTokens: 400,
+    timeout: 90000,
+  }, fetchImpl);
+  return clip(out.text, 200);
+}
+
 // 關鍵字查證（組員設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
 // 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」；
 // AI 原本的說法有人用就直接用，否則把有人用的候選連同論文標題交給 AI，依意思選論文用法相符的說法（pickTerms）。

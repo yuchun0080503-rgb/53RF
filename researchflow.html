@@ -1239,9 +1239,20 @@ async function addImages(files,at){files=[...files].filter(f=>/^image\//.test(f.
   const o=mkO({type:"img",by:ME,x,y,iw,ih,url:"",name:f.name.slice(0,80),aiRead:"（圖片："+f.name.slice(0,40)+"）"});p.objs.push(o);draw();setStat("圖片上傳中…");
   try{if(LIVE()&&p.fid){const u=await RFDB.uploadImage(p.fid,f);o.url=u.url;o.path=u.path}
    else o.url=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=no;fr.readAsDataURL(f)});
-   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）")}
+   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）");readImgAI(o,f)}
   catch(err){p.objs=p.objs.filter(k=>k!==o);draw();alert("圖片上傳失敗："+(err?.message||err))}
   x+=24;y+=24}}
+// 圖片辨識：上傳後請 AI 看圖片內容寫成文字（放進「AI 讀取結果」，可修正），分析畫布時才會用到圖片裡的資訊。
+// 後端一次只收 1 張、base64 2MB 以內的 PNG，所以先縮到長邊 1280 像素，太大再縮。
+async function imgB64(f){const u=URL.createObjectURL(f);try{const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+ for(let side=1280;side>=400;side=Math.round(side*.75)){const k=Math.min(1,side/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.naturalWidth*k));c.height=Math.max(1,Math.round(im.naturalHeight*k));
+  const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const b=c.toDataURL("image/png").split(",")[1];if(b.length<1.9e6)return b}
+ return ""}finally{URL.revokeObjectURL(u)}}
+async function readImgAI(o,f){if(!AIV())return;const proj=p,ph="（圖片："+String(f.name).slice(0,40)+"）";
+ try{const b=await imgB64(f);if(!b)return;setStat("AI 讀取圖片內容中…");const txt=await RFAI.readImage(b,f.name);
+  if(p!==proj||!txt||!p.objs.includes(o)||o.aiRead!==ph)return; // 等待期間學生已經自己改了讀取結果就不覆蓋
+  o.aiRead=ph+txt;o.hwBy=AIN();o.mod=ME;o.ver++;draw();insp();syncObjsLive(false);aiLog(`${AIN()} 讀取圖片「${String(f.name).slice(0,40)}」：${txt.slice(0,60)}${txt.length>60?"…":""}`);setStat("已讀取圖片內容（可在右邊修正）");if(pane==="agent"&&S.step===1)renderPane()}
+ catch(e){console.warn("[ResearchFlow] AI 讀取圖片失敗，保留檔名：",e?.message||e);setStat("圖片已加入（AI 沒有讀到內容，可自己在右邊補充說明）")}}
 $("#imgup").onclick=()=>$("#imgf").click();
 $("#imgf").onchange=e=>{addImages(e.target.files);e.target.value=""};
 $("#cvw").addEventListener("dragover",e=>{if([...(e.dataTransfer?.items||[])].some(i=>i.kind==="file")){e.preventDefault();e.dataTransfer.dropEffect="copy"}});
