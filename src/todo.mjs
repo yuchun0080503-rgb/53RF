@@ -104,7 +104,7 @@ export function nudgeChecks(q, now = Date.now()) {
 }
 
 // ---------------- 學生端 S1 ----------------
-const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定', profile: '去填寫' };
+const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定', profile: '去填寫', rubric: '看配比' };
 const WAIT_STEPS = { 1: '確認理解', 4: '確認策略' }; // 研究狀態七步驟中，停下來等學生確認的兩步
 
 /**
@@ -138,6 +138,12 @@ export function studentTodos(projects, { me, seen = {}, now = Date.now() } = {})
     for (const t of q.tasks || []) {
       if (t.assignee === me && !t.done && !nudged.has(`task-${t.id}`)) add(q, 'task', t.id, `我的分工：${t.title}`, t.due, { tab: 'team' });
     }
+    // 評分配比：老師新增或修改後（版本比我上次看過的新）
+    const rv = q.rubric && Number(q.rubric.ver) || 0;
+    if (rv > (Number(sn.rubric) || 0)) {
+      const md = q.rubric.at ? twDate(q.rubric.at).split('-').slice(1).map(Number).join('/') : '';
+      add(q, 'rubric', String(rv), rv > 1 ? `老師${md ? '於 ' + md + ' ' : ''}更新了評分配比` : '老師公布了評分配比', null, { tab: 'rubric' });
+    }
     const d = daysUntil(q.due, now);
     if (d !== null && d >= 0 && d <= 7) add(q, 'due', '', d === 0 ? '作業今天截止' : `作業 ${d} 天後截止`, q.due, { tab: 'open' });
     // 老師已經提醒過同一件事時，只顯示「老師提醒」那一項，不重複
@@ -166,6 +172,12 @@ export function teacherTodos({ courses = [], projects = [], now = Date.now() } =
     const missing = asg.length ? asg.filter((a) => !a.due) : (c.dueDate ? [] : [{ id: '', title: '' }]);
     for (const a of missing) {
       out.push({ key: `c:${c.id}:${a.id || '-'}:nodue`, kind: 'noDue', cid: c.id, name: c.name, reason: a.title ? `作業「${a.title}」還沒有設截止日` : '課程還沒有設截止日', due: null, act: { course: c.id }, btn: '前往', group: 'A' });
+    }
+    // 作業（或沒有作業清單的課程）還沒有設定評分配比
+    const all = asg.length ? asg : [{ id: '', title: '', rubric: c.rubric }];
+    for (const a of all) {
+      if (a.rubric && Array.isArray(a.rubric.items) && a.rubric.items.length) continue;
+      out.push({ key: `c:${c.id}:${a.id || '-'}:norubric`, kind: 'noRubric', cid: c.id, name: c.name, reason: a.title ? `作業「${a.title}」還沒有設定評分配比` : '課程還沒有設定評分配比', due: null, act: { course: c.id, rubric: a.id || '' }, btn: '前往', group: 'A' });
     }
     const left = daysUntil(c.codeExpires, now);
     if (c.codeActive !== false && left !== null && left >= 0 && left <= CODE_WARN_DAYS) {
