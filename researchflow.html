@@ -373,7 +373,17 @@ const U={A:{n:"家欣",c:CO[0],email:"jiaxin@gmail.com",id:"RF-U-7F3A21"},B:{n:"
 const TAGS={claim:"主張",counter:"反向觀點",question:"待驗證問題",evidence:"證據"},STG=["研究問題","假設","證據","討論","結論"];
 const LVN=["No AI","Research Assistant","Thinking Assistant","Writing Assistant"];
 let ROLE="s",ME="A",p=null,S=null,sel=new Set(),tool="sel",pane="agent",editing={},linkFrom=null,uid=100;
-const fresh=()=>({step:0,ver:null,rd:[],scope:{},rq:"",kw:[],rounds:0,ev:[],msg:"",tok:0,skip:false,qs:[],sum:"",scopeReasons:null,qs3:null,tooBroad:null,topic:"",q0:"",strat:null,sq:[],cq:[],mode:"",claim:"",held:[],gone:[],wantCounter:null,saved:[],kwEn:{},kwCore:[]});
+const fresh=()=>({step:0,ver:null,rd:[],scope:{},rq:"",kw:[],rounds:0,ev:[],msg:"",tok:0,skip:false,qs:[],sum:"",scopeReasons:null,qs3:null,tooBroad:null,topic:"",q0:"",strat:null,sq:[],cq:[],mode:"",claim:"",held:[],gone:[],wantCounter:null,saved:[],kwEn:{},kwCore:[],evVer:1,evVers:[]});
+// 證據版本：每次重新分析另開一個版本（證據 v1、v2…），舊版整份保留（證據、搜尋輪數與查詢、關鍵字、研究問題），在證據頁上方切換。
+// S.evVer 是目前版本號；其他版本的快照放在 S.evVers。切換時把目前這份存起來、換上選的那份，其餘程式一樣只讀 S.ev 等欄位。
+const EVF=["ev","held","qs","rounds","dbs","refl","broad","skip","sum","msg","kw","kwCore","kwEn","kwSyn","kwAspect","kwWeak","rq"];
+const evClone=x=>x===undefined?undefined:JSON.parse(JSON.stringify(x));
+function evStash(){const o={n:S.evVer||1,at:Date.now()};EVF.forEach(k=>{if(S[k]!==undefined)o[k]=evClone(S[k])});S.evVers=(S.evVers||[]).filter(x=>x.n!==o.n).concat(o).sort((a,b)=>a.n-b.n)}
+function evNew(){evStash();const n=Math.max(...S.evVers.map(x=>x.n))+1;
+ S.ev=[];S.held=[];S.qs=[];S.rounds=0;S.dbs=[];S.refl=[];S.broad=0;S.skip=false;S.sum="";S.msg="";S.evVer=n; // 關鍵字與研究問題先沿用，確認策略時會依新的畫布內容重新規劃
+ return n}
+function evSwitch(n){if(n===(S.evVer||1))return false;const t=(S.evVers||[]).find(x=>x.n===n);if(!t)return false;evStash();S.evVers=S.evVers.filter(x=>x.n!==n);
+ const d=fresh();EVF.forEach(k=>{S[k]=t[k]!==undefined?evClone(t[k]):d[k]});S.evVer=n;return true}
 const hasZh=s=>/[一-鿿]/.test(s);
 // 版本鎖定：小組確認讀取結果（關卡 1）時，把這次要分析的內容存成快照（S.snap）。之後的聚焦、研究問題、關鍵字、搜尋都讀快照，
 // 畫布之後再怎麼改，這一輪分析用的內容都不會跟著變；要用新內容就按「重新分析新增內容」。
@@ -1308,7 +1318,7 @@ const RD=[[0,1],[2,3],[4]],RQ=[["generative AI university students self-directed
 const NEED={analyze:1,re:1,ok1:1,ask:1,rq:2,myrq:1,go:1,round:1,expand:1,board:2,sum:3,outline:3,report:99};
 const lockedHTML=()=>`<div class="box"><b>此作業未開放 AI</b><p class="sm mute" style="margin:6px 0 0">老師設定為 Level 0。你們仍可使用共享畫布、專案管理與協作功能。</p></div>`;
 const repBtn=()=>`<div class="box sm" style="margin-top:22px"><div class="mute">目前權限：Level ${p.LV}（${LVN[p.LV]}）</div><div class="acts" style="margin-top:8px"><button data-a="report">${I("file")}請 Agent 完成整份報告</button></div></div>`;
-function stale(){if(!S.ver||S.step<1||p.ver<=S.ver||p.LV===0)return "";const n=p.ver-S.ver;return `<div class="box warn sm">自上次 Agent 分析（v${S.ver}）後，Canvas 已有 ${n} 項新修改。${S.snap&&S.snap.length?"這一輪分析鎖定的是 v"+(S.snapVer||S.ver)+" 的內容，新修改不會影響目前的結果。":""}是否分析新的研究內容？<div class="acts"><button class="pri" data-a="re">重新分析新增內容</button></div></div>`}
+function stale(){if(!S.ver||S.step<1||p.ver<=S.ver||p.LV===0)return "";const n=p.ver-S.ver;return `<div class="box warn sm">自上次 Agent 分析（v${S.ver}）後，Canvas 已有 ${n} 項新修改。${S.snap&&S.snap.length?"這一輪分析鎖定的是 v"+(S.snapVer||S.ver)+" 的內容，新修改不會影響目前的結果。":""}是否分析新的研究內容？${S.rounds||S.ev.length?`<div class="mute" style="margin-top:4px">已搜尋過的證據會保存成「證據 v${S.evVer||1}」，用新內容另開下一個版本重新搜尋，之後可以在證據頁切換。</div>`:""}<div class="acts"><button class="pri" data-a="re">重新分析新增內容</button></div></div>`}
 function updStale(){const e=$("#stl");if(e){e.innerHTML=stale();bind(e)}}
 function agentHTML(){const s=S.step;
  const st=["待命，等待你們分析研究方向。","等待你們確認手寫與內容的讀取結果。","研究範圍偏廣，需要先聚焦。","等待你們回答聚焦問題。","等待你們確認研究問題與搜尋策略。",`已搜尋 ${S.rounds}／${capOf()} 輪，等待你們決定下一步。`,"證據已確認完成，可以開始整理報告。"][s];
@@ -1348,7 +1358,7 @@ function body(){const s=S.step,sc=S.scope;
  <div class="box sm">${S.msg||"尚未搜尋。"}</div>
  ${S.rounds===1&&!balanced&&!S.skip?`<div class="box warn sm"><b>Evidence Imbalance</b><br>支持證據 ${sp} 筆，反向證據 ${c} 筆。請選擇下一步：<div class="acts"><button class="pri" data-a="round">重新規劃並搜尋</button><button data-a="board">加入討論板</button><button data-a="kwedit">修改搜尋方向</button><button data-a="skip">暫時略過</button></div></div>`:""}
  ${balanced?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}證據已足夠</b><div class="mute" style="margin-top:4px">支持 ${sp} 筆．反向／限制 ${c} 筆${uv?`，其中 ${uv} 筆來源待驗證`:""}</div></div>`:""}
- <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
+ <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset" title="清除全部證據版本、搜尋紀錄與關鍵字，從頭開始（收藏的例證保留）">重新開始分析（清除全部證據）</button></div>`}
  return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
 /* 主張論證模式的搜尋頁：只呈現「支持這個主張的證據夠不夠扎實」。不主動提供反面例證——
    先列出主張的潛在問題（看主張的寫法與證據的組成），再問小組要不要另外找反面例證當參考。 */
@@ -1368,7 +1378,7 @@ function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k=
    +(sup.length<3?`<div class="box sm" style="margin:8px 0">已經找到 ${u} 篇跟主張相關的文獻，但摘要沒有寫出研究結果（或網路搜尋沒有取得摘要），AI 判斷不出是否支持，所以先不計入。請到「證據」頁的「立場待確認」打開原文閱讀，確認支持主張後按「讀過了，列為支持」，就會計入論證強度。<div class="acts"><button data-a="gotoev">前往證據頁看這 ${u} 篇</button></div></div>`:"")})()}
  ${S.rounds?`<h3>目前主張下可能有的潛在問題</h3>${issues.length?issues.map(x=>`<div class="box sm warn" style="margin:6px 0">${esc(x)}</div>`).join(""):`<p class="sm mute">從主張的寫法和目前的證據來看，沒有發現明顯的問題。</p>`}<div class="box sm" style="margin-top:12px">${ask}</div>`:""}
  ${ok?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}論證的證據已足夠</b><div class="mute" style="margin-top:4px">支持主張 ${sup.length} 筆，其中證據力高 ${high} 筆${uv?`；有 ${uv} 筆來源待驗證`:""}</div></div>`:""}
- <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset">重新開始分析</button></div>`}
+ <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset" title="清除全部證據版本、搜尋紀錄與關鍵字，從頭開始（收藏的例證保留）">重新開始分析（清除全部證據）</button></div>`}
 function bind(r=document){r.querySelectorAll("details[data-ei]").forEach(d=>d.ontoggle=()=>{const e=S.ev[+d.dataset.ei];if(d.open&&e)zhFor(e.id)});
  r.querySelectorAll(".flow .go").forEach(x=>x.onkeydown=e=>{if(e.key==="Enter")x.click()});
  r.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const k=b.dataset.q,v=b.dataset.v,cur=scv(k),nx=cur.includes(v)?cur.filter(x=>x!==v):[...cur,v];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];saveS();renderPane()});
@@ -1763,7 +1773,14 @@ const evZh=e=>e.kp?[e.kp.findings,e.kp.use&&("用處："+e.kp.use)].filter(Boole
 const isSaved=e=>(S.saved||[]).some(x=>x.id===e.id);
 function savedHTML(){const sv=S.saved||[];if(!sv.length)return"";
  return `<h3>已收藏的例證（${sv.length}）</h3><p class="sm mute" style="margin-top:-2px">收藏的例證會一直留著，重新開始或換主張都不會不見，可以隨時放到畫布上。</p>`+sv.map((e,j)=>`<div class="ev sv"><b>${esc(e.t)}</b>（${esc(e.y)}）${evZh(e)?`<div class="evzh">${esc(evZh(e))}</div>`:""}<div class="acts" style="margin-top:6px">${/^https:\/\//.test(e.url||"")?`<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;align-self:center">開啟原始來源</a>`:""}<button data-a="tocv" data-k="s${j}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>放到畫布</button><button data-a="unsave" data-k="${j}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>取消收藏</button></div></div>`).join("")}
-function evHTML(){return savedHTML()+evHTML0()}
+// 證據版本列：有兩個以上版本時才出現。目前版本用深色按鈕；其他版本的按鈕滑過會顯示當時的關鍵字與搜尋時間
+function evVerBar(){const cur=S.evVer||1,vs=(S.evVers||[]).filter(x=>x.n!==cur).map(x=>({n:x.n,c:(x.ev||[]).length,r:x.rounds||0,tip:`${(x.kw||[]).slice(0,4).join("、")||"（無關鍵字）"}・${new Date(x.at).toLocaleString("zh-TW",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})} 保存`}))
+  .concat({n:cur,c:S.ev.length,r:S.rounds,cur:1}).sort((a,b)=>a.n-b.n);
+ if(vs.length<2)return"";
+ return `<div class="box sm" style="margin-bottom:10px"><b>證據版本</b><span class="mute">（每次「重新分析新增內容」會另開新版本，舊版都保留）</span>`
+  +`<div class="acts" style="margin-top:6px;flex-wrap:wrap">${vs.map(v=>`<button data-a="evver" data-k="${v.n}" class="${v.cur?"pri":""}" ${v.cur?'aria-current="true"':`title="${esc(v.tip)}"`} ${canEdit()?"":"disabled"} style="font-size:12px;padding:2px 9px">證據 v${v.n}（${v.c} 篇）</button>`).join("")}</div>`
+  +`<div class="sm mute" style="margin-top:6px">正在看 v${cur}：關鍵字 ${esc((S.kw||[]).slice(0,4).join("、")||"—")}${(S.kw||[]).length>4?"…":""}，已搜尋 ${S.rounds} 輪。切換版本時，搜尋與證據確認都是針對正在看的這一版。</div></div>`}
+function evHTML(){return evVerBar()+savedHTML()+evHTML0()}
 function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)e.k="u"}); // 舊資料：立場待確認以前被放進反向，顯示時改回待確認
  if(!S.ev.length)return `<h3>Evidence Map</h3><p class="sm mute">確認研究問題並完成搜尋後，證據會出現在這裡。沒有可驗證來源的資料不會被標記為證據。</p>`;
  const sp=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),tot=sp.length+cn.length;
@@ -1792,7 +1809,12 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(LIVE()&&LIVE_ACTS.has(a)){if(!canEdit()){alert("你的角色為唯讀，無法執行 Agent。");return}actLive(a,w);return}
  if(L<(NEED[a]||0)){log("Harness",a==="report"?"拒絕 generate_report：此能力未開放，研究結論與報告由學生完成。":`拒絕 ${a}：目前權限 Level ${L} 不允許此操作。`,"sys");alert(a==="report"?"AI Harness 已拒絕：ResearchFlow 不代替學生完成整份報告。":"目前的老師權限設定不允許此操作。");renderPane();return}
  if(!canEdit()&&a!=="report"){alert("你的角色為唯讀，無法執行 Agent。");return}
- if(a==="analyze"||a==="re"){const ids=(a==="re"||!sel.size?p.objs:p.objs.filter(o=>sel.has(o.id))).filter(o=>o.type!=="link");S.rd=ids.map(o=>o.id);S.snap=null;ids.forEach((o,i)=>{o.read=true;if(o.type==="stroke"&&!o.aiRead&&!o.hwSub)o.aiRead="（未能辨識，請手動輸入）"});S.ver=p.ver;S.step=1;S.tok+=3200;log(w,"選取研究區域並要求 Agent 分析。");log("Agent",`讀取 Canvas Version ${p.ver}（${ids.length} 個物件）。`,"ai")}
+ if(a==="analyze"||a==="re"){
+  // 已經搜尋過又重新分析：目前這份證據存成一個版本，另開新版本從第 1 輪重新搜尋。
+  // 以前輪數沒歸零，下一次搜尋接著第 6 輪（放寬年份、擴大範圍），而且輪數大於 0 時 AI 規劃關鍵字的結果會被丟掉，新畫布內容沒有進搜尋。
+  if(S.rounds||S.ev.length){const old=S.evVer||1,n=evNew();log(w,`重新分析：證據 v${old} 已保存，開始證據 v${n}，會從第 1 輪用新的畫布內容重新搜尋。`)}
+  const ids=(a==="re"||!sel.size?p.objs:p.objs.filter(o=>sel.has(o.id))).filter(o=>o.type!=="link");S.rd=ids.map(o=>o.id);S.snap=null;ids.forEach((o,i)=>{o.read=true;if(o.type==="stroke"&&!o.aiRead&&!o.hwSub)o.aiRead="（未能辨識，請手動輸入）"});S.ver=p.ver;S.step=1;S.tok+=3200;log(w,"選取研究區域並要求 Agent 分析。");log("Agent",`讀取 Canvas Version ${p.ver}（${ids.length} 個物件）。`,"ai")}
+ if(a==="evver"){if(evSwitch(+k))log(w,`切換到證據 v${k}。`)}
  if(a==="fix"){log(w,"標示 AI 讀取內容需修正；修改畫布後可重新分析。");S.step=0;S.ver=null}
  if(a==="ok1"){S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});S.step=2;S.tok+=900;log(w,"確認 AI 的讀取結果。");lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}）。`);log("Agent","判斷 Research Question 過於廣泛。","ai")}
  if(a==="ask"){S.step=3;S.tok+=900;log("Agent","提出 3 個引導式聚焦問題。","ai")}
@@ -1850,7 +1872,10 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  // 示範模式（沒連 Firebase）：投影片大綱用規則式整理
  if(a==="outline"&&window.RFAGENT){const it=RFAGENT.outlineEvidence(S.ev);if(!it.length){alert("還沒有可以引用的證據（支持或限制）。");return}
   const o=RFAGENT.ruleOutline({topic:p.name,question:S.rq,claim:S.claim,points:rdItems().map(x=>x.text).filter(Boolean),items:it});S.outline={...o,refs:RFAGENT.outlineRefs(it,o.slides),by:"規則式整理",at:Date.now()};log("Agent","產生投影片大綱（示範：規則式整理）。","ai")}
- if(a==="reset"){const keep=S.saved||[];S=p.S=fresh();S.saved=keep} // 收藏的例證不會因為重新開始而消失
+ if(a==="reset"){const nv=1+(S.evVers||[]).filter(x=>x.n!==(S.evVer||1)).length; // 目前有幾個證據版本
+  // 清掉全部證據版本、搜尋紀錄與關鍵字，從頭重新搜尋。想保留舊證據請改按「重新分析新增內容」（會另開新版本）
+  if(!confirm(`「重新開始分析」會清除全部證據版本（目前共 ${nv} 個）、搜尋紀錄與關鍵字，從頭重新分析與搜尋，無法復原。\n收藏的例證會保留。\n\n如果只是想用新的畫布內容再找一輪、又要保留舊證據，請取消，改按「重新分析新增內容」。`))return;
+  const keep=S.saved||[];S=p.S=fresh();S.saved=keep} // 收藏的例證不會因為重新開始而消失
  syncObjsLive(false);saveS();renderProj();renderPane()}
 // 證據卡：標題（年份）＋中文摘要＋可以點開的來源連結。完整網址存在 url，卡片上只顯示一小段（ul）。
 // 中文摘要沒有的話，先請本機模型整理（沒有模型就用機器翻譯）；模型只能根據資料庫給的摘要整理——資料庫沒有摘要的文獻不會編造內容，會直接寫明請讀原文。
