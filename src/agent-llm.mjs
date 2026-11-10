@@ -11,6 +11,7 @@
 
 import { chatJSON } from './llm.mjs';
 import { DISCIPLINES, normDiscipline } from './sources.mjs';
+import { groundPlanKeywords } from './termCheck.mjs';
 
 const str = { type: 'string' };
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -45,7 +46,11 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '8. 觀點詞（role=aspect）0 到 4 個：畫布上其他內容提到、但不是主題詞的具體概念（例如要比較的條件、可能的原因或機制、子問題），每個概念一個。不要漏掉學生寫下的概念（例如畫布寫了「通勤時間」「搭公車」，就要有 commuting time、public transportation）。\n' +
       '9. 概念在學術界有固定名稱時（理論、效應、量表、現象的正式名稱），en 或 synonyms 要用那個名稱：例如「只看到跟自己想法一樣的意見」是 echo chamber，「一直反覆想同一件不開心的事」是 rumination，「住的地方附近買不到新鮮食物」是 food desert。\n' +
       '10. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。\n' +
-      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
+      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。\n' +
+      '12. 每個主題詞另外寫三個欄位（程式會拿去資料庫查證，選真的有論文在用的說法）：' +
+      'meaning＝這個中文說法在講什麼現象或情況（一句繁體中文，例如「社工不足」是指機構或地方政府聘用的社工人數不夠、每人負責太多個案）；' +
+      'desc_en＝用一句完整的英文描述這個現象（描述情況，不要只翻譯詞本身）；' +
+      'candidates＝從 desc_en 想出 3 到 5 個英文論文標題或摘要實際會用的說法（1 到 4 個英文單字），包含學界的正式名稱，最常用的放第一個。範圍詞與觀點詞這三個欄位留空。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
       type: 'object', required: ['focus', 'keywords', 'discipline'],
@@ -54,11 +59,11 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
         discipline: { type: 'string', enum: DISCIPLINES },
         keywords: {
           type: 'array', minItems: 2, maxItems: 9,
-          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
+          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 }, meaning: str, desc_en: str, candidates: { type: 'array', items: str, maxItems: 5 } } },
         },
       },
     },
-    maxTokens: 900,
+    maxTokens: 1600,
   }, fetchImpl);
   // 主題詞 → 範圍詞 → 觀點詞：搜尋只用前面的主題詞＋第一個範圍詞，觀點詞給學生看、之後換方向時用，不會讓查詢條件變嚴
   const order = { core: 0, scope: 1, aspect: 2 };
@@ -78,7 +83,8 @@ function normKeywords(list) {
   });
   const keywords = split
     // 中文去掉括號裡的說明：模型會寫「女子教育（學校教育）」，但中文文獻要求關鍵字原樣出現在標題或摘要，括號會讓每篇都對不上
-    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3),
+      meaning: clip(k.meaning, 120), descEn: clip(k.desc_en, 300), candidates: (k.candidates || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 5) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
   // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
   // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
@@ -438,4 +444,13 @@ export async function readInk(imageBase64, hint = '', fetchImpl) {
     timeout: 90000,
   }, fetchImpl);
   return clip(out.text, 120);
+}
+
+// 關鍵字查證（Fanny 設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
+// 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」，選真的有人這樣用的說法當主題詞。
+// 查不到（網路錯誤）時保留 AI 原本的詞，不影響流程。回傳新的 plan（keywords 已換過）與查證報告。
+export async function groundPlan(plan, fetchImpl) {
+  if (!plan || !Array.isArray(plan.keywords)) return plan;
+  const r = await groundPlanKeywords(plan.keywords, fetchImpl);
+  return { ...plan, keywords: r.keywords, grounding: r.report };
 }

@@ -428,18 +428,20 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
  // 聚焦問題的選擇（對象、情境、要比較的結果）放在最前面：以前只進研究問題的文字，沒有進關鍵字規劃，搜尋就漏了「結果」那一半（例如行人體感溫度）
  const focusNotes=QS().map(q=>S.scope[q[1]]?"聚焦選擇："+S.scope[q[1]]:"").filter(Boolean);
  const notes=[...focusNotes,...rdItems().map(o=>o.text).filter(Boolean)];
- RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
+ // 規劃完再到 OpenAlex 查證主題詞（看候選說法實際有幾篇論文在用），查不到就用原本的規劃
+ RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>RFAI.groundPlan?RFAI.groundPlan(r).catch(()=>r):r).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
   S.kwEn=S.kwEn||{};S.kwSyn={};
-  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
+  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=!k.grounded&&k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
    if(known&&known.en.toLowerCase()!==en){syn=[en,...syn];en=known.en}
-   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect"}});
+   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect",weak:!!k.weak}});
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
   // 觀點詞：畫布上提到的其他概念（比較的條件、可能的機制、子問題），列出來讓小組看到有沒有漏掉，但不加進搜尋條件（加了會讓查詢太嚴）
   S.kwAspect=ks.filter(k=>k.aspect).map(k=>k.name);
   const cv=canvasTerms().filter(t=>!ks.some(x=>x.name===t)&&!mine.includes(t)); // 畫布短詞不會被模型規劃的結果蓋掉
   cv.forEach(t=>{if(hasZh(t)&&!S.kwEn[t])translateKw(t)});
-  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
-  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
+  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=ks.filter(k=>k.weak).map(k=>k.name);S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
+  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);
+  (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?"都太少，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="pair"?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
 function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||!S.kw.length)return;
