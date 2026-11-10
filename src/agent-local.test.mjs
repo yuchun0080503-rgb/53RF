@@ -376,3 +376,21 @@ test('outlineRefs／outlineToText：參考文獻只列有引用的，純文字�
   assert.match(txt, /第 1 頁　A\n・重點一\n　引用：\[3\]\[1\]/);
   assert.match(txt, /第 3 頁　參考文獻\n\[1\]/);
 });
+
+import { classifyWork as cw2, methodOf, zhTake, buildQueriesZh as bqz2, evidenceLevel as lv2 } from './agent-local.mjs';
+test('量化比較：統計顯著性檢定的中文摘要認得出方法，證據力中；問卷、訪談仍優先', () => {
+  const abs = '本文以2020年至2022年司法院公開之88件模擬判決與相對應之原刑事判決為樣本，比較兩者罪名及量刑之差異，並進行統計顯著性檢定，藉以研究職業法官與國民法官對罪名認定、量刑結果是否存在差異。';
+  const c = cw2({ id: 'x', title: '職業法官與國民法官之論罪量刑比較', abstract: abs, authors: [], year: 2023, venue: '', url: '' }, 's', ['國民法官', '量刑']);
+  assert.equal(c.m, '量化比較');
+  assert.equal(c.lv, '中');
+  assert.equal(lv2('量化比較'), '中');
+  assert.equal(methodOf('以問卷調查並進行迴歸分析'), '問卷調查', '問卷比統計檢定先認');
+  assert.equal(methodOf('88 件模擬判決與原判決比較，做統計顯著性檢定'), '量化比較');
+  assert.equal(methodOf('只寫了背景'), null);
+});
+test('zhTake／buildQueriesZh：有 2 個以上中文關鍵字時中文查詢至少用 2 個，最多 3 個', () => {
+  assert.equal(zhTake(['量刑', '國民法官'], 1), 2, '主題詞只有 1 個也用 2 個');
+  assert.equal(zhTake(['量刑'], 1), 1, '只有 1 個中文詞就用 1 個');
+  assert.equal(zhTake(['a', '量刑', '國民法官', '模擬法庭', '死刑'], 4), 3, '最多 3 個');
+  assert.deepEqual(bqz2(['量刑', '國民法官'], 0, 'claim', 1), ['量刑 國民法官']);
+});

@@ -534,8 +534,11 @@ export function relevance(work, core, scope = []) {
 }
 
 // 中文文獻的查詢：直接用中文主題詞（coreZh 個，最多 3 個），各輪加上的方向用語跟英文版對應。
+// 中文查詢用幾個關鍵字：至少 2 個（有 2 個以上中文關鍵字時），最多 3 個。
+// 以前主題詞只有 1 個中文詞時就只用它，例如只查「量刑」，講量刑但跟國民法官無關的文獻也會被當成直接證據。
+export const zhTake = (keywordsZh, coreZh) => Math.min(3, Math.max(1, coreZh || 0, Math.min(2, (Array.isArray(keywordsZh) ? keywordsZh : []).filter((k) => typeof k === 'string' && hasZh(k)).length)));
 export function buildQueriesZh(keywordsZh, round, mode = 'procon', coreZh = 3) {
-  const base = (Array.isArray(keywordsZh) ? keywordsZh : []).filter((k) => typeof k === 'string' && hasZh(k)).slice(0, Math.min(3, Math.max(1, coreZh))).join(' ');
+  const base = (Array.isArray(keywordsZh) ? keywordsZh : []).filter((k) => typeof k === 'string' && hasZh(k)).slice(0, zhTake(keywordsZh, coreZh)).join(' ');
   if (!base) return [];
   if (typeof round === 'number' && round >= 3) return [base]; // 擴大範圍：放寬年份，查詢回到最直接的寫法（見 buildQueries）
   if (mode === 'claim') {
@@ -559,6 +562,7 @@ const METHODS = [
   [/longitudinal/i, '縱貫研究'],
   [/survey|questionnaire/i, '問卷調查'],
   [/interview|qualitative|focus group/i, '質性研究'],
+  [/statistical(?:ly)? signific|significance test|regression|\bt-test|anova|chi-square/i, '量化比較'], // 放在最後：問卷、訪談等有明確方法的先認
 ];
 const POPULATIONS = [
   [/undergraduate|university student|college student|higher education/i, '大學生'],
@@ -576,6 +580,7 @@ const METHODS_ZH = [
   [/縱貫|追蹤研究|長期追蹤/, '縱貫研究'],
   [/問卷|調查法|調查研究|量表/, '問卷調查'],
   [/訪談|質性|焦點團體|個案研究/, '質性研究'],
+  [/統計顯著|顯著性檢定|顯著差異|迴歸分析|變異數分析|[tT] ?檢定|卡方|統計檢定/, '量化比較'], // 放在最後：問卷、訪談等有明確方法的先認
 ];
 const POPULATIONS_ZH = [
   [/大學生|大專|技專校院|高等教育/, '大學生'],
@@ -586,8 +591,11 @@ const POPULATIONS_ZH = [
 ];
 const firstMatch = (table, text) => (table.find(([re]) => re.test(text)) || [null, '摘要未說明'])[1];
 // 證據力：統整多篇研究的回顧最高，其次是有對照的實驗與長期追蹤，問卷與訪談較低；方法不明就標「不明」。
-const LEVELS = { 文獻回顧: '高', 實驗研究: '高', 縱貫研究: '中', 問卷調查: '中', 質性研究: '低' };
+const LEVELS = { 文獻回顧: '高', 實驗研究: '高', 縱貫研究: '中', 問卷調查: '中', 量化比較: '中', 質性研究: '低' };
 export const evidenceLevel = (method) => LEVELS[method] || '不明';
+// 從一段文字（例如 AI 整理的「對象與方法」）判斷研究方法，中英文規則都試；認不出來回傳 null。
+// 規則式分類看不出方法、但 AI 的重點整理有寫時，用它補判證據力。
+export const methodOf = (text) => { const s = String(text || ''); const hit = [...METHODS_ZH, ...METHODS].find(([re]) => re.test(s)); return hit ? hit[1] : null; };
 const count = (re, text) => (text.match(re) || []).length;
 
 // work：searchLogic.normalizeWork 的輸出；kind：這篇是哪個方向的查詢找到的（'s'／'c'），正負用語一樣多時用它決定。
@@ -652,7 +660,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const runSource = async (key, q) => normalizeSource(key, await getJson(sourceUrl(key, q, { fromYear }), SRC_NAME(key)), q, { fromYear });
   const coreEn = Array.isArray(core) && core.length ? core : (Array.isArray(keywords) ? keywords : []).slice(0, 2);
   const scopeEn = Array.isArray(scope) ? scope : [];
-  const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, Math.min(3, Math.max(1, coreZh || 2)));
+  const zhKeys = (Array.isArray(keywordsZh) ? keywordsZh : []).filter(hasZh).slice(0, zhTake(keywordsZh, coreZh || 2));
   const jaKeys = jstageTerms(zhKeys, Array.isArray(keywordsZh) ? keywordsZh.filter(hasZh) : []);
   const route = routeFor({ discipline, text: [routeText, ...(Array.isArray(keywordsZh) ? keywordsZh : []), ...(Array.isArray(keywords) ? keywords : [])].join(' ') });
   // 加查哪些：老師勾的（或依領域自動挑的）＋老師沒勾時再依學科自動加查；只留 searchLogic.SOURCES 認得的
