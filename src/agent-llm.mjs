@@ -337,7 +337,12 @@ export function fixLeakedFields(out) {
       if (KP_FIELDS.includes(name) && EMPTYISH(kp[name])) kp[name] = text;
     }
   }
-  for (const k of KP_FIELDS) kp[k] = kp[k].replace(/<\/?(?:parameter|invoke|antml:[\w]+|question|method|findings|limits|use)\b[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  // 殘留標記要涵蓋全部欄位（以前漏了 process、takeaway，畫面上出現「</process>」）
+  const tagRe = new RegExp(`<\\/?(?:parameter|invoke|antml:[\\w]+|${KP_FIELDS.join('|')})\\b[^>]*>`, 'g');
+  for (const k of KP_FIELDS) kp[k] = kp[k].replace(tagRe, ' ').replace(/\s+/g, ' ').trim();
+  // 「重點」寫沒有結果、「主要發現」卻有內容：兩者互相矛盾，重點改用主要發現的第一句
+  const NOINFO = /^摘要(?:沒有|未|並未|沒)(?:說明|寫出|提到|提供)/;
+  if (NOINFO.test(kp.takeaway) && kp.findings && !NOINFO.test(kp.findings)) kp.takeaway = (kp.findings.match(/^.*?[。！？；]/) || [kp.findings])[0];
   return kp;
 }
 export async function keyPoints({ title, abstract, claim = '' }, fetchImpl) {
