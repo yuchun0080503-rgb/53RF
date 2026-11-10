@@ -67,7 +67,7 @@ export async function openAlexTitles(term, also = '', fetchImpl = fetch, n = 3) 
   } catch { return []; }
 }
 
-export const CAND_MIN = 3; // 候選說法至少要有幾篇論文用過，才拿去給 AI 比對用法
+export const CAND_MIN = MIN_USE; // 候選說法至少要有幾篇論文用過，才拿去給 AI 比對用法（11/10 實測：AI 選了只有 5～100 篇的精準說法，英文文獻就一篇都查不到，所以門檻跟 MIN_USE 一樣）
 export const PAIR_FEW = 10; // 一起出現少於這個數：意思再準也可能查不到夠多文獻，AI 選詞時要考慮
 
 // 一次查詢同時拿「篇數」和 3 篇論文標題（OpenAlex 每次查詢都算錢：一天 1 美元額度、每次 0.001 美元，

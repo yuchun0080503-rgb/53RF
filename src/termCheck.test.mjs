@@ -58,7 +58,7 @@ test('AI 原本的說法有人用、也跟另一個主題詞一起出現：直�
   assert.equal(asked, 0); assert.equal(report[0].how, 'original'); assert.equal(report[1].to, 'physical health');
 });
 test('AI 自組的詞沒人用：把有人用的候選與標題交給 AI 依意思選；AI 說都不符就保留原詞並標待確認', async () => {
-  const n = { 'roommate sleep schedule misalignment': 0, 'chronotype mismatch': 5, 'social jetlag': 1173, 'sleep quality': 88000 };
+  const n = { 'roommate sleep schedule misalignment': 0, 'chronotype mismatch': 50, 'social jetlag': 1173, 'sleep quality': 88000 };
   const opt = { count: async (t, also) => (also ? (t === 'social jetlag' || also === 'social jetlag' ? 241 : 1) : n[t] ?? 0), titles: async (t) => [t + ' study'] };
   const kw = [{ zh: '室友作息不同', en: 'roommate sleep schedule misalignment', role: 'core', candidates: ['chronotype mismatch', 'social jetlag'], meaning: '室友睡覺時間不同' }, { zh: '睡眠品質', en: 'sleep quality', role: 'core' }];
   let seen;
