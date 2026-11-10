@@ -32,6 +32,11 @@ const check = makeCheck({
     t.set(ref, { calls: n }, { merge: true });
     return n;
   }),
+  // 伺服器端擋下超出 AI 權限的請求時，在這份研究的歷程留一筆紀錄（格式和網頁的 Harness 紀錄相同，多一個 blk:true）。
+  // 用 admin 權限寫入，不受 firestore.rules 限制；歷程照樣不能被學生修改或刪除。
+  onBlock: ({ projectId, uid, message }) => admin.firestore().collection(`projects/${projectId}/agentTrace`).add({
+    w: 'Harness', x: message, k: 'sys', uid, blk: true, at: admin.firestore.FieldValue.serverTimestamp(),
+  }),
 });
 const inc = (n) => admin.firestore.FieldValue.increment(n);
 const onUsage = (u) => usageDoc().set({ tokIn: inc(u.input_tokens || 0), tokOut: inc(u.output_tokens || 0), ...(u.web_search_requests ? { webSearch: inc(u.web_search_requests) } : {}) }, { merge: true });

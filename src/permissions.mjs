@@ -2,7 +2,7 @@
 // 單一事實來源（Single Source of Truth）：角色 → 允許的動作。
 // firestore.rules 的邏輯必須與這份表一致；兩邊不一致是最容易出現「前端擋得住、後端擋不住」漏洞的地方，
 // 所以這份檔案同時也拿來產生 firestore.rules 測試情境，並在前端用來決定要不要顯示某個按鈕（僅供 UX，不當作安全邊界）。
-// Agent 相關的硬限制（AI Level、Token 預算）在 functions/harness.mjs，那邊才是伺服器端真正執行的地方。
+// Agent 相關的硬限制（AI Level）：伺服器端在 functions/actions.js（/api/ai 依它拒絕），網頁端在 src/harness.mjs（同一張表，提早擋按鈕）。
 
 // Owner 可以指派給組員的角色。老師（teacher）刻意不在這裡：Owner 不能把組員「改成」老師，
 // 老師只能透過老師邀請連結加入。

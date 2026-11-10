@@ -28,7 +28,7 @@ test('detect：有設定後端而且已登入才算可用；展示模式或沒�
   const keep = globalThis.RF_AI_ENDPOINT; delete globalThis.RF_AI_ENDPOINT;
   const c = await detect(true);
   assert.equal(c.ok, false); assert.equal(c.why, 'config');
-  await assert.rejects(chatJSON({ system: 's', user: 'u', schema: { type: 'object' } }, fake({})), /展示模式/);
+  await assert.rejects(chatJSON({ action: 'analyzeScope', system: 's', user: 'u', schema: { type: 'object' } }, fake({})), /展示模式/);
   globalThis.RF_AI_ENDPOINT = keep; globalThis.RF_AI_TOKEN = async () => 'test-token';
 });
 
@@ -284,7 +284,9 @@ test('chatJSON：帶登入憑證、依有沒有圖片選 text／ink、記下後�
   assert.equal(f.calls[0].images, undefined);
   assert.equal(f.calls[0].schema.type, 'object');
   assert.equal(f.headers[0].Authorization, 'Bearer test-token');
+  assert.equal(f.calls[0].action, 'proposeKeywords'); // 後端依 action 檢查 AI 權限 Level
   assert.equal(modelLabel(), 'Claude Haiku 5.5');
+  await assert.rejects(chatJSON({ system: 's', user: 'u', schema: { type: 'object' } }, f), /action/); // 沒帶動作就不送出
   const down = async () => { throw new TypeError('Failed to fetch'); };
   await assert.rejects(translate('睡眠品質', '', down), /連不上 AI 後端/);
   const denied = async () => ({ ok: false, status: 401, text: async () => '{"error":"登入憑證無效或已過期"}' });

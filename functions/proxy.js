@@ -3,6 +3,8 @@
 //
 // 要換模型只改下面的 MODELS：文字步驟（text）與手寫辨識（ink）分開設定，之後想讓手寫改用 Sonnet 只要改 ink 那一行。
 
+const { MIN_LEVEL, levelOf, isAction } = require('./actions');
+
 const MODELS = {
   text: 'claude-haiku-5-5', // 關鍵字規劃、翻譯、文獻判讀、反思、摘要
   ink: 'claude-haiku-5-5', //  手寫辨識（看圖片）。要測試 Sonnet 時改成 'claude-sonnet-5-5'
@@ -52,15 +54,25 @@ function extractAnswer(data) {
 //   2. 這份研究的 AI Level ≥ 1（老師設成 Level 0 就不能用）
 //   3. 全站每天最多 SITE_PER_DAY 次（團隊決定 2000 次），避免被濫用把儲值額度用完
 // 資料怎麼讀由 index.js 提供（getAccess、countToday），這裡只做判斷，方便測試。
+//   4.（2026/11/10 加）請求要帶 action（Agent 動作），這份研究的 Level 要達到 actions.js 的 MIN_LEVEL[action]。
+//      被擋下時呼叫 onBlock 寫一筆「超出權限・已阻擋」歷程（老師端看得到）。
+//      /api/zhsearch 不帶 action，由呼叫端固定傳 action: 'searchEvidence'。
 const SITE_PER_DAY = 2000;
-function makeCheck({ getAccess, countToday, sitePerDay = SITE_PER_DAY }) {
-  return async ({ uid, body }) => {
+function makeCheck({ getAccess, countToday, sitePerDay = SITE_PER_DAY, onBlock }) {
+  return async ({ uid, body, action = body && body.action }) => {
     const pid = body && body.projectId;
     if (typeof pid !== 'string' || !/^[\w-]{1,64}$/.test(pid)) return { status: 400, message: '缺少研究專案資訊' };
+    if (!isAction(action)) return { status: 400, message: `未知的 Agent 動作：${String(action).slice(0, 40)}` };
     const a = await getAccess(pid, uid);
     if (!a || !['owner', 'editor'].includes(a.role)) return { status: 403, message: '你不是這份研究的成員，或沒有使用 AI 的權限' };
-    const lv = Number.isInteger(a.aiLevel) ? a.aiLevel : 2;
-    if (lv < 1) return { status: 403, message: '老師把這份研究的 AI 權限設為 Level 0' };
+    const lv = levelOf(a.aiLevel);
+    if (lv < MIN_LEVEL[action]) {
+      const message = action === 'generateReport' ? '拒絕 generate_report：此能力未開放，研究結論與報告由學生完成。（伺服器端檢查）'
+        : lv === 0 ? '老師把這份研究的 AI 權限設為 Level 0'
+          : `拒絕 ${action}：目前權限 Level ${lv} 不允許此操作。（伺服器端檢查）`;
+      if (onBlock) { try { await onBlock({ projectId: pid, uid, action, message }); } catch { /* 記錄失敗不影響拒絕 */ } }
+      return { status: 403, message };
+    }
     if ((await countToday()) > sitePerDay) return { status: 429, message: '今天全站的 AI 額度已用完，網站會改用不需要 AI 的做法' };
     return null;
   };

@@ -72,12 +72,12 @@ const { makeCheck } = proxy;
 const access = (a) => async () => a;
 test('makeCheck：要是這份研究的 owner／editor，AI Level ≥ 1，全站沒超過上限', async () => {
   const c = (a, n = 1) => makeCheck({ getAccess: access(a), countToday: async () => n, sitePerDay: 2000 });
-  assert.equal(await c({ role: 'editor', aiLevel: 2 })({ uid: 'u', body: { projectId: 'p1' } }), null);
+  assert.equal(await c({ role: 'editor', aiLevel: 2 })({ uid: 'u', body: { projectId: 'p1', action: 'searchEvidence' } }), null);
   assert.equal((await c({ role: 'editor', aiLevel: 2 })({ uid: 'u', body: {} })).status, 400);
-  assert.equal((await c(null)({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
-  assert.equal((await c({ role: 'teacher', aiLevel: 3 })({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
-  assert.equal((await c({ role: 'owner', aiLevel: 0 })({ uid: 'u', body: { projectId: 'p1' } })).status, 403);
-  assert.equal((await c({ role: 'owner', aiLevel: 2 }, 2001)({ uid: 'u', body: { projectId: 'p1' } })).status, 429);
+  assert.equal((await c(null)({ uid: 'u', body: { projectId: 'p1', action: 'searchEvidence' } })).status, 403);
+  assert.equal((await c({ role: 'teacher', aiLevel: 3 })({ uid: 'u', body: { projectId: 'p1', action: 'searchEvidence' } })).status, 403);
+  assert.equal((await c({ role: 'owner', aiLevel: 0 })({ uid: 'u', body: { projectId: 'p1', action: 'searchEvidence' } })).status, 403);
+  assert.equal((await c({ role: 'owner', aiLevel: 2 }, 2001)({ uid: 'u', body: { projectId: 'p1', action: 'searchEvidence' } })).status, 429);
 });
 test('handle：檢查沒過就不呼叫 Claude；通過後記錄 token 用量', async () => {
   let called = 0, usage = null;

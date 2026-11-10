@@ -151,6 +151,7 @@ firebase.json              rules／functions／hosting 設定（含 /api/ai 轉�
 functions/
   index.js                  Cloud Function「ai」：驗證 Firebase 登入，用 Secret 裡的金鑰呼叫 Claude
   proxy.js                  代理的邏輯與模型設定（MODELS；測試在 src/functions-proxy.test.mjs）
+  actions.js                每個 Agent 動作的最低 AI Level（伺服器端；和 src/harness.mjs 一致）
 tools/make-config.mjs      產生 src/firebase-config.js（npm run config）
 ```
 
@@ -174,8 +175,26 @@ npm run deploy
 
 - **Firestore 安全規則（伺服器端，改前端也繞不過）**：只有成員能讀專案；只有 Owner／Editor 能改畫布與研究狀態；
   AI Level 只有老師改得動（連 Owner 也不行）；研究歷程只能新增且必須是自己的身分。
-- **瀏覽器端（`src/db.mjs` 的 guard）**：執行 Agent 前，從 Firestore 讀取老師設定的 AI Level 與自己的角色來判斷。
-  這一層跑在使用者的瀏覽器裡，因為系統沒有付費的後端；Agent 本身不使用任何付費資源或金鑰，所以沒有可被盜用的東西。
+- **AI 後端（`functions/proxy.js` 的 `makeCheck`，2026-11-10 起依動作檢查）**：每次呼叫 Claude 都要帶 `action`，
+  後端從 Firestore 讀這份研究的 AI Level 和你的角色，Level 不到 `functions/actions.js` 的 `MIN_LEVEL[action]` 就回 403，
+  並在研究歷程寫一筆 `blk:true` 的阻擋紀錄。`functions/actions.js` 和 `src/harness.mjs` 的表由
+  `src/functions-actions.test.mjs` 檢查一致。
+- **瀏覽器端（`src/db.mjs` 的 guard）**：同一張表，提早把按鈕擋下來、給清楚的說明；真正的限制在上面的後端。
+
+| 動作 | 最低 Level | 用在哪裡 |
+|---|---|---|
+| `readHandwriting` | 1 | 手寫辨識 |
+| `analyzeScope` | 1 | 判定範圍、聚焦問題的選項 |
+| `searchEvidence` | 1 | 搜尋、文獻判讀、搜尋反思、中文網路搜尋 |
+| `readAbstract` | 1 | 文獻摘要的中文重點整理 |
+| `proposeKeywords` | 1 | 搜尋關鍵字規劃、翻譯關鍵字 |
+| `proposeQuestion` | 2 | Agent 草擬研究問題 |
+| `summarizeEvidence` | 3 | 證據摘要 |
+| `slideOutline` | 3 | 投影片文字大綱 |
+| `generateReport` | 不開放 | 任何 Level 都拒絕 |
+
+**已知限制**：提示詞（`system`／`user`）仍由網頁送出，後端只檢查動作名稱。改過的網頁可以謊報動作名稱
+（例如用 Level 1 的動作名稱送出別的要求）。需要更嚴格的動作（排演室）會把提示詞和輸出格式放在後端組裝。
 
 ## 驗證狀態
 
