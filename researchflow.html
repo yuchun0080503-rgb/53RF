@@ -244,6 +244,21 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .tag.warn{color:var(--warn);border-color:var(--warn)}
 .recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#d93025;margin-right:5px;vertical-align:0}#rec.recon{color:#d93025;font-variant-numeric:tabular-nums}#rec.recon .recdot{border-radius:2px;animation:recb 1s steps(2) infinite}@keyframes recb{50%{opacity:.25}}
 #pinbox{position:absolute;z-index:6;width:290px;max-height:62%;display:flex;flex-direction:column;gap:7px;background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.16);padding:10px 12px}#pinbox.hide{display:none}.pbh{display:flex;align-items:center;gap:6px}.pbh .dot{margin-right:2px}.pbh .pbx{margin-left:auto;border:0;background:none;padding:2px 6px;color:var(--mute)}.pbm{overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:0}.pmsg{font-size:13px;line-height:1.55;padding:2px 2px}.pmsg b{margin-right:6px}.pmsg.t{background:var(--soft);border-radius:8px;padding:6px 8px}#pinbox textarea{width:100%;resize:vertical;font:inherit;font-size:13px;margin:0}#pinbox .acts{margin:0}.pinrow{display:flex;gap:8px;padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px}.pinrow:hover,.pinrow:focus{background:var(--soft);outline:none}.pinrow .dot{margin-top:7px;flex:none}.pinn{display:inline-block;min-width:16px;padding:0 4px;border-radius:99px;background:var(--bad);color:#fff;font-size:10.5px;line-height:16px;text-align:center}
+/* 待辦列表（主頁最上方）：每列最前面的細色條代表緊急程度；顏色不是唯一的辨識方式，色條本身有文字說明（滑鼠移上去或螢幕報讀） */
+:root{--td-r:#d93025;--td-o:#e8770c;--td-y:#d9a900;--td-g:#2f9e5b}
+.todo{border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin:18px 0 4px;background:var(--bg)}
+.todoh{display:flex;align-items:baseline;gap:10px}.todoh h2{font-size:17px;margin:0}
+.tdl{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tdr{display:flex;align-items:center;gap:12px;padding:7px 10px 7px 0;border-radius:12px;background:var(--soft);min-height:42px;overflow:hidden}
+.tdbar{flex:none;width:5px;align-self:stretch;margin:-7px 0;border-radius:0 3px 3px 0}
+.c-red .tdbar{background:var(--td-r)}.c-orange .tdbar{background:var(--td-o)}.c-yellow .tdbar{background:var(--td-y)}.c-green .tdbar{background:var(--td-g)}
+.tdn{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.tdw{flex:1;min-width:0;font-size:14px}
+.tda{display:flex;gap:6px;flex:none;align-items:center}.tda button{font-size:13px;padding:4px 12px}
+.tdr.snz{opacity:.45}
+.tdmore{margin-top:8px;font-size:13px}.tdempty{margin:8px 0 0}
+.tdwrap{grid-column:1/-1;min-width:0}.tdwrap .todo{margin:0}
+@media(max-width:640px){.tdr{flex-wrap:wrap;padding-left:0}.tdn{max-width:calc(100% - 20px)}.tdw{flex-basis:calc(100% - 20px);margin-left:17px}.tda{width:100%;justify-content:flex-end}}
 </style>
 </head>
 <body>
@@ -278,6 +293,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 
 <section id="v-proj" class="wrap hide">
   <h2 id="hi" style="font-size:28px"></h2><p class="mute" style="margin:6px 0 0">選擇要繼續的研究，或開始新的一份。</p>
+  <div id="todo"></div>
   <div class="home">
     <div class="big"><div class="bh"><span class="badge"><i data-i="folder"></i></span><div><h3>我的研究／報告</h3><div class="sm mute" id="cnt"></div></div></div><div id="plist"></div></div>
     <div class="big" id="boxB"><div class="bh"><span class="badge"><i data-i="plus"></i></span><div><h3>建立或加入研究／報告</h3><div class="sm mute" id="boxBs">有老師給的課程代碼：輸入後選組別加入；沒有就直接建立，你會成為 Project Owner</div></div></div>
@@ -328,7 +344,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-1";
+window.RF_VER = "2026.11.10-2";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -337,6 +353,8 @@ try { window.RFCOURSE = await import("./src/course.mjs"); } catch (err) { consol
 // 各領域資料庫的清單與自動挑選（老師端勾選、學生端顯示會查哪些資料庫）
 try { window.RFSRC = await import("./src/searchLogic.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
+// 待辦列表（學生端與老師端共用的判斷、緊急程度顏色、排序、稍後提醒）
+try { window.RFTODO = await import("./src/todo.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 todo.mjs：", err?.message || err); }
 // AI：Claude（經 Firebase Cloud Function 代理，見 functions/index.js）。登入後關鍵字規劃、翻譯、文獻判讀、手寫辨識都交給它；沒登入或後端不可用就用規則式。
 try { window.RFLLM = await import("./src/llm.mjs"); window.RFAI = await import("./src/agent-llm.mjs"); window.RFLLM.detect().then(() => window.dispatchEvent(new Event("rf:llm"))); } catch (err) { console.info("[ResearchFlow] 無法載入 AI 模組：", err?.message || err); }
 try { window.RFAGENT = await import("./src/agent-local.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 agent-local.mjs：", err?.message || err); }
@@ -509,6 +527,8 @@ function applyCodeParam(){if(!pendingCode||ROLE==="t")return;const f=$("#f0");if
  f.dispatchEvent(new Event("input"));f.scrollIntoView({block:"center"})}
 // 研究所屬課程的設定（老師指定閱讀、可信任資料庫）。老師端有完整課程清單；學生端線上模式另外讀一次放在 courseCache。
 const courseCache={};
+// 待辦列表的狀態：myUser＝自己的已讀時間與稍後提醒（users/{uid}，展示模式只存在記憶體）；todoOpen＝是否展開超過 5 項的部分
+let unsubMe=null,myUser={seen:{},snooze:{}},todoOpen={s:false,t:false},tdTimer=0;
 const courseOfP=q=>q&&q.courseId?(courses.find(c=>c.id===q.courseId)||courseCache[q.courseId]||null):null;
 // 這份研究搜尋時要加查的領域資料庫：老師有勾就照老師的，沒有就依研究領域、課程名稱自動挑
 const srcOf=q=>window.RFSRC?RFSRC.pickSources({teacher:courseOfP(q)?.sources,field:q.field,course:q.course,name:q.name}):[];
@@ -590,13 +610,19 @@ async function enterLive(fu){if(entered===fu.uid)return;entered=fu.uid;restored=
  renderAv();$("#hi").textContent=ROLE==="t"?"老師，你好":"嗨，"+U[ME].n;$("#form").classList.toggle("hide",ROLE==="t");$("#tnote").classList.toggle("hide",ROLE!=="t");
  const qs=new URLSearchParams(location.search),join=qs.get("join");
  if(join&&join.includes(":")){const[pid,token]=join.split(":");try{await RFDB.redeemInvite(pid,token,ME,myProfile());history.replaceState(null,"",location.pathname)}catch(err){alert("加入專案失敗："+(err?.message||err))}}
+ if(RFDB.subscribeMyUser){if(unsubMe)unsubMe();unsubMe=RFDB.subscribeMyUser(ME,d=>{myUser={seen:d.seen||{},snooze:d.snooze||{}};todoTick()},err=>console.warn("[ResearchFlow] 讀取已讀紀錄失敗：",err))}
  attachLiveProjects();attachLiveCourses();show("proj")}
 // 老師的課程清單（即時）。學生端不需要。
 let unsubCourses=null;
 function attachLiveCourses(){if(unsubCourses){unsubCourses();unsubCourses=null}courses.length=0;if(ROLE!=="t"||!RFDB.subscribeMyCourses)return;
  unsubCourses=RFDB.subscribeMyCourses(ME,list=>{courses.length=0;courses.push(...list);teachTick()},err=>{console.error("[ResearchFlow] 讀取課程失敗：",err);alert("讀取課程失敗："+(err?.message||err))})}
 // 研究清單第一次載入後：重新整理前如果正開著某一份研究，直接回到那一份（連同當時的分頁）
-function restoreOpen(){if(restored)return;restored=true;setTimeout(unboot,60);const fid=LS("rf.open"),i=projects.findIndex(q=>q.fid===fid);if(!fid||i<0)return;
+// 網址 ?p=<研究id>&tab=feedback|readings|pin|agent|team|settings&pin=<留言id>：直接打開那一份研究的指定頁面（待辦列表也用同一套跳轉）
+function restoreOpen(){if(restored)return;restored=true;setTimeout(unboot,60);
+ try{const qs=new URLSearchParams(location.search),dp=qs.get("p");
+  if(dp){const u=new URL(location.href);["p","tab","pin"].forEach(k=>u.searchParams.delete(k));history.replaceState(null,"",u.pathname+u.search);
+   if(projects.some(q=>q.fid===dp)){goTodoS({pid:dp,act:{tab:qs.get("tab")||"open",id:qs.get("pin")||""}});return}}}catch(e){console.warn("[ResearchFlow] 網址參數無法使用：",e)}
+ const fid=LS("rf.open"),i=projects.findIndex(q=>q.fid===fid);if(!fid||i<0)return;
  const tab=LS("rf.pane");openWs(i);const b=tab&&document.querySelector('.tabs button[data-p="'+tab+'"]');if(b)b.click()}
 let regMode=false; // true：這次按下的是「註冊新帳號」
 let gMode=false; // true：這次按下的是「使用 Google 帳號登入」
@@ -651,14 +677,14 @@ function attachLiveProjects(){
    const q=projects.find(x=>x.fid===d.id)||mkP({fid:d.id,ver:0,objs:[]});
    // 老師回饋：學生的研究清單與畫布上方都會顯示，所以清單載入時就訂閱
    if(d.courseId&&!courseCache[d.courseId]&&RFDB.getCourse){courseCache[d.courseId]={id:d.courseId};RFDB.getCourse(d.courseId).then(c=>{if(c){courseCache[d.courseId]=c;if(p&&p.courseId===d.courseId&&!$("#v-ws").classList.contains("hide"))fbChip()}}).catch(()=>{delete courseCache[d.courseId]})}
-   if(!q._unsubFb&&RFDB.subscribeFeedback)q._unsubFb=RFDB.subscribeFeedback(d.id,rows=>{q.fb=rows;renderProj();teachTick();if(p===q&&!$("#v-ws").classList.contains("hide"))fbChip()},err=>console.error("[ResearchFlow] 讀取老師回饋失敗：",err));
-   return Object.assign(q,{mode:d.searchMode||"",name:d.name,course:d.course||"",courseId:d.courseId||"",groupName:d.groupName||"",assignmentId:d.assignmentId||"",assignmentTitle:d.assignmentTitle||"",req:d.teacherReq||"",due:d.dueDate||"",field:d.field||"",reportType:d.reportType||"",reportUrl:d.reportUrl||"",
+   if(!q._unsubFb&&RFDB.subscribeFeedback)q._unsubFb=RFDB.subscribeFeedback(d.id,rows=>{q.fb=rows;renderProj();todoTick();if(p===q&&!$("#v-ws").classList.contains("hide"))fbChip()},err=>console.error("[ResearchFlow] 讀取老師回饋失敗：",err));
+   return Object.assign(q,{ownerUid:d.ownerUid||"",gradedAt:d.gradedAt?.toMillis?d.gradedAt.toMillis():0,mode:d.searchMode||"",name:d.name,course:d.course||"",courseId:d.courseId||"",groupName:d.groupName||"",assignmentId:d.assignmentId||"",assignmentTitle:d.assignmentTitle||"",req:d.teacherReq||"",due:d.dueDate||"",field:d.field||"",reportType:d.reportType||"",reportUrl:d.reportUrl||"",
     LV:Number.isInteger(d.aiLevel)?d.aiLevel:2,members:mem.map(m=>({u:m.uid,role:CAP(m.role),duty:m.task||""}))});
   }));
   const inWs=!$("#v-ws").classList.contains("hide");
   projects.length=0;projects.push(...mapped);
   if(p&&!mapped.includes(p)){detachLive(p);p=null;if(inWs){alert("你已經不是這個研究專案的成員。");show("proj")}}
-  renderProj();teachTick();
+  attachTodoFeeds();renderProj();teachTick();
   if(p&&inWs){openWsUI();renderPane()}
   restoreOpen();
  },err=>{console.error(err);$("#cnt").textContent="讀取研究專案失敗，請檢查網路或 Firebase 設定";alert("讀取研究專案失敗："+(err?.message||err))});
@@ -680,7 +706,7 @@ function chooseMode(q,done){const d=$("#pd"),text=[q.name,q.req,q.field,q.course
   else if(q.trace)q.trace.push({t:nowT(),w:U[ME].n,x:"將預設查證模式設為「"+MODE_N[m]+"」。",k:"user"});
   q.mode=m;d.oncancel=null;d.close();renderProj();if(p===q&&!$("#v-ws").classList.contains("hide")){openWsUI();renderPane()}done&&done()});
  d.showModal()}
-function renderProj(){const mine=q=>(LIVE()||ROLE==="s")&&roleIn(q)==="Owner";
+function renderProj(){todoTick();const mine=q=>(LIVE()||ROLE==="s")&&roleIn(q)==="Owner";
  $("#cnt").textContent=`${projects.length} 個進行中的研究`+(projects.some(mine)?"．自己建立的研究可以按「刪除」或向左滑刪除":"");
  $("#plist").innerHTML=projects.map((q,i)=>`<div class="rowwrap"><div class="row" data-i="${i}" tabindex="0" ${mine(q)?'data-own="1"':""}><div style="flex:1 1 200px"><b>${esc(q.name)}</b><div class="sm mute">${esc(q.course||"未填課程")}${q.assignmentTitle?"・"+esc(q.assignmentTitle):""}　截止 ${q.due||"未設定"}</div></div><span class="tag">${q.stage}</span><span class="stack">${q.members.map(m=>av(m.u,22)).join("")}</span><button data-e="${i}" class="sm" style="padding:3px 10px">${I("gear")}研究檔案</button>${mine(q)?`<button data-trash="${i}" class="sm" style="padding:3px 10px" title="刪除這份研究" aria-label="刪除「${esc(q.name)}」">${I("trash")}刪除</button>`:""}<div class="gap">${I("spark")}${gapText(q)}</div>${q.fb&&q.fb.length?`<div class="gap" style="color:var(--ac)">${I("clip")}老師回饋：${esc(q.fb[0].text.length>60?q.fb[0].text.slice(0,60)+"…":q.fb[0].text)}</div>`:""}</div>${mine(q)?`<button class="rowdel" data-del="${i}" tabindex="-1" aria-label="刪除「${esc(q.name)}」">${I("trash")}刪除</button>`:""}</div>`).join("");
  $$("#plist .row").forEach(r=>{let x0=null,dx=0,moved=false;const wrap=r.parentNode,del=wrap.querySelector(".rowdel"),W=84;
@@ -871,14 +897,15 @@ function openWs(i){p=projects[i];S=p.S;sel.clear();tool="sel";editing={};linkFro
  $$(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p==="agent"));show("ws");openWsUI();resize();if(!p.v)p.v={x:cv.getBoundingClientRect().width*.62,y:cv.getBoundingClientRect().height*.4,z:1};
  attachLiveObjects(p);attachLiveState(p);attachLivePins(p);closePin();draw();renderPane();setStat("已連線，等待操作");
  if(!p.mode&&roleIn(p)==="Owner")chooseMode(p)}
-function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb","_unsubPins"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
-function leaveWs(){if($("#ws").classList.contains("full")){setFull(false);try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}}detachLive(p);LS("rf.open","");goHome()}
+function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb","_unsubPins","_unsubNudges"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
+// 離開畫布只停止畫布同步；研究狀態、歷程、分工、留言、提醒繼續訂閱（主頁的待辦列表要用）
+function leaveWs(){if($("#ws").classList.contains("full")){setFull(false);try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}}if(p&&p._unsubObjs){p._unsubObjs();p._unsubObjs=null}LS("rf.open","");goHome()}
 /* 小組共用的 Agent 流程狀態、Canvas 版本、Token 用量、研究歷程（live 模式）：訂閱 Firestore，組員做的每一步大家都看得到 */
 function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
  proj._unsubState=RFDB.subscribeResearchState(proj.fid,st=>{
   if(st.canvas)proj.ver=st.canvas.ver||0;
   proj.tok=(st.usage&&st.usage.tok)||0;
-  let changed=false;teachTick();
+  let changed=false;todoTick();
   if(st.current&&st.current.json&&st.current.json!==proj._sj){try{proj.S={...fresh(),...JSON.parse(st.current.json)};proj._sj=st.current.json;changed=true}catch(e){console.error("[ResearchFlow] 研究狀態格式錯誤：",e)}}
   if(p!==proj)return;
   S=proj.S;
@@ -887,10 +914,10 @@ function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
   if(changed||!typing)renderPane();else updStale();
  },err=>{console.error("[ResearchFlow] 讀取研究狀態失敗：",err);setStat("讀取研究狀態失敗，請檢查網路或 Firebase 設定","r")});
  proj._unsubTrace=RFDB.subscribeTrace(proj.fid,rows=>{
-  proj.trace=rows.slice().reverse().map(r=>({t:new Date(r.at).toTimeString().slice(0,5),w:r.w,x:r.x,k:r.k,at:r.at}));teachTick();
+  proj.trace=rows.slice().reverse().map(r=>({t:new Date(r.at).toTimeString().slice(0,5),w:r.w,x:r.x,k:r.k,at:r.at,blk:!!r.blk}));todoTick();
   if(p===proj&&pane==="tr")renderPane();
  },err=>console.error("[ResearchFlow] 讀取研究歷程失敗：",err));
- if(RFDB.subscribeTasks)proj._unsubTasks=RFDB.subscribeTasks(proj.fid,rows=>{proj.tasks=rows;teachTick();if(p===proj)renderTeam()},err=>console.error("[ResearchFlow] 讀取分工清單失敗：",err))}
+ if(RFDB.subscribeTasks)proj._unsubTasks=RFDB.subscribeTasks(proj.fid,rows=>{proj.tasks=rows;todoTick();if(p===proj)renderTeam()},err=>console.error("[ResearchFlow] 讀取分工清單失敗：",err))}
 function saveS(){if(!LIVE()||!p||!p.fid||!canEdit())return;
  const j=JSON.stringify(S);if(j===p._sj)return;p._sj=j;
  RFDB.saveResearchState(p.fid,j,ME).catch(err=>{console.error("[ResearchFlow] 儲存研究狀態失敗：",err);setStat("儲存研究狀態失敗，請檢查網路","r")})}
@@ -957,7 +984,7 @@ window.RF_AI_PROJECT=()=>p&&p.fid||"";
 function fbChip(){const b=$("#fbb");if(!b||!p)return;const n=(p.fb||[]).length;b.classList.toggle("hide",!n);$("#fbbt").textContent="老師回饋（"+n+"）";
  const r=$("#rdb"),m=readingsOf(p).length;r.classList.toggle("hide",!m);$("#rdbt").textContent="指定閱讀（"+m+"）"}
 // 老師指定閱讀：可以打開原文，也可以加到畫布（標成「證據」，之後跟 Agent 找到的文獻一樣由小組判讀）
-$("#rdb").onclick=()=>{const d=$("#pd"),rs=readingsOf(p),onCv=r=>p.objs.some(o=>o.type==="text"&&o.rd===(r.url||r.title));
+$("#rdb").onclick=()=>{markSeen(p,{rd:readingsOf(p).map(rdKey)});const d=$("#pd"),rs=readingsOf(p),onCv=r=>p.objs.some(o=>o.type==="text"&&o.rd===(r.url||r.title));
  d.innerHTML=`<h2>指定閱讀</h2><p class="sm mute" style="margin:6px 0 0">老師為這門課指定的閱讀資料。加到畫布後會標成「證據」，由你們閱讀後判斷它支持或反駁哪個主張。</p>
  ${rs.map((r,i)=>`<div class="box"><b>${esc(r.title)}</b>${r.url?`<div class="sm" style="margin-top:4px"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(shortUrl(r.url))} ↗</a></div>`:""}
   <div class="acts" style="margin-top:8px"><button data-rd="${i}" ${canEdit()&&!onCv(r)?"":"disabled"}>${onCv(r)?"已在畫布上":"加到畫布"}</button></div></div>`).join("")}
@@ -967,7 +994,7 @@ $("#rdb").onclick=()=>{const d=$("#pd"),rs=readingsOf(p),onCv=r=>p.objs.some(o=>
   p.objs.push(mkO({type:"text",by:ME,x:-300,y:200+p.objs.length*8,text:"指定閱讀："+r.title,ml:true,rd:r.url||r.title,...(r.url?{url:r.url,ul:shortUrl(r.url)}:{}),tag:"evidence"}));
   op("將老師指定閱讀加到畫布");log(U[ME].n,"將老師指定閱讀「"+r.title+"」加到畫布。");b.disabled=true;b.textContent="已在畫布上"});
  d.showModal()};
-$("#fbb").onclick=()=>{const d=$("#pd");d.innerHTML=`<h2>老師回饋</h2><p class="sm mute" style="margin:6px 0 0">老師寫給這一組的回饋，所有組員都看得到。</p>
+$("#fbb").onclick=()=>{markSeen(p,{fb:Date.now()});const d=$("#pd");d.innerHTML=`<h2>老師回饋</h2><p class="sm mute" style="margin:6px 0 0">老師寫給這一組的回饋，所有組員都看得到。</p>
  ${(p.fb||[]).map(f=>`<div class="box"><div class="sm mute">${esc(f.by||"老師")}・${f.at?fmtAt(f.at):""}</div><div style="margin-top:4px;white-space:pre-wrap">${esc(f.text)}</div></div>`).join("")}
  <div class="acts" style="justify-content:flex-end;margin-top:18px"><button id="fbc">關閉</button></div>`;$("#fbc").onclick=()=>d.close();d.showModal()};
 // 搜尋輪數預算：預設 3 輪；用完後由小組決定要不要擴大範圍（每次允許多 1 輪）
@@ -1254,7 +1281,7 @@ document.addEventListener("paste",e=>{if(!p||$("#v-ws").classList.contains("hide
    live 模式存在 Firestore 的 projects/{id}/pins（回覆在 pins/{id}/msgs）；展示模式存在本機的 p.pins。 */
 let pinOpen=null,pinNew=null,pinMsgs=[],pinUnsub=null;
 function attachLivePins(proj){if(!LIVE()||!proj.fid||proj._unsubPins||!RFDB.subscribePins)return;
- proj._unsubPins=RFDB.subscribePins(proj.fid,rows=>{proj.pins=rows;if(p!==proj)return;draw();pinTab();if(pane==="pins")renderPane();if(pinOpen)renderPinBox()},err=>console.error("[ResearchFlow] 讀取老師留言失敗：",err))}
+ proj._unsubPins=RFDB.subscribePins(proj.fid,rows=>{proj.pins=rows;todoTick();if(p!==proj)return;draw();pinTab();if(pane==="pins")renderPane();if(pinOpen)renderPinBox()},err=>console.error("[ResearchFlow] 讀取老師留言失敗：",err))}
 // 原本貼著的內容找不到時：手寫常被重新分段或合併（物件換了新的 id），不一定是被刪掉。
 // 先看留言原本的位置上有沒有內容，有就當作貼在那個內容上（只用來顯示名稱，位置不動），真的沒有才標「已刪除」
 function pinPos(pn){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);return{x:b.x+pn.dx,y:b.y+pn.dy,o,gone:false}}
@@ -1271,7 +1298,7 @@ function pinTab(){const el=$("#pinct");if(!el||!p)return;const n=(p.pins||[]).fi
 const pinWhere=P=>P.o?"「"+esc(objLabel(P.o))+"」":P.gone?"原本的內容（已刪除）":"畫布空白處";
 function pinsHTML(){const ps=p.pins||[],open=ps.filter(x=>x.status!=="done").length;
  if(!ps.length)return `<h3>老師留言</h3><p class="sm mute">${isT()?"選畫布工具列的「留言」，點便利貼、手寫或畫布任何位置，就可以留言給這組。留言貼在內容上時，內容移動，留言會跟著移動。":"老師還沒有在畫布上留言。老師留言後，畫布上會出現紅色圖釘，這裡也會列出來。"}</p>`;
- const row=([pn,i])=>{const P=pinPos(pn);return `<div class="pinrow" data-pin="${esc(pn.id)}" tabindex="0" role="button"><i class="dot ${pn.status==="done"?"g":"r"}"></i><div><b>#${i+1}</b> ${esc(pn.text.slice(0,70))}${pn.text.length>70?"…":""}<div class="sm mute">${esc(pn.by)}．貼在${pinWhere(P)}．${pn.n?pn.n+" 則回覆":"還沒有回覆"}${pn.status==="done"?"．"+(pn.doneBy?esc(pn.doneBy)+" ":"")+"標記已處理":""}</div></div></div>`};
+ const row=([pn,i])=>{const P=pinPos(pn);return `<div class="pinrow" data-pin="${esc(pn.id)}" tabindex="0" role="button"><i class="dot ${pn.status==="done"?"g":"r"}"></i><div><b>#${i+1}</b> ${esc(pn.text.slice(0,70))}${pn.text.length>70?"…":""}<div class="sm mute">${esc(pn.by)}．貼在${pinWhere(P)}．${pn.n?pn.n+" 則回覆":"還沒有回覆"}${pn.status==="done"?"．"+(pn.doneBy?esc(pn.doneBy)+" ":"")+"標記已處理"+(pn.closed?"．老師已結案":""):""}</div></div></div>`};
  return `<h3>老師留言</h3><div class="box sm">未處理 <b style="color:var(--bad)">${open}</b>　已處理 <b style="color:var(--ok)">${ps.length-open}</b></div>`
   +ps.map((pn,i)=>[pn,i]).sort((a,b)=>(a[0].status==="done")-(b[0].status==="done")).map(row).join("")
   +`<p class="note">點一則留言會跳到畫布上的位置。${isT()?"":"處理完老師的建議後，打開留言按「標記已處理」，老師就看得到。"}</p>`}
@@ -1289,10 +1316,10 @@ function renderPinBox(){const box=$("#pinbox");if(!box)return;if(!p||(!pinOpen&&
  else{const i=(p.pins||[]).findIndex(x=>x.id===pinOpen),pn=p.pins&&p.pins[i];
   if(!pn)box.innerHTML=`<div class="pbh"><span class="sm mute">儲存中…</span><button class="pbx" aria-label="關閉">✕</button></div>`;
   else{const P=pinPos(pn),ms=LIVE()?pinMsgs:(pn.msgs||[]),done=pn.status==="done";
-   box.innerHTML=`<div class="pbh"><i class="dot ${done?"g":"r"}"></i><b>老師留言 #${i+1}</b><span class="sm mute">${done?"已處理":"未處理"}</span><button class="pbx" aria-label="關閉">✕</button></div>`
+   box.innerHTML=`<div class="pbh"><i class="dot ${done?"g":"r"}"></i><b>老師留言 #${i+1}</b><span class="sm mute">${pn.closed?"已結案":done?"已處理":"未處理"}</span><button class="pbx" aria-label="關閉">✕</button></div>`
     +`<div class="sm mute">貼在${pinWhere(P)}</div>`
     +`<div class="pbm"><div class="pmsg t"><b>${esc(pn.by)}</b><span class="sm mute">${pinTime(pn.at)}</span><div>${esc(pn.text)}</div></div>${ms.map(m=>`<div class="pmsg${m.uid===pn.uid?" t":""}"><b>${esc(m.by)}</b><span class="sm mute">${pinTime(m.at)}</span><div>${esc(m.text)}</div></div>`).join("")}</div>`
-    +(can?`<textarea id="pbt" rows="2" maxlength="1000" placeholder="回覆…"></textarea><div class="acts"><button class="pri" id="pbs">回覆</button><button id="pbd">${done?"重新打開":"標記已處理"}</button>${isT()&&pn.uid===ME?'<button id="pbdel">刪除</button>':""}</div>`:`<div class="sm mute">你的角色是唯讀，只能查看留言。</div>`);
+    +(can?`<textarea id="pbt" rows="2" maxlength="1000" placeholder="回覆…"></textarea><div class="acts"><button class="pri" id="pbs">回覆</button>${pn.closed&&!isT()?"":`<button id="pbd">${done?"重新打開":"標記已處理"}</button>`}${isT()&&done&&!pn.closed?'<button id="pbcl">結案</button>':""}${isT()&&pn.uid===ME?'<button id="pbdel">刪除</button>':""}</div>`:`<div class="sm mute">你的角色是唯讀，只能查看留言。</div>`);
    const m=box.querySelector(".pbm");if(m)m.scrollTop=m.scrollHeight}}
  if(keep&&$("#pbt"))$("#pbt").value=keep;
  box.classList.remove("hide");
@@ -1301,6 +1328,7 @@ function renderPinBox(){const box=$("#pinbox");if(!box)return;if(!p||(!pinOpen&&
  const s=$("#pbs");if(s)s.onclick=pinSend;
  const d=$("#pbd");if(d)d.onclick=pinToggle;
  const x=$("#pbdel");if(x)x.onclick=pinDelete;
+ const cl=$("#pbcl");if(cl)cl.onclick=pinClose;
  pinBoxPos()}
 function pinBoxPos(){const box=$("#pinbox");if(!box||box.classList.contains("hide")||!p||!p.v)return;
  const pn=pinOpen&&(p.pins||[]).find(x=>x.id===pinOpen),P=pinNew?{x:pinNew[0],y:pinNew[1]}:pn?pinPos(pn):null;if(!P)return;
@@ -1321,6 +1349,10 @@ async function pinToggle(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)
  try{if(LIVE()&&p.fid)await RFDB.setPinStatus(p.fid,pn.id,done,U[ME].n);else{pn.status=done?"done":"open";pn.doneBy=done?U[ME].n:""}
   renderPinBox();pinTab();draw();if(pane==="pins")renderPane();setStat(done?"已標記為已處理（圖釘變綠色）":"已重新打開這則留言")}
  catch(err){alert("沒有更新成功："+(err?.message||err))}}
+// 老師結案：學生標記已處理後，老師確認可以結束（結案後學生不能重新打開）
+async function pinClose(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)return;
+ try{if(LIVE()&&p.fid)await RFDB.closePin(p.fid,pn.id);else pn.closed=true;renderPinBox();if(pane==="pins")renderPane();setStat("已結案");todoTick()}
+ catch(err){alert("結案失敗："+(err?.message||err))}}
 async function pinDelete(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)return;
  if(!(await ask("確定要刪除這則留言嗎？底下的回覆也會一起刪除。")))return;
  try{if(LIVE()&&p.fid)await RFDB.deletePin(p.fid,pn.id);else p.pins=p.pins.filter(x=>x!==pn);closePin();pinTab();if(pane==="pins")renderPane()}
@@ -1522,12 +1554,12 @@ function activityHTML(){const T=window.RFTEAM,a=T.canvasActivity(p.objs,studs())
 function tasksHTML(){const T=window.RFTEAM,ids=studs(),ts=p.tasks||[],sum=T.taskSummary(ts,ids),own=myRole()==="Owner",can=canEdit();
  const row=t=>{const ty=T.typeOf(t.type),mine=can&&t.assignee===ME,free=!ids.includes(t.assignee);
   return `<div class="tk ${t.done?"done":""}"><input type="checkbox" data-tk="done" data-id="${esc(t.id)}" ${t.done?"checked":""} ${mine?"":"disabled"} aria-label="標記完成" title="${mine?"標記完成":"只有負責人自己可以標記完成"}"><div><div>${esc(t.title)} <span class="tag">${ty.name}</span></div>
-   <div class="sm mute">${t.done?`${esc(uname(t.doneBy))} 於 ${fmtAt(t.doneAt)} 自行標記完成`:t.doneBy?`${esc(uname(t.doneBy))} 於 ${fmtAt(t.doneAt)} 取消完成`:"尚未標記完成"}．${ty.onCanvas?"可對照畫布活動統計":"畫布上看不到，由負責人自行回報"}</div>
+   <div class="sm mute">${t.due?`截止 ${esc(t.due)}．`:""}${t.done?`${esc(uname(t.doneBy))} 於 ${fmtAt(t.doneAt)} 自行標記完成`:t.doneBy?`${esc(uname(t.doneBy))} 於 ${fmtAt(t.doneAt)} 取消完成`:"尚未標記完成"}．${ty.onCanvas?"可對照畫布活動統計":"畫布上看不到，由負責人自行回報"}</div>
    ${free&&can&&!t.assignee?`<button class="tclaim" data-tk="claim" data-id="${esc(t.id)}">我來負責</button>`:""}</div>
    ${can&&(own||t.by===ME)?`<button data-tk="del" data-id="${esc(t.id)}" aria-label="刪除任務" title="刪除任務">${I("trash")}</button>`:"<span></span>"}</div>`};
  const free=ts.filter(t=>!ids.includes(t.assignee));
  return `<h3>分工清單</h3><p class="sm mute tsub">完成狀態由負責人自己勾選，系統沒有驗證；每一次標記都會記下時間，並留在「歷程」裡。</p>`
-  +(can?`<div class="tadd"><input id="tkn" maxlength="120" placeholder="新增任務，例如：上台報告第二段"><div><select id="tkt" aria-label="任務類型">${T.TASK_TYPES.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select><select id="tku" aria-label="負責人">${ids.map(u=>`<option value="${esc(u)}" ${u===ME?"selected":""}>${esc(uname(u))}</option>`).join("")}<option value="">尚未決定</option></select><button class="pri" data-tk="add">新增</button></div></div>`:"")
+  +(can?`<div class="tadd"><input id="tkn" maxlength="120" placeholder="新增任務，例如：上台報告第二段"><div><select id="tkt" aria-label="任務類型">${T.TASK_TYPES.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select><select id="tku" aria-label="負責人">${ids.map(u=>`<option value="${esc(u)}" ${u===ME?"selected":""}>${esc(uname(u))}</option>`).join("")}<option value="">尚未決定</option></select><input type="date" id="tkd" aria-label="截止日（選填）" title="截止日（選填）"><button class="pri" data-tk="add">新增</button></div></div>`:"")
   +ids.map((u,i)=>{const mine=ts.filter(t=>t.assignee===u),duty=(p.members.find(m=>m.u===u)||{}).duty;
    return `<div class="tgh">${av(u,22)}<b>${esc(uname(u))}</b>${duty?`<span class="sm mute">${esc(duty)}</span>`:""}<span class="mute">${mine.length?`自行標記完成 ${sum.rows[i].done}／${mine.length}`:"還沒有任務"}</span></div>${mine.map(row).join("")}`}).join("")
   +(free.length?`<div class="tgh"><b>還沒有人負責</b><span class="mute">${free.length} 項</span></div>${free.map(row).join("")}`:"")
@@ -1541,8 +1573,8 @@ function bindTeam(r){r.querySelectorAll("[data-tk]").forEach(b=>{const go=()=>te
  const n=r.querySelector("#tkn");if(n)n.onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)teamAct("add","",r)}}
 function fillTeam(){const d=$("#tm");d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h2 style="margin:0">分工</h2><button data-tk="close">關閉</button></div>`+teamHTML(true);bindTeam(d)}
 // 別人更新分工清單時重畫，但保留自己打到一半的任務名稱
-function renderTeam(){if(!p)return;const d=$("#tm"),keep=r=>{const n=r.querySelector("#tkn");return n?{v:n.value,f:document.activeElement===n,t:r.querySelector("#tkt").value,u:r.querySelector("#tku").value}:null},
-  put=(r,k)=>{const n=r.querySelector("#tkn");if(!n||!k)return;n.value=k.v;r.querySelector("#tkt").value=k.t;r.querySelector("#tku").value=k.u;if(k.f)n.focus()};
+function renderTeam(){if(!p)return;const d=$("#tm"),keep=r=>{const n=r.querySelector("#tkn");return n?{v:n.value,f:document.activeElement===n,t:r.querySelector("#tkt").value,u:r.querySelector("#tku").value,d:r.querySelector("#tkd")?.value||""}:null},
+  put=(r,k)=>{const n=r.querySelector("#tkn");if(!n||!k)return;n.value=k.v;r.querySelector("#tkt").value=k.t;r.querySelector("#tku").value=k.u;const dd=r.querySelector("#tkd");if(dd)dd.value=k.d;if(k.f)n.focus()};
  if(pane==="team"){const el=$("#pane"),k=keep(el);renderPane();put(el,k)}
  if(d.open){const k=keep(d);fillTeam();put(d,k)}}
 function teamAct(k,id,r){const ts=p.tasks=p.tasks||[],t=ts.find(x=>x.id===id),live=LIVE()&&p.fid,me=U[ME].n,
@@ -1551,8 +1583,8 @@ function teamAct(k,id,r){const ts=p.tasks=p.tasks||[],t=ts.find(x=>x.id===id),li
  if(k==="close"){$("#tm").close();return}
  if(!canEdit())return;
  if(k==="add"){const n=r.querySelector("#tkn"),title=n.value.trim().slice(0,120);if(!title){n.focus();return}
-  const d={title,type:r.querySelector("#tkt").value,assignee:r.querySelector("#tku").value};n.value="";
-  log(me,`新增任務「${title}」（${RFTEAM.typeOf(d.type).name}），負責人：${d.assignee?uname(d.assignee):"尚未決定"}。`);
+  const d={title,type:r.querySelector("#tkt").value,assignee:r.querySelector("#tku").value,due:r.querySelector("#tkd")?.value||""};n.value="";const dd=r.querySelector("#tkd");if(dd)dd.value="";
+  log(me,`新增任務「${title}」（${RFTEAM.typeOf(d.type).name}），負責人：${d.assignee?uname(d.assignee):"尚未決定"}${d.due?"，截止 "+d.due:""}。`);
   if(live)RFDB.addTask(p.fid,d,ME).catch(fail);else ts.push({id:"t"+Date.now(),...d,by:ME,done:false,doneBy:"",doneAt:0,at:Date.now()})}
  if(k==="done"&&t){if(t.assignee!==ME){renderTeam();return}const done=!t.done;log(me,`${done?"標記完成":"取消完成"}任務「${t.title}」。`);
   if(live)RFDB.setTaskDone(p.fid,id,done,ME).catch(fail);else Object.assign(t,{done,doneBy:ME,doneAt:Date.now()})}
@@ -1648,9 +1680,71 @@ function drawMini(c,q){if(!c)return;const d=devicePixelRatio||1,w=c.clientWidth,
   else if(o.type==="img")paintImg(x,o,col);
   else if(o.type==="audio")paintAudio(x,o,col);
   else{x.strokeStyle=col;x.lineWidth=o.w;x.beginPath();o.pts.forEach((k,i)=>i?x.lineTo(k[0],k[1]):x.moveTo(k[0],k[1]));x.stroke()}}}
+/* ---------------- 待辦列表（學生端 S1、老師端 T2；判斷與排序在 src/todo.mjs） ---------------- */
+const pidOf=q=>q.fid||q.id||q.name;
+const rdKey=r=>r.url||r.title;
+// 把畫面上的研究整理成 todo.mjs 要的格式
+function todoProj(q){const c=courseOfP(q);
+ return {id:pidOf(q),name:q.name,groupName:q.groupName||"",ownerUid:q.ownerUid||(q.members.find(m=>m.role==="Owner")||{}).u||"",due:q.due||"",reportUrl:q.reportUrl||"",gradedAt:q.gradedAt||0,step:(q.S||{}).step||0,
+  members:q.members.map(m=>({u:m.u,role:String(m.role||"").toLowerCase()})),lastAt:Math.max(0,...(q.trace||[]).map(t=>t.at||0)),
+  fb:q.fb||[],pins:q.pins||[],readings:readingsOf(q).map(rdKey),tasks:q.tasks||[],nudges:q.nudges||[],trace:q.trace||[],hasAssignments:asgOf(c).length>0,assignmentId:q.assignmentId||""}}
+// 每一份研究的待辦資料（研究狀態、歷程、分工、留言、老師提醒）在主頁就要訂閱
+function attachNudges(q){if(!LIVE()||!q.fid||q._unsubNudges||!RFDB.subscribeNudges)return;
+ q._unsubNudges=RFDB.subscribeNudges(q.fid,rows=>{q.nudges=rows;todoTick()},err=>console.warn("[ResearchFlow] 讀取老師提醒失敗：",err))}
+function attachTodoFeeds(){if(!LIVE())return;projects.forEach(q=>{attachLiveState(q);attachLivePins(q);attachNudges(q)})}
+function todoTick(){if(ROLE==="t"){teachTick();return}clearTimeout(tdTimer);tdTimer=setTimeout(renderTodo,200)}
+function markSeen(q,patch){if(!q)return;const id=pidOf(q);myUser.seen[id]={...(myUser.seen[id]||{}),...patch};
+ if(LIVE()&&q.fid&&RFDB.markSeen)RFDB.markSeen(ME,q.fid,patch).catch(err=>console.warn("[ResearchFlow] 記錄已讀失敗：",err));todoTick()}
+const hm=t=>new Date(t).toLocaleTimeString("zh-TW",{hour:"numeric",minute:"2-digit",hour12:false});
+const sameDay=(a,b)=>RFTODO.twDate(a)===RFTODO.twDate(b);
+function wakeText(t){const now=Date.now();return (sameDay(t,now+864e5)?"明天 ":sameDay(t,now)?"今天 ":new Date(t).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})+" ")+hm(t)+" 恢復"}
+function nudgedText(t){return (sameDay(t,Date.now())?"今天 ":new Date(t).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})+" ")+hm(t)}
+function todoRow(it){const k=esc(it.key);
+ return `<li class="tdr c-${it.color}${it.snoozed?" snz":""}"><span class="tdbar" role="img" aria-label="${esc(it.label)}" title="${esc(it.label)}"></span><b class="tdn" title="${esc(it.name)}">${esc(it.name)}</b><span class="tdw">${esc(it.reason)}</span><span class="tda">`
+  +(it.snoozed?`<span class="sm mute">${esc(wakeText(it.until))}</span><button data-td="wake" data-k="${k}">恢復</button>`
+   :(it.nudge&&!it.nudge.canSend?`<span class="sm mute">已提醒・${esc(nudgedText(it.nudge.lastAt))}</span>`:`<button class="pri" data-td="go" data-k="${k}">${esc(it.btn)}</button>`)+`<button data-td="snz" data-k="${k}">稍後提醒</button>`)
+  +`</span></li>`}
+function todoHTML(items,role){if(!window.RFTODO)return "";
+ const s=RFTODO.sortTodos(items,{snooze:myUser.snooze,now:Date.now()}),f=RFTODO.foldTodos(s,5,todoOpen[role]);
+ return `<section class="todo" aria-label="待辦"><div class="todoh"><h2>待辦</h2><span class="sm mute">${s.length?s.length+" 項":""}</span></div>`
+  +(s.length?`<ul class="tdl">${f.shown.map(todoRow).join("")}</ul>${f.rest?`<button class="tdmore" data-td="more">展開其餘 ${f.rest} 項</button>`:s.length>5?`<button class="tdmore" data-td="more">收合</button>`:""}`
+   :`<p class="sm mute tdempty">目前沒有待辦</p>`)+`</section>`}
+function studentTodoItems(){return window.RFTODO?RFTODO.studentTodos(projects.map(todoProj),{me:ME,seen:myUser.seen,now:Date.now()}):[]}
+function teacherTodoItems(){if(!window.RFTODO)return [];
+ return RFTODO.teacherTodos({courses,projects:teachList().map(todoProj),now:Date.now()})}
+function renderTodo(){const el=$("#todo");if(!el||ROLE==="t")return;const items=studentTodoItems();el.innerHTML=todoHTML(items,"s");bindTodo(el,items,"s")}
+function rerenderTodo(role){if(role==="t"){tLast="";renderTeach()}else renderTodo()}
+function saveSnooze(){myUser.snooze=RFTODO.pruneSnooze(myUser.snooze,Date.now());
+ if(LIVE()&&RFDB.saveSnooze)RFDB.saveSnooze(ME,myUser.snooze).catch(err=>console.warn("[ResearchFlow] 儲存稍後提醒失敗：",err))}
+function bindTodo(root,items,role){const by=k=>items.find(x=>x.key===k);
+ root.querySelectorAll("[data-td]").forEach(b=>b.onclick=()=>{const a=b.dataset.td,it=by(b.dataset.k);
+  if(a==="more"){todoOpen[role]=!todoOpen[role];rerenderTodo(role);return}
+  if(!it)return;
+  if(a==="snz"){myUser.snooze={...myUser.snooze,[it.key]:RFTODO.snoozeUntil(Date.now())};saveSnooze();rerenderTodo(role);return}
+  if(a==="wake"){const n={...myUser.snooze};delete n[it.key];myUser.snooze=n;saveSnooze();rerenderTodo(role);return}
+  if(a==="go")role==="t"?(it.nudge?sendNudge(it,b):goTodoT(it)):goTodoS(it)})}
+// 學生端：跳到待辦對應的頁面（也給網址 ?p=<研究id>&tab=… 使用）
+function goTodoS(it){const i=projects.findIndex(q=>pidOf(q)===it.pid);if(i<0)return;const tab=it.act.tab;
+ if(tab==="settings"){openPD(i);return}
+ openWs(i);
+ setTimeout(()=>{if(tab==="feedback")$("#fbb").click();else if(tab==="readings")$("#rdb").click();else if(tab==="pin"&&it.act.id)goPin(it.act.id);
+  else if(tab==="team"){const b=document.querySelector('.tabs button[data-p="team"]');if(b)b.click()}},60)}
+// 老師端「前往」：課程設定、某一組的頁面（報告、歷程）或畫布上的留言
+function goTodoT(it){const a=it.act;
+ if(a.course){const c=courses.find(x=>x.id===a.course);if(!c)return;tCourse=c.id;tAsg="";tLast="";renderTeach();openCourse(c);return}
+ const q=projects.find(x=>pidOf(x)===a.group);if(!q)return;
+ tCourse=courses.some(c=>c.id===q.courseId)?q.courseId:"#other";tAsg="";tSel=q;tView="group";tLv=null;tLast="";renderTeach();
+ if(a.pin){openWs(projects.indexOf(q));setTimeout(()=>goPin(a.pin),80);return}
+ const sec=a.report?$("#tsec-report"):a.trace?$("#tsec-trace"):null;if(sec)sec.scrollIntoView({block:"start",behavior:"smooth"});else scrollTo({top:0})}
+// 老師「提醒同學」：學生的待辦會出現「老師提醒」；同一件事 24 小時內只能提醒一次（firestore.rules 也會擋）
+async function sendNudge(it,b){const q=projects.find(x=>pidOf(x)===it.pid);if(!q||!it.nudge.canSend)return;b.disabled=true;
+ try{if(LIVE())await RFDB.sendNudge(q.fid,it.nudge,U[ME].n);
+  else{q.nudges=[...(q.nudges||[]).filter(n=>n.id!==it.nudge.id),{...it.nudge,by:U[ME].n,at:Date.now()}];q.trace.push({t:nowT(),w:U[ME].n,x:it.nudge.text,k:"sys",at:Date.now()})}
+  rerenderTodo("t")}
+ catch(err){alert("提醒沒有送出："+(/permission|PERMISSION/.test(String(err?.code||err?.message))?"同一件事 24 小時內只能提醒一次。":(err?.message||err)));b.disabled=false}}
 function renderTeach(){const el=$("#v-teach"),all=teachList();
  $("#tbadge").classList.remove("hide");
- if(LIVE())all.forEach(attachLiveState); // 每一組的階段、Agent 次數、最近更新都要即時
+ if(LIVE())all.forEach(q=>{attachLiveState(q);attachLivePins(q);attachNudges(q)}); // 每一組的階段、Agent 次數、最近更新、留言、提醒都要即時（待辦列表也要用）
  // 左上選課程：自己開的課程；另外，舊的「老師邀請連結」加入、不屬於任何課程的研究放在「其他」
  const others=all.filter(q=>!courses.some(c=>c.id===q.courseId));
  const opts=[...courses.map(c=>({k:c.id,n:c.name})),...(others.length?[{k:"#other",n:"其他（用邀請連結加入的研究）"}]:[])];
@@ -1695,6 +1789,8 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
    ${q.req?`<p class="sm mute" style="margin:10px 0 0">老師要求：${esc(q.req)}</p>`:""}
    <section class="tcard"><h2>研究進度</h2><p class="sm mute">與學生端「進度檢核」相同：每一項依實際完成的事實判定，不使用百分比。</p>
     <div class="tprog">${cells.map(h=>`<div class="s-${h[1]}"><b>${h[0]}</b><span>${h[2]}</span></div>`).join("")}</div></section>
+   <section class="tcard" id="tsec-report"><div class="tch"><h2>小組報告</h2><span class="sm mute">${q.gradedAt?"已於 "+esc(fmtAt(q.gradedAt))+" 標記已批改":q.reportUrl?"還沒有標記已批改":""}</span></div>
+    <div class="acts" style="align-items:center">${q.reportUrl&&fixUrl(q.reportUrl)?`<button id="trep">${I("ext")}開啟${esc(q.reportType||"報告")}</button>`:'<span class="sm mute">小組還沒有設定報告連結。</span>'}${q.reportUrl?`<button id="tgrade">${q.gradedAt?"取消已批改":"標記已批改"}</button>`:""}</div></section>
    <section class="tcard"><div class="tch"><h2>給這組的回饋</h2><span class="sm mute">組員會在研究清單和畫布上方看到</span></div>
     <textarea id="tfb" rows="3" maxlength="1000" placeholder="例如：反向證據還不夠，建議找 2 篇不同立場的研究；研究問題可以再聚焦到大學生。" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--fg)"></textarea>
     <div class="acts" style="margin-top:8px"><button class="pri" id="tfbs">送出回饋</button></div>
@@ -1703,11 +1799,11 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
     <div class="lvs" role="radiogroup" aria-label="AI 權限等級">${LVN.map((n,l)=>`<label class="lvopt ${l===lv?"on":""}"><input type="radio" name="tlv" value="${l}" ${l===lv?"checked":""}><span><b>Level ${l}・${n}</b><span>${LVD[l]}</span></span></label>`).join("")}</div>
     <div class="acts"><button class="pri" id="tsave" ${lv===q.LV?"disabled":""}>儲存設定</button><span class="sm mute" style="align-self:center">${lv===q.LV?"目前為 Level "+q.LV:"尚未儲存：Level "+q.LV+" → Level "+lv}</span></div></section>
    <section class="tcard"><h2>分工</h2>${window.RFTEAM?`<p class="sm mute">兩種資訊請分開看：系統不會把它們合併成一個分數，整體分工是否合理由老師判斷。</p><div class="tgrid"><section>${activityHTML()}</section><section>${tasksHTML()}</section></div>`:teamHTML(true)}</section>
-   <section class="tcard"><div class="tch"><h2>AI 使用歷程</h2><span class="sm mute">與學生端「歷程」同一份紀錄・不含同步紀錄・最近 ${rows.length} 筆</span></div>
-    ${rows.length?`<table class="ttab"><thead><tr><th>時間</th><th>誰</th><th>做了什麼</th><th>類型</th></tr></thead><tbody>${rows.map(t=>{const block=t.k==="sys"&&/拒絕/.test(t.x);
+   <section class="tcard" id="tsec-trace"><div class="tch"><h2>AI 使用歷程</h2><span class="sm mute">與學生端「歷程」同一份紀錄・不含同步紀錄・最近 ${rows.length} 筆</span></div>
+    ${rows.length?`<table class="ttab"><thead><tr><th>時間</th><th>誰</th><th>做了什麼</th><th>類型</th></tr></thead><tbody>${rows.map(t=>{const block=t.k==="sys"&&(t.blk||/拒絕/.test(t.x));
      return `<tr><td>${t.at?fmtAt(t.at):t.t}</td><td>${esc(t.w)}</td><td>${esc(t.x)}</td><td><span class="tag ${t.k==="ai"?"ai":block?"blk":""}">${t.k==="ai"?"Agent":block?"超出權限・已阻擋":t.k==="sys"?"權限":"學生"}</span></td></tr>`}).join("")}</tbody></table>`:`<p class="sm mute">還沒有紀錄。</p>`}</section>
    <section class="tcard"><div class="tch"><h2>小組白板</h2><span class="sm mute">唯讀預覽・共 ${q.objs.filter(o=>o.type!=="link"&&!o.hwSub).length} 項內容</span></div><canvas id="tmini" aria-label="小組白板預覽"></canvas></section></main>`}
- const html=side+main;
+ const tItems=teacherTodoItems(),html=`<div class="tdwrap">${todoHTML(tItems,"t")}</div>`+side+main;
  if(html!==tLast){tLast=html;
   // 其他組有更新時會重畫；老師正在寫的回饋不能被洗掉
   const fbOld=$("#tfb"),draft=fbOld?fbOld.value:"",hadFocus=fbOld&&document.activeElement===fbOld;
@@ -1742,6 +1838,10 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
    ...list.flatMap(q=>(q.trace||[]).filter(t=>t.k!=="sync").map(t=>[`${gl(q)}`,q.name,t.at?new Date(t.at).toLocaleString("zh-TW",{hour12:false}):t.t,t.w,t.x,t.k==="ai"?"Agent":t.k==="sys"?"權限":"學生"]))]);
   el.querySelectorAll('input[name="tlv"]').forEach(r=>r.onchange=()=>{tLv=+r.value;renderTeach()});
   const op=$("#topen");if(op)op.onclick=()=>openWs(projects.indexOf(tSel));
+  const rp=$("#trep");if(rp)rp.onclick=()=>{const u=fixUrl(tSel.reportUrl);if(u)window.open(u,"_blank","noopener")};
+  const gr=$("#tgrade");if(gr)gr.onclick=async()=>{const q=tSel,on=!q.gradedAt;gr.disabled=true;
+   try{if(LIVE())await RFDB.setGraded(q.fid,on);q.gradedAt=on?Date.now():0;tLast="";renderTeach()}catch(err){alert("沒有更新成功："+(err?.message||err));gr.disabled=false}};
+  bindTodo(el,tItems,"t");
   const fs=$("#tfbs");if(fs)fs.onclick=async()=>{const q=tSel,t=$("#tfb").value.trim();if(!t){$("#tfb").focus();return}fs.disabled=true;
    try{if(LIVE())await RFDB.addFeedback(q.fid,t,U[ME].n);else{q.fb=[{id:"f"+(++uid),text:t,by:U[ME].n,uid:ME,at:Date.now()},...(q.fb||[])]}$("#tfb").value="";tLast="";renderTeach()}
    catch(err){alert("送出回饋失敗："+(err?.message||err));fs.disabled=false}};

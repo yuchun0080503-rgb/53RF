@@ -31,7 +31,8 @@
       "**/*.bat",
       "**/*.command",
       "**/*.exe",
-      "**/*.sh"
+      "**/*.sh",
+      "rules-test/**"
     ],
     "rewrites": [
       {
