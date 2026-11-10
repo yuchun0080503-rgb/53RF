@@ -157,7 +157,9 @@ for (const c of cases) {
     if (ai) {
       await step(trace, 'AI 規劃關鍵字', async () => {
         try {
-          const r = await ai.planSearch({ title: agent.topicOf(items), claim: q.researchQuestion, notes: items.map((it) => it.text) });
+          let r = await ai.planSearch({ title: agent.topicOf(items), claim: q.researchQuestion, notes: items.map((it) => it.text) });
+          // 跟網站一樣：規劃完到 OpenAlex 查證主題詞（看候選說法實際有幾篇論文、論文裡怎麼用）
+          if (ai.groundPlan) { try { r = await ai.groundPlan(r); row.grounding = (r.grounding || []).map((g) => `${g.zh}:${g.from}→${g.to}(${g.how})`).join('; '); } catch { row.fallbacks++; } }
           for (const k of r.keywords) { if (k.role === 'aspect') { aspects.push(k.en); continue; } if (k.en && !en.includes(k.en)) en.push(k.en); if (k.synonyms?.length) synonyms[k.en] = k.synonyms; }
           for (const k of r.keywords) if (k.role === 'aspect' && k.synonyms?.length) synonyms[k.en] = k.synonyms;
           aiCore = r.keywords.filter((k) => k.role === 'core').length;

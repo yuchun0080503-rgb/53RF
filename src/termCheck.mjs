@@ -116,7 +116,8 @@ export async function groundPlanKeywords(keywords, fetchImpl = fetch, { count = 
   if (ask.length && pick) {
     await Promise.all(ask.flatMap(({ cand }) => cand.map(async (x) => { x.titles = await titles(x.t, x.with || '', fetchImpl); })));
     let ans = null;
-    try { ans = await pick(ask.map(({ it, cand }) => ({ zh: it.k.zh, meaning: it.k.meaning || '', descEn: it.k.descEn || '', options: cand.map((x) => ({ t: x.t, n: x.n, pair: x.pair, with: x.with || '', titles: x.titles || [] })) }))); } catch { ans = null; }
+    const q = () => pick(ask.map(({ it, cand }) => ({ zh: it.k.zh, meaning: it.k.meaning || '', descEn: it.k.descEn || '', options: cand.map((x) => ({ t: x.t, n: x.n, pair: x.pair, with: x.with || '', titles: x.titles || [] })) })));
+    try { ans = await q(); } catch { try { ans = await q(); } catch { ans = null; } } // 失敗重試一次
     if (Array.isArray(ans)) ask.forEach(({ it, cand }, i) => {
       const a = String(ans[i] || '').toLowerCase().trim();
       const hit = cand.find((x) => x.t === a);

@@ -468,5 +468,6 @@ export async function pickTerms(items, fetchImpl) {
     schema: { type: 'object', required: ['picks'], properties: { picks: { type: 'array', items: str } } },
     maxTokens: 200,
   }, fetchImpl);
-  return (out.picks || []).map((s) => clip(s, 60).replace(/^["“]|["”]$/g, '').toLowerCase());
+  // 模型偶爾把只有一項的答案寫成字串而不是陣列（21 題實測 h01 發生），兩種都收
+  return [].concat(out.picks ?? []).map((s) => clip(s, 60).replace(/^["“]|["”]$/g, '').toLowerCase());
 }
