@@ -5,7 +5,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp, setLogLevel } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp, setLogLevel } from 'firebase/firestore';
 
 setLogLevel('silent'); // 被拒絕是預期的結果，不用把每次拒絕都印出來
 
@@ -108,4 +108,44 @@ test('users：已讀與稍後提醒存在自己的文件，別人讀不到也改
   await assertSucceeds(setDoc(doc(as('A'), 'users', 'A'), { seen: { [PID]: { fb: 1 } }, snooze: { 'p1:feedback': 2 } }, { merge: true }));
   await assertFails(getDoc(doc(as('B'), 'users', 'A')));
   await assertFails(setDoc(doc(as('T'), 'users', 'A'), { snooze: {} }, { merge: true }));
+});
+
+// ---------------- 學號（courses/{cid}/roster/{uid}） ----------------
+const seedCourse = () => env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'courses', 'c1'), { name: '教育導論', teacherUid: 'T', defaultAiLevel: 2, requireSid: true });
+  await setDoc(doc(db, 'courses', 'c1', 'roster', 'B'), { sid: 'B10901234', sidAt: Timestamp.now(), name: '小明' });
+});
+const roster = (u, owner) => doc(as(u), 'courses', 'c1', 'roster', owner);
+
+test('學號：組員讀不到別人的學號（單筆或列表都不行）；本人與這門課的老師讀得到', async () => {
+  await seedCourse();
+  await assertFails(getDoc(roster('A', 'B')));
+  await assertFails(getDoc(roster('V', 'B')));
+  await assertFails(getDoc(roster('X', 'B')));
+  await assertFails(getDocs(collection(as('A'), 'courses', 'c1', 'roster')));
+  await assertSucceeds(getDoc(roster('B', 'B')));
+  await assertSucceeds(getDoc(roster('T', 'B')));
+  await assertSucceeds(getDocs(collection(as('T'), 'courses', 'c1', 'roster')));
+});
+
+test('學號：只能寫自己的；格式要是 4–20 碼大寫英數字或空白；不能夾帶其他欄位、修改時間不能是未來', async () => {
+  await seedCourse();
+  const ok = { sid: 'A1234567', sidAt: Timestamp.now(), name: '家欣' };
+  await assertSucceeds(setDoc(roster('A', 'A'), ok));
+  await assertSucceeds(setDoc(roster('A', 'A'), { ...ok, sid: '', sidAt: null }));
+  await assertFails(setDoc(roster('A', 'B'), ok)); // 不能改別人的
+  await assertFails(setDoc(roster('T', 'A'), ok)); // 老師也不能代改
+  await assertFails(setDoc(roster('A', 'A'), { ...ok, sid: 'a1234567' })); // 小寫
+  await assertFails(setDoc(roster('A', 'A'), { ...ok, sid: 'A12' })); // 太短
+  await assertFails(setDoc(roster('A', 'A'), { ...ok, sid: 'A1234-567' }));
+  await assertFails(setDoc(roster('A', 'A'), { ...ok, grade: 90 }));
+  await assertFails(setDoc(roster('A', 'A'), { ...ok, sidAt: Timestamp.fromMillis(Date.now() + 3600e3) }));
+  await assertFails(setDoc(doc(as('A'), 'courses', 'nope', 'roster', 'A'), ok)); // 不存在的課程
+});
+
+test('學號：users 文件上的學號也要符合格式', async () => {
+  await assertSucceeds(setDoc(doc(as('A'), 'users', 'A'), { sid: 'B10901234', sidAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(as('A'), 'users', 'A'), { sid: '' }, { merge: true }));
+  await assertFails(setDoc(doc(as('A'), 'users', 'A'), { sid: 'b1' }, { merge: true }));
 });

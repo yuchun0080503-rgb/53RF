@@ -93,12 +93,18 @@ export function nudgeChecks(q, now = Date.now()) {
       out.push({ id: `task-${t.id}`, kind: 'taskLate', to: [t.assignee], due: t.due, teacher: `分工任務「${t.title}」逾期 ${-td} 天`, student: `分工任務「${t.title}」已逾期 ${-td} 天`, tab: 'team' });
     }
   }
+  // 課程必填學號：sids 是「已讀到的學號」{uid: 學號}；還沒讀到名冊（undefined）時不判斷，避免誤報
+  if (q.requireSid && q.sids) {
+    for (const u of students(q)) {
+      if (!q.sids[u]) out.push({ id: `sid-${u}`, kind: 'sidMissing', to: [u], due: null, teacher: `${(q.names || {})[u] || '有組員'}還沒有填學號`, student: '這門課要求填寫學號，請到個人檔案設定填寫', tab: 'profile' });
+    }
+  }
   if (q.hasAssignments && !q.assignmentId && q.ownerUid) out.push({ id: 'unselected', kind: 'unselected', to: [q.ownerUid], due: null, teacher: '還沒有選作業', student: '還沒有選這份研究屬於哪一個作業', tab: 'settings' });
   return out;
 }
 
 // ---------------- 學生端 S1 ----------------
-const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定' };
+const BTN = { open: '開啟', feedback: '看回饋', readings: '看閱讀', pin: '看留言', agent: '去確認', team: '看分工', settings: '去設定', profile: '去填寫' };
 const WAIT_STEPS = { 1: '確認理解', 4: '確認策略' }; // 研究狀態七步驟中，停下來等學生確認的兩步
 
 /**

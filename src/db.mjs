@@ -342,11 +342,11 @@ async function claimCode(courseId, uid, expires) {
 
 // sources：Agent 加查的領域資料庫；zhLinks：給學生的中文資料庫連結；readings：老師指定的閱讀 [{title,url}]
 // assignments：一門課的多個作業 [{id,title,req,due}]；沒有的話，課程本身的老師要求與截止日就是唯一的作業
-export async function createCourse({ name, teacherReq = '', dueDate = '', defaultAiLevel = 2, codeExpires = '', sources = [], zhLinks = null, readings = [], assignments = [] }, uid, profile = {}) {
+export async function createCourse({ name, teacherReq = '', dueDate = '', defaultAiLevel = 2, codeExpires = '', sources = [], zhLinks = null, readings = [], assignments = [], requireSid = false }, uid, profile = {}) {
   const expires = codeExpires || semesterEnd();
   const ref = await addDoc(collection(db, 'courses'), {
     name: name || '未命名課程', teacherUid: uid, teacherName: profile.displayName || '老師',
-    teacherReq, dueDate, defaultAiLevel: +defaultAiLevel, code: '', codeExpires: expires, sources, zhLinks, readings: readings.slice(0, 30), assignments: assignments.slice(0, 20), createdAt: serverTimestamp(),
+    teacherReq, dueDate, defaultAiLevel: +defaultAiLevel, code: '', codeExpires: expires, sources, zhLinks, readings: readings.slice(0, 30), assignments: assignments.slice(0, 20), requireSid: !!requireSid, createdAt: serverTimestamp(),
   });
   const code = await claimCode(ref.id, uid, expires);
   await updateDoc(ref, { code });
@@ -362,7 +362,7 @@ export function subscribeMyCourses(uid, onChange, onError) {
 // 改課程設定；改了期限的話，目前的代碼一起延長／縮短
 export async function updateCourse(course, fields) {
   const clean = {};
-  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
+  for (const k of ['name', 'teacherReq', 'dueDate', 'defaultAiLevel', 'codeExpires', 'sources', 'zhLinks', 'readings', 'assignments', 'requireSid']) if (k in fields) clean[k] = k === 'defaultAiLevel' ? +fields[k] : fields[k];
   await updateDoc(doc(db, 'courses', course.id), clean);
   if (clean.codeExpires && course.code && clean.codeExpires !== course.codeExpires) await updateDoc(doc(db, 'courseCodes', course.code), { expiresAt: codeExpiry(clean.codeExpires) });
 }
@@ -691,6 +691,31 @@ export async function sendNudge(projectId, { id, kind, text, to }, who) {
 // 老師標記報告「已批改」（on=false 取消）
 export async function setGraded(projectId, on) {
   await updateDoc(doc(db, 'projects', projectId), { gradedAt: on ? serverTimestamp() : null });
+}
+
+// ---------------- 學號 ----------------
+// 學號本體在 users/{uid}（本人）；另外在每門課的名冊 courses/{cid}/roster/{uid} 放一份給老師看（組員讀不到）。
+// sidAt：最後一次修改學號的時間（用瀏覽器時間，規則只允許不超過伺服器時間 5 分鐘）。
+export async function setMySid(uid, sid) {
+  const sidAt = sid ? Timestamp.now() : null;
+  await setDoc(doc(db, 'users', uid), { sid, sidAt }, { merge: true });
+  return sidAt ? sidAt.toMillis() : 0;
+}
+export async function getMyRoster(courseId, uid) {
+  const d = await getDoc(doc(db, 'courses', courseId, 'roster', uid));
+  return d.exists() ? d.data() : null;
+}
+// 把自己的學號與名字寫進這門課的名冊（sidAt 為毫秒或 0）
+export async function putRoster(courseId, uid, { sid, sidAt, name }) {
+  await setDoc(doc(db, 'courses', courseId, 'roster', uid), { sid: sid || '', sidAt: sid && sidAt ? Timestamp.fromMillis(sidAt) : null, name: String(name || '').slice(0, 60) });
+}
+// 老師：這門課的名冊 {uid: {sid, sidAt, name}}
+export function subscribeRoster(courseId, onChange, onError) {
+  return onSnapshot(collection(db, 'courses', courseId, 'roster'), (snap) => {
+    const out = {};
+    snap.docs.forEach((d) => { const x = d.data(); out[d.id] = { sid: x.sid || '', sidAt: x.sidAt?.toMillis ? x.sidAt.toMillis() : 0, name: x.name || '' }; });
+    onChange(out);
+  }, onError);
 }
 
 // ---------------- util ----------------

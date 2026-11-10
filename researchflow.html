@@ -258,6 +258,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .tdr.snz{opacity:.45}
 .tdmore{margin-top:8px;font-size:13px}.tdempty{margin:8px 0 0}
 .tdwrap{grid-column:1/-1;min-width:0}.tdwrap .todo{margin:0}
+@media(max-width:860px){.ttab th{white-space:nowrap}.ttab td.sm{min-width:150px}}
 @media(max-width:640px){.tdr{flex-wrap:wrap;padding-left:0}.tdn{max-width:calc(100% - 20px)}.tdw{flex-basis:calc(100% - 20px);margin-left:17px}.tda{width:100%;justify-content:flex-end}}
 </style>
 </head>
@@ -344,7 +345,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.10-2";
+window.RF_VER = "2026.11.10-3";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -528,7 +529,9 @@ function applyCodeParam(){if(!pendingCode||ROLE==="t")return;const f=$("#f0");if
 // 研究所屬課程的設定（老師指定閱讀、可信任資料庫）。老師端有完整課程清單；學生端線上模式另外讀一次放在 courseCache。
 const courseCache={};
 // 待辦列表的狀態：myUser＝自己的已讀時間與稍後提醒（users/{uid}，展示模式只存在記憶體）；todoOpen＝是否展開超過 5 項的部分
-let unsubMe=null,myUser={seen:{},snooze:{}},todoOpen={s:false,t:false},tdTimer=0;
+let unsubMe=null,myUser={seen:{},snooze:{},sid:"",sidAt:0,loaded:false},todoOpen={s:false,t:false},tdTimer=0;
+// 學號：老師端每門課的名冊 {courseId: {uid: {sid, sidAt, name}}}；學生端記下這次登入已經同步過名冊的課程
+const rosterOf={},rosterUnsub={},rosterSynced={},sidAsked={};let tSearch="";
 const courseOfP=q=>q&&q.courseId?(courses.find(c=>c.id===q.courseId)||courseCache[q.courseId]||null):null;
 // 這份研究搜尋時要加查的領域資料庫：老師有勾就照老師的，沒有就依研究領域、課程名稱自動挑
 const srcOf=q=>window.RFSRC?RFSRC.pickSources({teacher:courseOfP(q)?.sources,field:q.field,course:q.course,name:q.name}):[];
@@ -582,14 +585,37 @@ $("#out").onclick=()=>{$("#menu").classList.add("hide");
  if(LIVE()){projects.length=0;courses.length=0;p=null;RFDB.signOutUser().catch(()=>{})}
  show("login")};
 $("#mpf").onclick=()=>{$("#menu").classList.add("hide");openPF()};
-function openPF(){const u=U[ME];let col=u.c;const d=$("#pf");
- d.innerHTML=`<h2>個人檔案設定</h2><label for="pn">顯示名稱</label><input id="pn" value="${esc(u.n)}">
+// 學號名冊：把自己的學號與名字寫進每一門加入的課程（老師看得到、組員看不到）；課程必填但還沒填時，打開個人檔案設定提示
+async function syncRoster(force){if(!LIVE()||ROLE==="t"||!myUser.loaded||!RFDB.putRoster)return;
+ const cids=[...new Set(projects.filter(q=>q.courseId&&roleIn(q)!=="Teacher").map(q=>q.courseId))];
+ for(const cid of cids){const key=(myUser.sid||"")+"|"+U[ME].n;
+  if(rosterSynced[cid]!==key||force){rosterSynced[cid]=key;
+   try{const cur=await RFDB.getMyRoster(cid,ME);if(force||!cur||cur.sid!==(myUser.sid||"")||cur.name!==U[ME].n)await RFDB.putRoster(cid,ME,{sid:myUser.sid,sidAt:myUser.sidAt,name:U[ME].n})}
+   catch(err){delete rosterSynced[cid];console.warn("[ResearchFlow] 同步學號名冊失敗：",err)}}
+  let c=courseCache[cid];if(!c||!("requireSid" in c)){try{c=await RFDB.getCourse(cid);if(c)courseCache[cid]=c}catch(e){}}
+  if(c&&c.requireSid&&!myUser.sid&&!sidAsked[cid]&&!$("#pf").open){sidAsked[cid]=true;openPF(c.name);break}}}
+// 老師端：訂閱每一門課的學號名冊
+function attachRoster(c){if(!LIVE()||!c||!c.id||rosterUnsub[c.id]||!RFDB.subscribeRoster)return;
+ rosterUnsub[c.id]=RFDB.subscribeRoster(c.id,m=>{rosterOf[c.id]=m;teachTick()},err=>console.warn("[ResearchFlow] 讀取學號名冊失敗：",err))}
+// 某位學生在某份研究所屬課程的學號（老師端用；展示模式用記憶體裡的資料）
+const sidOf=(q,u)=>((rosterOf[q.courseId]||{})[u]||{}).sid||"";
+// need：從哪門課來的提示（課程必填學號時，加入課程後自動打開）
+function openPF(need){const u=U[ME];let col=u.c;const d=$("#pf"),stu=ROLE!=="t";
+ d.innerHTML=`<h2>個人檔案設定</h2>${need?`<p class="cstat bad" style="margin:8px 0 0">「${esc(need)}」要求填寫學號，請在下面填好後儲存。</p>`:""}<label for="pn">顯示名稱</label><input id="pn" value="${esc(u.n)}">
+ ${stu?`<label for="psid">學號（選填）</label><input id="psid" value="${esc(myUser.sid||"")}" autocomplete="off" maxlength="30" placeholder="例如：B10901234" style="text-transform:uppercase"><div class="cstat" id="psids" aria-live="polite">只有你和你加入課程的老師看得到，組員看不到。${myUser.sidAt?"上次修改："+esc(fmtAt(myUser.sidAt)):""}</div>`:""}
  <label>頭像顏色</label><div class="sw">${CO.map(c=>`<button data-c="${c}" style="background:${c}" class="${c===col?"on":""}" aria-label="頭像顏色"></button>`).join("")}</div>
  <div class="hl" style="margin-top:18px"><span>帳號</span><span>${esc(u.email)}</span></div><div class="hl"><span>ResearchFlow User ID</span><span>${u.id}</span></div><div class="hl"><span>登入方式</span><span>${LIVE()?"電子郵件與密碼":"展示帳號"}</span></div>
  <p class="note">登入只負責確認你是誰（密碼由 Firebase Authentication 保管）；研究資料由 ResearchFlow 自己的資料庫管理。</p>
  <div class="acts" style="justify-content:flex-end"><button id="pc">取消</button><button class="pri" id="pfsave">儲存</button></div>`;
  d.querySelectorAll(".sw button").forEach(b=>b.onclick=()=>{col=b.dataset.c;d.querySelectorAll(".sw button").forEach(x=>x.classList.toggle("on",x===b))});
- $("#pc").onclick=()=>d.close();$("#pfsave").onclick=()=>{u.n=$("#pn").value.trim()||u.n;u.c=col;d.close();
+ $("#pc").onclick=()=>d.close();$("#pfsave").onclick=async()=>{
+  let sidChanged=false;
+  if(stu&&window.RFCOURSE){const r=RFCOURSE.checkSid($("#psid").value);if(!r.ok){$("#psids").className="cstat bad";$("#psids").textContent=r.reason;$("#psid").focus();return}
+   if(r.sid!==(myUser.sid||"")){sidChanged=true;
+    try{myUser.sidAt=LIVE()?await RFDB.setMySid(ME,r.sid):(r.sid?Date.now():0);myUser.sid=r.sid}catch(err){alert("儲存學號失敗："+(err?.message||err));return}}}
+  const nameChanged=($("#pn").value.trim()||u.n)!==u.n;
+  u.n=$("#pn").value.trim()||u.n;u.c=col;d.close();
+  if(sidChanged||nameChanged)syncRoster(true);todoTick();
   if(LIVE())RFDB.updateMyProfile(ME,{displayName:u.n,color:u.c},projects.map(q=>q.fid).filter(Boolean)).catch(err=>alert("儲存個人檔案失敗："+(err?.message||err)));renderAv();renderProj();p&&!$("#v-ws").classList.contains("hide")&&openWsUI()};d.showModal()}
 
 /* login & home */
@@ -610,12 +636,12 @@ async function enterLive(fu){if(entered===fu.uid)return;entered=fu.uid;restored=
  renderAv();$("#hi").textContent=ROLE==="t"?"老師，你好":"嗨，"+U[ME].n;$("#form").classList.toggle("hide",ROLE==="t");$("#tnote").classList.toggle("hide",ROLE!=="t");
  const qs=new URLSearchParams(location.search),join=qs.get("join");
  if(join&&join.includes(":")){const[pid,token]=join.split(":");try{await RFDB.redeemInvite(pid,token,ME,myProfile());history.replaceState(null,"",location.pathname)}catch(err){alert("加入專案失敗："+(err?.message||err))}}
- if(RFDB.subscribeMyUser){if(unsubMe)unsubMe();unsubMe=RFDB.subscribeMyUser(ME,d=>{myUser={seen:d.seen||{},snooze:d.snooze||{}};todoTick()},err=>console.warn("[ResearchFlow] 讀取已讀紀錄失敗：",err))}
+ if(RFDB.subscribeMyUser){if(unsubMe)unsubMe();unsubMe=RFDB.subscribeMyUser(ME,d=>{const first=!myUser.loaded;myUser={seen:d.seen||{},snooze:d.snooze||{},sid:d.sid||"",sidAt:d.sidAt?.toMillis?d.sidAt.toMillis():0,loaded:true};todoTick();if(first)syncRoster()},err=>console.warn("[ResearchFlow] 讀取已讀紀錄失敗：",err))}
  attachLiveProjects();attachLiveCourses();show("proj")}
 // 老師的課程清單（即時）。學生端不需要。
 let unsubCourses=null;
 function attachLiveCourses(){if(unsubCourses){unsubCourses();unsubCourses=null}courses.length=0;if(ROLE!=="t"||!RFDB.subscribeMyCourses)return;
- unsubCourses=RFDB.subscribeMyCourses(ME,list=>{courses.length=0;courses.push(...list);teachTick()},err=>{console.error("[ResearchFlow] 讀取課程失敗：",err);alert("讀取課程失敗："+(err?.message||err))})}
+ unsubCourses=RFDB.subscribeMyCourses(ME,list=>{courses.length=0;courses.push(...list);list.forEach(attachRoster);teachTick()},err=>{console.error("[ResearchFlow] 讀取課程失敗：",err);alert("讀取課程失敗："+(err?.message||err))})}
 // 研究清單第一次載入後：重新整理前如果正開著某一份研究，直接回到那一份（連同當時的分頁）
 // 網址 ?p=<研究id>&tab=feedback|readings|pin|agent|team|settings&pin=<留言id>：直接打開那一份研究的指定頁面（待辦列表也用同一套跳轉）
 function restoreOpen(){if(restored)return;restored=true;setTimeout(unboot,60);
@@ -684,7 +710,7 @@ function attachLiveProjects(){
   const inWs=!$("#v-ws").classList.contains("hide");
   projects.length=0;projects.push(...mapped);
   if(p&&!mapped.includes(p)){detachLive(p);p=null;if(inWs){alert("你已經不是這個研究專案的成員。");show("proj")}}
-  attachTodoFeeds();renderProj();teachTick();
+  attachTodoFeeds();renderProj();teachTick();syncRoster();
   if(p&&inWs){openWsUI();renderPane()}
   restoreOpen();
  },err=>{console.error(err);$("#cnt").textContent="讀取研究專案失敗，請檢查網路或 Firebase 設定";alert("讀取研究專案失敗："+(err?.message||err))});
@@ -1621,6 +1647,7 @@ function openCourse(c){const d=$("#pd"),isNew=!c,v=c||{name:"",teacherReq:"",due
  <p class="sm mute" style="margin:6px 0 0">代碼預設用到這學期結束（${SEM_END}）。過期後學生不能再用代碼加入，已經加入的研究不受影響。</p>
  <label for="k4">新加入研究的 AI 權限</label><select id="k4">${LVN.map((n,l)=>`<option value="${l}" ${l===+v.defaultAiLevel?"selected":""}>Level ${l}．${n}</option>`).join("")}</select>
  <p class="sm mute" id="k4d" style="margin:6px 0 0"></p>
+ <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:14px"><input type="checkbox" id="k8" style="width:auto;margin:0" ${v.requireSid?"checked":""}>學生必須填寫學號</label><p class="sm mute" style="margin:2px 0 0">學生加入後會被提醒補填。學號只有學生本人和你看得到，組員看不到。</p>
  <h3 style="margin:20px 0 2px">作業</h3><p class="sm mute" style="margin:0">一門課有好幾份作業時在這裡新增。學生輸入代碼後選擇是哪一份作業，老師要求與截止日會照該作業帶入。沒有新增的話，就用上面的老師要求與截止日。</p>
  <div id="kas"></div><button id="kaa" style="margin-top:8px">${I("plus")}新增作業</button>
  <h3 style="margin:20px 0 2px">組別（選填）</h3><p class="sm mute" style="margin:0">可以先開好組別（例如 8 組），學生輸入代碼後只能從這些組別選，組名會跟你的點名表一致；不開的話，由學生自己建立新的一組，其他組員從清單選同一組加入。有分作業時，在上面每份作業右邊的「預先開幾組」填。</p>
@@ -1643,7 +1670,7 @@ function openCourse(c){const d=$("#pd"),isNew=!c,v=c||{name:"",teacherReq:"",due
  $("#kc").onclick=()=>d.close();
  $("#ks").onclick=async()=>{const srcs=[...d.querySelectorAll("[data-src]")].filter(x=>x.checked).map(x=>x.dataset.src),zhs=[...d.querySelectorAll("[data-zh]")].filter(x=>x.checked).map(x=>x.dataset.zh);
   const f={name:$("#k1").value.trim(),teacherReq:$("#k2").value.trim(),dueDate:$("#k3").value,codeExpires:$("#k5").value||SEM_END,defaultAiLevel:+$("#k4").value,
-   sources:srcs.length?srcs:null,zhLinks:zhs,readings:parseReadings($("#k7").value),
+   sources:srcs.length?srcs:null,zhLinks:zhs,readings:parseReadings($("#k7").value),requireSid:!!$("#k8")?.checked,
    assignments:[...d.querySelectorAll("#kas [data-aid]")].map(r=>({id:r.dataset.aid,title:r.querySelector("[data-at]").value.trim(),req:r.querySelector("[data-ar]").value.trim(),due:r.querySelector("[data-ad]").value,groupCount:Math.max(0,Math.min(40,+r.querySelector("[data-ag]").value||0))})).filter(a=>a.title),
    groupCount:Math.max(0,Math.min(40,+$("#k8").value||0))}; // sources 為 null：交給系統依領域自動挑
   if(!f.name){alert("請填課程名稱。");$("#k1").focus();return}
@@ -1662,6 +1689,7 @@ function openCourse(c){const d=$("#pd"),isNew=!c,v=c||{name:"",teacherReq:"",due
 const LVD=["Agent 全部關閉","判斷研究範圍、搜尋文獻；研究問題由學生自己寫","另可產生研究問題草案","另可產生證據摘要"];
 const STAGES=["畫布討論","畫布讀取確認","範圍聚焦","範圍聚焦","搜尋準備","證據補強","整理階段"];
 const teachList=()=>projects.filter(q=>!LIVE()||roleIn(q)==="Teacher");
+const studsOf=q=>q.members.filter(m=>m.role!=="Teacher"&&U[m.u]).map(m=>m.u);
 const tAgentN=q=>(q.trace||[]).filter(t=>t.k==="ai").length;
 // 幾天沒有任何紀錄（只有線上模式的歷程有完整時間）
 const tIdle=q=>{const at=Math.max(0,...(q.trace||[]).map(t=>t.at||0));return at?Math.floor((Date.now()-at)/864e5):0};
@@ -1687,7 +1715,10 @@ const rdKey=r=>r.url||r.title;
 function todoProj(q){const c=courseOfP(q);
  return {id:pidOf(q),name:q.name,groupName:q.groupName||"",ownerUid:q.ownerUid||(q.members.find(m=>m.role==="Owner")||{}).u||"",due:q.due||"",reportUrl:q.reportUrl||"",gradedAt:q.gradedAt||0,step:(q.S||{}).step||0,
   members:q.members.map(m=>({u:m.u,role:String(m.role||"").toLowerCase()})),lastAt:Math.max(0,...(q.trace||[]).map(t=>t.at||0)),
-  fb:q.fb||[],pins:q.pins||[],readings:readingsOf(q).map(rdKey),tasks:q.tasks||[],nudges:q.nudges||[],trace:q.trace||[],hasAssignments:asgOf(c).length>0,assignmentId:q.assignmentId||""}}
+  fb:q.fb||[],pins:q.pins||[],readings:readingsOf(q).map(rdKey),tasks:q.tasks||[],nudges:q.nudges||[],trace:q.trace||[],hasAssignments:asgOf(c).length>0,assignmentId:q.assignmentId||"",
+  requireSid:!!(c&&c.requireSid),names:Object.fromEntries(q.members.map(m=>[m.u,(U[m.u]||{}).n||""])),
+  // 學號：老師端讀名冊（還沒讀到時不判斷）；學生端只知道自己的
+  sids:ROLE==="t"?(rosterOf[q.courseId]?Object.fromEntries(Object.entries(rosterOf[q.courseId]).map(([u,r])=>[u,r.sid])):undefined):(myUser.loaded?{[ME]:myUser.sid}:undefined)}}
 // 每一份研究的待辦資料（研究狀態、歷程、分工、留言、老師提醒）在主頁就要訂閱
 function attachNudges(q){if(!LIVE()||!q.fid||q._unsubNudges||!RFDB.subscribeNudges)return;
  q._unsubNudges=RFDB.subscribeNudges(q.fid,rows=>{q.nudges=rows;todoTick()},err=>console.warn("[ResearchFlow] 讀取老師提醒失敗：",err))}
@@ -1726,6 +1757,7 @@ function bindTodo(root,items,role){const by=k=>items.find(x=>x.key===k);
 // 學生端：跳到待辦對應的頁面（也給網址 ?p=<研究id>&tab=… 使用）
 function goTodoS(it){const i=projects.findIndex(q=>pidOf(q)===it.pid);if(i<0)return;const tab=it.act.tab;
  if(tab==="settings"){openPD(i);return}
+ if(tab==="profile"){openPF(courseOfP(projects[i])?.name||"");return}
  openWs(i);
  setTimeout(()=>{if(tab==="feedback")$("#fbb").click();else if(tab==="readings")$("#rdb").click();else if(tab==="pin"&&it.act.id)goPin(it.act.id);
   else if(tab==="team"){const b=document.querySelector('.tabs button[data-p="team"]');if(b)b.click()}},60)}
@@ -1779,13 +1811,14 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
   main=`<main class="tmain"><div class="thead"><h1>${esc(cur?cur.name:"其他研究")}${asgName?"・"+esc(asgName):""}・全班總覽</h1></div>
    <p class="sm mute" style="margin:0">每一組依實際完成的事實列出，不打分數。點一列可以看那一組的細節。</p>
    <section class="tcard"><div class="tch"><h2>各組狀態（${list.length} 組）</h2><span class="acts" style="display:flex;gap:8px;flex-wrap:wrap"><button id="tcsv1">${I("ext")}匯出全班進度（CSV）</button><button id="tcsv2">${I("ext")}匯出 AI 使用歷程（CSV）</button></span></div>
-   <table class="ttab"><thead><tr><th>組別</th><th>研究名稱</th>${asg.length&&!tAsg?"<th>作業</th>":""}<th>目前階段</th><th>AI 權限</th><th>Agent 次數</th><th>支持／反向證據</th><th>最近更新</th><th>需要注意</th></tr></thead><tbody>
-   ${list.map(q=>{const n=cnt(q),f=tFlag(q);return `<tr data-tg="${projects.indexOf(q)}" style="cursor:pointer"><td>${gl(q)}</td><td><b>${esc(q.name)}</b></td>${asg.length&&!tAsg?`<td>${esc(q.assignmentTitle||"未選")}</td>`:""}<td>${STAGES[q.S.step]||STAGES[0]}</td><td>Level ${q.LV}</td><td>${tAgentN(q)}</td><td>${n.s}／${n.c}</td><td>${esc(tLastAt(q))}</td><td>${f.length?`<span class="tag blk">${esc(f.join("、"))}</span>`:'<span class="mute">—</span>'}</td></tr>`}).join("")}
+   <input id="tsearch" type="search" placeholder="搜尋姓名或學號" aria-label="搜尋學生（姓名或學號）" value="${esc(tSearch)}" style="max-width:280px;margin:0 0 10px"><p class="sm mute hide" id="tsearchn" style="margin:-4px 0 10px"></p>
+   <table class="ttab"><thead><tr><th>組別</th><th>研究名稱</th><th>組員（學號）</th>${asg.length&&!tAsg?"<th>作業</th>":""}<th>目前階段</th><th>AI 權限</th><th>Agent 次數</th><th>支持／反向證據</th><th>最近更新</th><th>需要注意</th></tr></thead><tbody>
+   ${list.map(q=>{const n=cnt(q),f=tFlag(q),st=studsOf(q);return `<tr data-tg="${projects.indexOf(q)}" data-s="${esc(st.map(u=>(U[u]?.n||"")+" "+sidOf(q,u)).join(" ").toUpperCase())}" style="cursor:pointer"><td>${gl(q)}</td><td><b>${esc(q.name)}</b></td><td class="sm">${st.map(u=>esc(U[u]?.n||"組員")+(sidOf(q,u)?`<span class="mute">（${esc(sidOf(q,u))}）</span>`:"")).join("、")||"—"}</td>${asg.length&&!tAsg?`<td>${esc(q.assignmentTitle||"未選")}</td>`:""}<td>${STAGES[q.S.step]||STAGES[0]}</td><td>Level ${q.LV}</td><td>${tAgentN(q)}</td><td>${n.s}／${n.c}</td><td>${esc(tLastAt(q))}</td><td>${f.length?`<span class="tag blk">${esc(f.join("、"))}</span>`:'<span class="mute">—</span>'}</td></tr>`}).join("")}
    </tbody></table></section></main>`}
  if(tView!=="all"&&tSel){const q=tSel,lv=tLv??q.LV,rows=(q.trace||[]).filter(t=>t.k!=="sync").slice().reverse().slice(0,40),cells=health().flatMap(g=>g[1]);
   main=`<main class="tmain"><div class="mute">${esc(q.course||"未填課程")}${q.assignmentTitle?"・"+esc(q.assignmentTitle):""}・${gl(q)}・截止 ${q.due||"未設定"}</div>
    <div class="thead"><h1>${esc(q.name)}</h1><button id="topen">${I("ext")}開啟畫布（唯讀）</button></div>
-   <div class="tchips">${q.members.filter(m=>m.role!=="Teacher"&&U[m.u]).map(m=>`<span style="color:${U[m.u].c};background:color-mix(in srgb,${U[m.u].c} 11%,var(--bg))">${esc(U[m.u].n)}・${m.role}${m.duty?"・"+esc(m.duty):""}</span>`).join("")}<span class="tag m-${modeOf(q)}">${MODE_N[modeOf(q)]}</span></div>
+   <div class="tchips">${q.members.filter(m=>m.role!=="Teacher"&&U[m.u]).map(m=>{const sid=sidOf(q,m.u);return `<span style="color:${U[m.u].c};background:color-mix(in srgb,${U[m.u].c} 11%,var(--bg))">${esc(U[m.u].n)}・${sid?"學號 "+esc(sid):courseOfP(q)?.requireSid?"未填學號":m.role}${m.duty?"・"+esc(m.duty):""}</span>`}).join("")}<span class="tag m-${modeOf(q)}">${MODE_N[modeOf(q)]}</span></div>
    ${q.req?`<p class="sm mute" style="margin:10px 0 0">老師要求：${esc(q.req)}</p>`:""}
    <section class="tcard"><h2>研究進度</h2><p class="sm mute">與學生端「進度檢核」相同：每一項依實際完成的事實判定，不使用百分比。</p>
     <div class="tprog">${cells.map(h=>`<div class="s-${h[1]}"><b>${h[0]}</b><span>${h[2]}</span></div>`).join("")}</div></section>
@@ -1806,8 +1839,9 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
  const tItems=teacherTodoItems(),html=`<div class="tdwrap">${todoHTML(tItems,"t")}</div>`+side+main;
  if(html!==tLast){tLast=html;
   // 其他組有更新時會重畫；老師正在寫的回饋不能被洗掉
-  const fbOld=$("#tfb"),draft=fbOld?fbOld.value:"",hadFocus=fbOld&&document.activeElement===fbOld;
+  const fbOld=$("#tfb"),draft=fbOld?fbOld.value:"",hadFocus=fbOld&&document.activeElement===fbOld,sFocus=document.activeElement?.id==="tsearch";
   el.innerHTML=`<div class="tlay">${html}</div>`;
+  if(sFocus){const t=$("#tsearch");if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
   const fbNew=$("#tfb");if(fbNew&&draft){fbNew.value=draft;if(hadFocus)fbNew.focus()}
   const cs=$("#tcs");if(cs)cs.onchange=()=>{tCourse=cs.value;tAsg="";tSel=null;renderTeach()};
   const as=$("#tas");if(as)as.onchange=()=>{tAsg=as.value;tSel=null;tView="all";renderTeach()};
@@ -1831,9 +1865,13 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
     try{if(LIVE())cur.code=await RFDB.resetCourseCode(cur,ME);else cur.code=demoCode();cur.codeActive=true;tLast="";renderTeach()}catch(err){alert("換新代碼失敗："+(err?.message||err))}}}
   el.querySelectorAll("[data-tg]").forEach(b=>b.onclick=()=>{tSel=projects[+b.dataset.tg];tView="group";tLv=null;renderTeach();scrollTo({top:0})});
   const ta=$("#tall");if(ta)ta.onclick=()=>{tView="all";tSel=null;tLv=null;renderTeach();scrollTo({top:0})};
+  // 搜尋姓名或學號：只隱藏不符合的列，不重畫（輸入框不會失去焦點）
+  const ts=$("#tsearch");if(ts){const run=()=>{tSearch=ts.value;const k=tSearch.trim().toUpperCase(),rows=[...el.querySelectorAll(".ttab tr[data-s]")];let n=0;
+    rows.forEach(r=>{const hit=!k||r.dataset.s.includes(k);r.classList.toggle("hide",!hit);n+=hit});const m=$("#tsearchn");m.classList.toggle("hide",!k);m.textContent=n?`找到 ${n} 組`:"沒有符合的學生"};
+   ts.oninput=run;if(tSearch)run()}
   const cname=((cur?cur.name:"其他研究")+(asgName?"-"+asgName:"")).replace(/[\\/:*?"<>|]/g,"_"),today=new Date().toISOString().slice(0,10);
-  const c1=$("#tcsv1");if(c1)c1.onclick=()=>dlCSV(`${cname}-全班進度-${today}.csv`,[["組別","研究名稱","作業","組員","目前階段","AI 權限","Agent 次數","支持證據","反向證據","最近更新","需要注意"],
-   ...list.map(q=>[`${gl(q)}`,q.name,q.assignmentTitle||"",q.members.filter(m=>m.role!=="Teacher"&&U[m.u]).map(m=>U[m.u].n).join("、"),STAGES[q.S.step]||STAGES[0],"Level "+q.LV,tAgentN(q),q.S.ev.filter(e=>e.k==="s").length,q.S.ev.filter(e=>e.k==="c").length,tLastAt(q),tFlag(q).join("、")])]);
+  const c1=$("#tcsv1");if(c1)c1.onclick=()=>dlCSV(`${cname}-全班進度-${today}.csv`,[["組別","研究名稱","作業","組員","組員學號","目前階段","AI 權限","Agent 次數","支持證據","反向證據","最近更新","需要注意"],
+   ...list.map(q=>[`${gl(q)}`,q.name,q.assignmentTitle||"",studsOf(q).map(u=>U[u]?.n||"組員").join("、"),studsOf(q).map(u=>sidOf(q,u)||"未填").join("、"),STAGES[q.S.step]||STAGES[0],"Level "+q.LV,tAgentN(q),q.S.ev.filter(e=>e.k==="s").length,q.S.ev.filter(e=>e.k==="c").length,tLastAt(q),tFlag(q).join("、")])]);
   const c2=$("#tcsv2");if(c2)c2.onclick=()=>dlCSV(`${cname}-AI使用歷程-${today}.csv`,[["組別","研究名稱","時間","誰","做了什麼","類型"],
    ...list.flatMap(q=>(q.trace||[]).filter(t=>t.k!=="sync").map(t=>[`${gl(q)}`,q.name,t.at?new Date(t.at).toLocaleString("zh-TW",{hour12:false}):t.t,t.w,t.x,t.k==="ai"?"Agent":t.k==="sys"?"權限":"學生"]))]);
   el.querySelectorAll('input[name="tlv"]').forEach(r=>r.onchange=()=>{tLv=+r.value;renderTeach()});
