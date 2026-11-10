@@ -2,7 +2,7 @@
   "name": "researchflow-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "ResearchFlow：多人研究畫布 + Research Agent（Firebase 免費方案：Auth／Firestore／Hosting，無任何 API 金鑰）。",
+  "description": "ResearchFlow：多人研究畫布 + Research Agent（Firebase：Auth／Firestore／Hosting／Functions／Storage；AI 經後端代理呼叫 Claude）。",
   "scripts": {
     "start": "node dev-server.mjs",
     "test": "node --test src/*.test.mjs",
