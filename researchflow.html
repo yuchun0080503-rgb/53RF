@@ -403,14 +403,14 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
   </aside>
 </div></section>
 
-<dialog id="ps"></dialog><dialog id="pd"></dialog><dialog id="ask" style="width:min(440px,92vw);z-index:9999"></dialog><dialog id="tm"></dialog><dialog id="pf"></dialog>
+<dialog id="ps"></dialog><dialog id="pd"></dialog><dialog id="prp"></dialog><dialog id="ask" style="width:min(440px,92vw);z-index:9999"></dialog><dialog id="tm"></dialog><dialog id="pf"></dialog>
 
 <script type="module">
 // 第一步地基：Firebase Auth + Firestore。這段用動態 import，所以就算 firebase-config.js
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-29";
+window.RF_VER = "2026.11.11-30";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -944,8 +944,6 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  <select id="dmo" ${dis} style="margin-top:8px" aria-label="預設查證模式">${["procon","claim"].map(m=>`<option value="${m}" ${m===(q.mode||"procon")?"selected":""}>${MODE_N[m]}</option>`).join("")}</select>
  <h3 style="margin:20px 0 4px">AI 權限</h3><div class="sm mute">由老師設定 Agent 可以協助到什麼程度；設定由後端強制執行，組員無法自行調整。</div>
  <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><select id="dlv" ${teach?"":"disabled"} aria-label="AI 權限 Level">${LVN.map((n,l)=>`<option value="${l}" ${l===q.LV?"selected":""}>Level ${l}．${n}</option>`).join("")}</select><span class="sm mute" id="dlvs">${teach?"變更後立即生效":"只有老師可以調整"}</span></div>
- <h3 style="margin:20px 0 4px">小組報告</h3><div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，會自動判斷是哪一種；之後可在畫布上方一鍵開啟。貼錯了可以直接改，或清空後儲存。</div>
- <div style="margin-top:8px"><input id="d7" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${dis}></div><div class="sm mute" id="d6t" style="margin-top:4px">${q.reportUrl&&rptType(q)?"判斷為："+esc(rptType(q)):""}</div>
  <label>邀請連結</label>${own&&(q._invLinks||[]).length?`<div class="sm" style="margin:0 0 8px">${q._invLinks.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-top:4px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.email)}</span><button class="lnk" data-invcp="${i}">複製連結</button></div>`).join("")}<div class="mute" style="margin-top:4px">建立研究時邀請的組員，把連結傳給對方即可加入（每個連結只能用一次）。</div></div>`:""}<div style="display:flex;gap:8px"><input readonly value="${LIVE()?esc(q._lastInvite||""):"https://researchflow.app/join/"+q.code}" placeholder="${own?"在上方輸入 Email 並按「邀請」，會產生一次性連結":"只有 Owner 可以產生邀請連結"}" id="lk"><button id="cp">${I("copy")}複製</button></div>
  <div class="acts" style="justify-content:flex-end;margin-top:22px"><button id="dc">關閉</button>${own?'<button class="pri" id="ds">儲存變更</button>':""}</div>`;
  const live=LIVE();
@@ -988,13 +986,12 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  $("#dc").onclick=()=>d.close();
  $("#ds")&&($("#ds").onclick=async()=>{rd();
   const asel=$("#dasg"),aPick=asel?asgOf(courseOfP(q)).find(a=>a.id===asel.value):null,asgF=asel?{assignmentId:aPick?aPick.id:"",assignmentTitle:aPick?aPick.title:""}:{};
-  const fields={...asgF,name:$("#d1").value,course:$("#d2").value,req:$("#d3").value,due:$("#d4").value,field:$("#d5").value,reportType:(window.RFCOURSE&&RFCOURSE.reportTypeOf(fixUrl($("#d7")?.value)))||"",reportUrl:fixUrl($("#d7")?.value),mode:$("#dmo")?.value||q.mode};
-  if($("#d7")?.value.trim()&&!fields.reportUrl){alert("報告連結的格式不正確，請貼上完整的網址（例如 https://docs.google.com/…）。");$("#d7").focus();return}
+  const fields={...asgF,name:$("#d1").value,course:$("#d2").value,req:$("#d3").value,due:$("#d4").value,field:$("#d5").value,mode:$("#dmo")?.value||q.mode};
   // 改了預設查證模式：還沒開始搜尋的研究直接套用新的模式（之前在確認頁臨時選的模式會蓋過預設值，看起來就像沒改到）
   const modeChanged=fields.mode!==q.mode;if(modeChanged&&!q.S.rounds)q.S.mode="";
   if(live){const btn=$("#ds");btn.disabled=true;const old=btn.textContent;btn.textContent="儲存中…";
    try{
-    await RFDB.updateProjectSettings(q.fid,{...asgF,name:fields.name,course:fields.course,teacherReq:fields.req,dueDate:fields.due,field:fields.field,reportType:fields.reportType||"",reportUrl:fields.reportUrl||"",searchMode:fields.mode||""});
+    await RFDB.updateProjectSettings(q.fid,{...asgF,name:fields.name,course:fields.course,teacherReq:fields.req,dueDate:fields.due,field:fields.field,searchMode:fields.mode||""});
     await Promise.all(q.members.filter(m=>m.role!=="Teacher").map(m=>RFDB.updateMember(q.fid,m.u,{role:m.role.toLowerCase(),task:m.duty})));
    }catch(err){alert("儲存失敗（部分變更可能未寫入 Firestore）："+(err?.message||err));btn.disabled=false;btn.textContent=old;return}
    Object.assign(q,fields);traceLive(q.fid,U[ME].n,"更新研究檔案與組員設定。","user");d.close();renderProj();if(p===q){openWsUI();saveS();renderPane()}
@@ -1002,8 +999,6 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
    return;
   }
   Object.assign(q,fields);q.trace.push({t:nowT(),w:U[ME].n,x:"更新研究檔案與組員設定。",k:"user"});d.close();renderProj();if(p===q){openWsUI();renderPane()}});
- // 貼上或修改報告連結時，在欄位下方顯示判斷出的類型（儲存時自動寫入 reportType，不用再手動選）
- const d7=$("#d7"),d6t=$("#d6t");if(d7&&d6t&&window.RFCOURSE)d7.oninput=()=>{const t=RFCOURSE.reportTypeOf(fixUrl(d7.value)||d7.value);d6t.textContent=t?"判斷為："+t:""};
  d.showModal()}
 $("#cfg").onclick=()=>openPD(projects.indexOf(p));
 // 網址沒寫 http(s):// 就補上；不是 http／https 的（例如 javascript:）一律不接受
@@ -1011,15 +1006,36 @@ function fixUrl(v){v=String(v||"").trim();if(!v)return"";if(!/^[a-z][a-z0-9+.-]*
 // 小組報告類型：能從網址判斷就用判斷結果（src/course.mjs 的 reportTypeOf），判斷不出來才用存的類型
 const rptType=q=>(window.RFCOURSE&&RFCOURSE.reportTypeOf(q.reportUrl))||q.reportType||"";
 const rptLabel=q=>window.RFCOURSE?RFCOURSE.reportLabel(q.reportType,q.reportUrl):(q.reportType||"報告");
+// 小組報告：獨立的視窗（不在研究檔案裡）。所有組員都能看與開啟連結；只有 Owner 可以貼上、修改、移除。
+function openRP(){const q=p,d=$("#prp"),own=canEdit()&&myRole()==="Owner",u=fixUrl(q.reportUrl);
+ d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h2 style="margin:0">小組報告</h2><button id="rc0" aria-label="關閉">關閉</button></div>
+ <div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，會自動判斷是哪一種；排演室也會用這份連結。${own?"貼錯了可以直接改，或按「移除連結」。":"只有 Owner 可以設定連結。"}</div>
+ <label for="r1">報告連結</label><input id="r1" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${own?"":"readonly"}>
+ <div class="sm mute" id="r1t" style="margin-top:4px">${q.reportUrl&&rptType(q)?"判斷為："+esc(rptType(q)):""}</div>
+ <div class="acts" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ro" ${u?"":"disabled"}>${I("ext")}開啟${q.reportUrl?esc(rptLabel(q)):"報告"}</button>${own&&q.reportUrl?'<button id="rx">移除連結</button>':""}<span style="flex:1"></span>${own?'<button class="pri" id="rs">儲存</button>':""}</div>`;
+ $("#rc0").onclick=()=>d.close();
+ $("#ro").onclick=()=>{const v=fixUrl(own?$("#r1").value:q.reportUrl);if(v)window.open(v,"_blank","noopener")};
+ const r1=$("#r1"),r1t=$("#r1t");r1.oninput=()=>{const v=fixUrl(r1.value)||r1.value,ty=window.RFCOURSE?RFCOURSE.reportTypeOf(v):"";r1t.textContent=ty?"判斷為："+ty:"";$("#ro").disabled=!fixUrl(r1.value)};
+ const save=async(url,msg)=>{const ty=url&&window.RFCOURSE?RFCOURSE.reportTypeOf(url):"";
+  try{if(LIVE()&&q.fid)await RFDB.updateProjectSettings(q.fid,{reportUrl:url,reportType:ty||""})}catch(err){alert("儲存失敗："+(err?.message||err));return false}
+  q.reportUrl=url;q.reportType=ty||"";if(LIVE()&&q.fid)traceLive(q.fid,U[ME].n,msg,"user");else q.trace.push({t:nowT(),w:U[ME].n,x:msg,k:"user"});
+  renderProj();if(p===q){openWsUI();renderPane()}return true};
+ if($("#rs"))$("#rs").onclick=async()=>{const raw=r1.value.trim(),url=fixUrl(raw);
+  if(raw&&!url){alert("報告連結的格式不正確，請貼上完整的網址（例如 https://docs.google.com/…）。");r1.focus();return}
+  if(url===fixUrl(q.reportUrl)){d.close();return}
+  if(await save(url,url?"設定小組報告連結。":"移除小組報告連結。"))d.close()};
+ if($("#rx"))$("#rx").onclick=async()=>{if(!confirm("移除小組報告連結？\n"+q.reportUrl+"\n\n移除後可以重新貼上新的連結。"))return;
+  if(await save("","移除小組報告連結。")){d.close();setStat("已移除報告連結")}};
+ d.showModal();if(own&&!q.reportUrl)setTimeout(()=>r1.focus(),60)}
+// 還沒有連結：按「小組報告」開視窗貼連結（只有 Owner）；已經有連結：按鈕變成單一的連結按鈕，直接開啟；按旁邊的 ✕ 清掉連結，按鈕就變回「小組報告」
 $("#rpt").onclick=()=>{const u=fixUrl(p.reportUrl);if(u){window.open(u,"_blank","noopener");return}
- if(!canEdit()||myRole()!=="Owner"){alert(p.reportUrl?"報告連結的格式不正確，請 Owner 到「研究檔案」重新貼上。":"還沒有設定報告連結。只有 Owner 可以在「研究檔案」裡設定。");return}
- openPD(projects.indexOf(p));setTimeout(()=>$("#d7")?.focus(),80)};
-// 貼錯連結時：按 ✕ 清掉報告連結與類型，之後可以在「小組報告」或「研究檔案」重新貼上
+ if(!canEdit()||myRole()!=="Owner"){alert(p.reportUrl?"報告連結的格式不正確，請 Owner 重新貼上。":"還沒有設定報告連結。只有 Owner 可以設定。");return}
+ openRP()};
 $("#rptx").onclick=async()=>{if(!p.reportUrl||!canEdit()||myRole()!=="Owner")return;
  if(!confirm("移除小組報告連結？\n"+p.reportUrl+"\n\n移除後可以重新貼上新的連結。"))return;
  const q=p;
  try{if(LIVE()&&q.fid)await RFDB.updateProjectSettings(q.fid,{reportUrl:"",reportType:""})}catch(err){alert("移除失敗："+(err?.message||err));return}
- q.reportUrl="";q.reportType="";if(LIVE()&&q.fid)traceLive(q.fid,U[ME].n,"移除小組報告連結。","user");
+ q.reportUrl="";q.reportType="";if(LIVE()&&q.fid)traceLive(q.fid,U[ME].n,"移除小組報告連結。","user");else q.trace.push({t:nowT(),w:U[ME].n,x:"移除小組報告連結。",k:"user"});
  renderProj();openWsUI();setStat("已移除報告連結")};
 
 /* 工作空間 */
