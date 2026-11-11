@@ -188,7 +188,7 @@ export async function summarizeEvidence(projectId, { evidence }) {
 }
 
 // 排演室（Level 2／3）：提示詞由伺服器組（functions/rehearsal.js），這裡只送資料；每次產生都寫一筆「Agent 建議」歷程
-const REHEARSAL_NAMES = { rehearsalFlow: '報告流程、交接卡與問答分工', rehearsalOutline: '講稿大綱', rehearsalInteraction: '互動建議' };
+const REHEARSAL_NAMES = { rehearsalFlow: '講者提示卡與台下提問', rehearsalOutline: '講者提示卡（含要講的重點）與台下提問', rehearsalInteraction: '互動建議', deckCheck: '簡報對照評分配比' };
 export async function rehearse(projectId, action, input) {
   if (!(action in REHEARSAL_NAMES)) throw new Error('未知的排演室動作');
   const uid = await guard(projectId, action);

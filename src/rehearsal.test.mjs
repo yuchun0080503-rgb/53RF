@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { REQ, CLAIM_COUNTER_TITLE, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent, GOALS, FORMATS, inferGoal, pickFormats, rulePlan, formatOf } from './rehearsal.mjs';
+import { REQ, CLAIM_COUNTER_TITLE, QA_STYLES, isStageItem, stageTips, deckPace, ruleDeckCheck, DEFAULT_CRITERIA, rolesOf, needHandoff, deckSeen, readiness, planFlow, assignQA, sideRoles, kahootRows, kahootSheet, KAHOOT, SEGMENTS, ruleContent, GOALS, FORMATS, inferGoal, pickFormats, rulePlan, formatOf } from './rehearsal.mjs';
 import { buildXlsx, zipStore, crc32, colName } from './xlsx.mjs';
 
 const task = (assignee, type, o = {}) => ({ id: assignee + type, title: type, type, assignee, done: false, ...o });
@@ -187,4 +187,25 @@ test('rulePlan／ruleContent：每種形式都有步驟；短劇與辯論有角�
   const picked = ruleContent('rehearsalInteraction', { ...inp, goal: 'check' });
   assert.equal(picked.goal, 'check'); assert.match(picked.goalWhy, /指定/);
   assert.deepEqual(Object.keys(GOALS), ['ideas', 'check', 'fun']);
+});
+
+test('講者提示卡（規則式）：每段有「讓台下記住的一件事」；Level 3 有要講的重點與轉場；結論段不代寫；提問有不同風格', () => {
+  const inp = { question: 'AI 會不會降低自主思考？', claim: '過度依賴 AI 會降低自主思考', evidence: [{ n: 1, k: 's', t: 'Gerlich 2025' }, { n: 2, k: 'c', t: 'Kasneci 2023' }], rubric: [{ name: '上台表現', pct: 30, to: 'speaker' }, { name: '證據', pct: 70 }] };
+  const f = ruleContent('rehearsalFlow', inp), o = ruleContent('rehearsalOutline', inp);
+  assert.ok(f.segments.filter((s) => s.id !== 'conclusion').every((s) => s.remember)); assert.equal(f.segments.find((s) => s.id === 'conclusion').remember, '');
+  assert.ok(o.segments.find((s) => s.id === 'open').next.includes('研究方法')); assert.equal(o.segments.find((s) => s.id === 'conclusion').next, '');
+  assert.ok(o.segments.find((s) => s.id === 'finding').points.length > 0);
+  const styles = f.qa.map((x) => x.style);
+  assert.ok(new Set(styles).size === styles.length && styles.every((x) => x in QA_STYLES)); assert.ok(f.qa.every((x) => x.hint));
+  assert.deepEqual(f.delivery.map((x) => x.name), ['上台表現']);
+});
+
+test('上台表現與簡報檢查的規則', () => {
+  assert.ok(isStageItem({ name: '時間控制' }) && isStageItem({ name: '內容', to: 'speaker' }) && !isStageItem({ name: '證據品質', to: 'all' }));
+  assert.match(stageTips({ name: '時間控制' })[0], /計時/); assert.equal(stageTips({ name: '其他' }).length, 2);
+  assert.match(deckPace(30, 10), /可能講不完/); assert.match(deckPace(2, 12), /每頁要講很久/); assert.equal(deckPace(10, 10), ''); assert.equal(deckPace(0, 10), '');
+  const c = ruleDeckCheck({ rubric: [{ name: '證據品質', pct: 60 }, { name: '上台表現', pct: 40, to: 'speaker' }], slides: [{ n: 1, text: '研究問題' }, { n: 2, text: '支持證據：Gerlich' }] });
+  assert.deepEqual(c.items.map((x) => [x.name, x.status, x.pages]), [['證據品質', 'unknown', [2]]]); // 規則式只能找關鍵字，不判斷好壞
+  assert.deepEqual(c.stage, [{ name: '上台表現', pct: 40 }]);
+  assert.deepEqual(ruleDeckCheck({ rubric: [], slides: [] }).items.map((x) => x.name), DEFAULT_CRITERIA.map((x) => x.name));
 });

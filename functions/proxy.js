@@ -5,6 +5,7 @@
 
 const { MIN_LEVEL, levelOf, isAction } = require('./actions');
 const rehearsal = require('./rehearsal');
+const deck = require('./deck');
 
 const MODELS = {
   text: 'claude-haiku-5-5', // 關鍵字規劃、翻譯、文獻判讀、反思、摘要
@@ -12,12 +13,13 @@ const MODELS = {
 };
 
 // 防呆上限：避免登入的人（或被盜用的憑證）一次送出超大的請求
-const LIMITS = { maxTokens: 1500, user: 20000, system: 8000, imageB64: 2000000, images: 1 };
+// serverMaxTokens：排演室這類由伺服器組提示詞的動作（輸出格式也由伺服器限制），講者提示卡一次要回 6 段＋提問，需要比較多
+const LIMITS = { maxTokens: 1500, serverMaxTokens: 3000, user: 20000, system: 8000, imageB64: 2000000, images: 1 };
 
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
 
 // 把前端的請求整理成 Anthropic Messages API 的 body；格式不對丟出 Error
-function buildRequest(b) {
+function buildRequest(b, { cap = LIMITS.maxTokens } = {}) {
   if (!b || typeof b !== 'object') throw new Error('請求內容不是 JSON 物件');
   const model = MODELS[b.tier];
   if (!model) throw new Error('tier 必須是 text 或 ink');
@@ -27,7 +29,7 @@ function buildRequest(b) {
   const images = Array.isArray(b.images) ? b.images : [];
   if (b.tier === 'text' && images.length) throw new Error('文字步驟不能附圖片');
   if (images.length > LIMITS.images || images.some((x) => typeof x !== 'string' || x.length > LIMITS.imageB64)) throw new Error('圖片太大或太多');
-  const maxTokens = Math.min(Math.max(parseInt(b.maxTokens, 10) || 900, 16), LIMITS.maxTokens);
+  const maxTokens = Math.min(Math.max(parseInt(b.maxTokens, 10) || 900, 16), cap);
   const content = [
     ...images.map((data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data } })),
     { type: 'text', text: b.user },
@@ -88,12 +90,21 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, check, onUs
   let user;
   try { user = await verify(m[1]); } catch { return bad(res, 401, '登入憑證無效或已過期'); }
   // 排演室的動作：不採用網頁送來的提示詞與格式，由伺服器依資料組成（見 rehearsal.js）
-  const server = req.body && rehearsal.isServerAction(req.body.action) ? rehearsal.build(req.body.action, req.body.input) : null;
+  const action = req.body && req.body.action;
+  let server = req.body && rehearsal.isServerAction(action) ? rehearsal.build(action, req.body.input) : null;
+  const opt = server ? { cap: LIMITS.serverMaxTokens } : undefined;
   let body;
-  try { body = buildRequest(server ? server.req : req.body); } catch (e) { return bad(res, 400, e.message); }
+  try { body = buildRequest(server ? server.req : req.body, opt); } catch (e) { return bad(res, 400, e.message); }
   if (check) {
     const why = await check({ uid: user && user.uid, body: req.body });
     if (why) return bad(res, why.status || 403, why.message || String(why));
+  }
+  // 簡報檢查只帶了 Google 連結：權限檢查通過後才去讀（只讀 docs.google.com 的匯出檔），讀到的文字一起回傳給網頁
+  let slides = null;
+  if (server && rehearsal.needsGoogle(action, req.body.input)) {
+    try { const g = await deck.fetchGoogle(req.body.input.googleUrl, fetchImpl); slides = g; } catch (e) { return bad(res, 422, e.message); }
+    server = rehearsal.build(action, { ...req.body.input, slides: slides.slides, deckKind: slides.kind });
+    try { body = buildRequest(server.req, opt); } catch (e) { return bad(res, 400, e.message); }
   }
   let r;
   try {
@@ -109,7 +120,7 @@ async function handle(req, res, { verify, apiKey, fetchImpl = fetch, check, onUs
   if (onUsage && json && json.usage) { try { await onUsage(json.usage); } catch { /* 記錄失敗不影響回答 */ } }
   try {
     const data = extractAnswer(json);
-    return res.json({ data: server ? rehearsal.clean(req.body.action, data, server.input) : data, model: body.model });
+    return res.json({ data: server ? rehearsal.clean(action, data, server.input) : data, model: body.model, ...(slides ? { slides: server.input.slides, deckKind: server.input.deckKind } : {}) });
   } catch (e) { return bad(res, 502, e.message); }
 }
 

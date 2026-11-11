@@ -76,11 +76,18 @@ export async function serverJSON({ action, input, timeout = 55000 }, fetchImpl =
   } catch (err) {
     throw new Error(err?.name === 'AbortError' ? 'AI 回應逾時' : '連不上 AI 後端：' + (err?.message || err));
   } finally { clearTimeout(t); }
-  if (!res.ok) throw new Error(`AI 後端回應 ${res.status}：${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    // 後端的錯誤訊息是 {error:'…'}（例如讀不到 Google 簡報、權限不足）：直接顯示那句話
+    const txt = await res.text();
+    let msg = '';
+    try { msg = JSON.parse(txt).error || ''; } catch { /* 不是 JSON */ }
+    throw new Error(msg ? msg : `AI 後端回應 ${res.status}：${txt.slice(0, 200)}`);
+  }
   const body = await res.json();
   if (!body || typeof body.data !== 'object' || body.data === null) throw new Error('模型沒有照格式回答');
   if (body.model) state = { ...state, model: body.model, textModel: body.model };
-  return body.data;
+  // 簡報檢查：伺服器讀了 Google 簡報時，把讀到的文字一起帶回來（網頁存起來，講者提示卡對應頁碼用）
+  return body.slides ? { ...body.data, _deck: { slides: body.slides, kind: body.deckKind } } : body.data;
 }
 
 export async function chatJSON({ action, system, user, images, schema, maxTokens = 900, timeout = 55000 }, fetchImpl = fetch) {

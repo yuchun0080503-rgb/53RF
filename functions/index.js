@@ -42,7 +42,8 @@ const inc = (n) => admin.firestore.FieldValue.increment(n);
 const onUsage = (u) => usageDoc().set({ tokIn: inc(u.input_tokens || 0), tokOut: inc(u.output_tokens || 0), ...(u.web_search_requests ? { webSearch: inc(u.web_search_requests) } : {}) }, { merge: true });
 
 exports.ai = onRequest(
-  { region: 'asia-east1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, maxInstances: 5, memory: '256MiB' },
+  // 512MiB：排演室的簡報檢查要讀 Google 簡報的 .pptx（最大 40 MB）
+  { region: 'asia-east1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, maxInstances: 5, memory: '512MiB' },
   (req, res) => handle(req, res, { verify, apiKey: () => ANTHROPIC_API_KEY.value(), check, onUsage }),
 );
 
