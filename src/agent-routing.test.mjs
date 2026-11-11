@@ -138,7 +138,7 @@ test('searchEvidence：年份下限傳給 OpenAlex 與加查的資料庫；中�
 
 const ZW = 'https://www.airitilibrary.com/Article/Detail/22186670-201412-201501280032-201501280032-91-107';
 const zhItems = () => json({ items: [
-  { title: '開化意識下的日治時期臺灣女子教育政策－以彰化高女為例', url: ZW, abstract: '日治時期的臺灣女子教育政策制訂內容，基於開化意識，肯定職業婦女對社會的貢獻。', year: 2014, authors: ['陳瑛珣'], venue: '藝術與文化論衡', source: '華藝線上圖書館' },
+  { title: '開化意識下的日治時期臺灣女子教育政策－以彰化高女為例', url: ZW, abstract: '日治時期的臺灣女子教育政策制訂內容，基於開化意識，肯定職業婦女對社會的貢獻。', year: 2018, authors: ['陳瑛珣'], venue: '藝術與文化論衡', source: '華藝線上圖書館' },
   { title: '外站', url: 'https://evil.example/x', abstract: '這筆不該出現在證據裡，網域不是華藝或國圖。', source: '華藝線上圖書館' },
 ] });
 
@@ -287,4 +287,22 @@ test('searchRelaxed：J-STAGE 只在第 1 輪的第一次查詢時查（放寬�
     await searchRelaxed({ ...args, round: 1 }, svc);
     assert.equal(svc.hosts().filter((h) => h === 'jstage-proxy').length, 0);
   } finally { delete globalThis.RF_AI_TOKEN; }
+});
+
+test('中文網路搜尋：早於時間範圍（中文 2015 年起）的文獻不要；人文歷史類不限制', async () => {
+  globalThis.RF_AI_TOKEN = async () => 'tok';
+  let pid = 0;
+  globalThis.RF_AI_PROJECT = () => 'proj-year-' + pid;
+  try {
+    const items = () => json({ items: [
+      { title: '高中生午睡與下午學習表現之研究', url: 'https://www.airitilibrary.com/Article/Detail/11111111-201101-0001', abstract: '午睡二十分鐘的學生下午測驗分數較高。', year: 2011, source: '華藝線上圖書館' },
+      { title: '午睡時間長短與注意力之關係', url: 'https://www.airitilibrary.com/Article/Detail/22222222-201901-0002', abstract: '午睡超過四十分鐘注意力反而下降。', year: 2019, source: '華藝線上圖書館' },
+    ] });
+    const run = (discipline) => { pid++; const svc = service({ '/api/zhsearch': items, 'api.openalex.org': () => json({ results: [] }) });
+      return searchEvidence({ ...buildQueries(['nap', 'academic performance'], 0), keywords: ['nap', 'academic performance'], keywordsZh: ['午睡', '學習表現'], coreZh: 2, discipline, web: true, routeText: '午睡' }, svc); };
+    const edu = await run('business');
+    assert.deepEqual(edu.evidence.filter((e) => e.web).map((e) => e.y), [2019], '2011 年的不要');
+    const hum = await run('humanities');
+    assert.equal(hum.evidence.filter((e) => e.web).length, 2, '人文歷史類保留較早的文獻');
+  } finally { delete globalThis.RF_AI_TOKEN; delete globalThis.RF_AI_PROJECT; }
 });

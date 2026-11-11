@@ -769,7 +769,8 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
   const jaRanked = pool('ja').map((w) => ({ w, n: jaScore(w) })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
   // 中文網路搜尋的結果：後端已經核對過，也是 Claude 依論點挑的，所以不再要求關鍵字原樣出現（論文常換說法）；排在 OpenAlex 的中文文獻前面
   // 時間範圍：網路搜尋的中文文獻也要照「中文文獻 2015 年至今」（第 3 輪起放寬時跟著放寬）；年份不明的保留
-  const webPick = pool('zhweb').filter((w) => !(Number(w.year) > 0 && Number(w.year) < zhFrom)).slice(0, 4);
+  // 人文歷史類常要引用較早的文獻，不套用這個限制
+  const webPick = pool('zhweb').filter((w) => route.discipline === 'humanities' || !(Number(w.year) > 0 && Number(w.year) < zhFrom)).slice(0, 4);
   const zhPick = zhRanked.slice(0, Math.max(0, 4 - webPick.length)), jaPick = jaRanked.slice(0, 2), enPick = enRanked.slice(0, limit - webPick.length - zhPick.length - jaPick.length);
   const evidence = [
     ...enPick.map(({ w, r }) => ({ ...classifyWork(w, kind, [...coreEn, ...scopeEn], claimNeg), src: w.src || 'OpenAlex', sc: `主題詞 ${r.coreHit}／${coreEn.length}（標題 ${r.inTitle}）`, d: r.inTitle === coreEn.length ? '直接' : '間接', rel: r.inTitle === coreEn.length ? '高' : '中' })),
