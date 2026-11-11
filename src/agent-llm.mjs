@@ -11,6 +11,7 @@
 
 import { chatJSON } from './llm.mjs';
 import { DISCIPLINES, normDiscipline } from './sources.mjs';
+import { groundPlanKeywords } from './termCheck.mjs';
 
 const str = { type: 'string' };
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -46,7 +47,11 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
       '8. 觀點詞（role=aspect）0 到 4 個：畫布上其他內容提到、但不是主題詞的具體概念（例如要比較的條件、可能的原因或機制、子問題），每個概念一個。不要漏掉學生寫下的概念（例如畫布寫了「通勤時間」「搭公車」，就要有 commuting time、public transportation）。\n' +
       '9. 概念在學術界有固定名稱時（理論、效應、量表、現象的正式名稱），en 或 synonyms 要用那個名稱：例如「只看到跟自己想法一樣的意見」是 echo chamber，「一直反覆想同一件不開心的事」是 rumination，「住的地方附近買不到新鮮食物」是 food desert。\n' +
       '10. discipline 選這個主張最主要的學科（決定要查哪些專門資料庫）：humanities 人文歷史語文、law 法律、social 社會科學與經濟、education 教育、business 商管、stem 理工資訊、health 醫護生科、arts 藝術設計傳播。\n' +
-      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。',
+      '11. 輸出順序：主題詞 → 範圍詞 → 觀點詞。\n' +
+      '12. 每個主題詞另外寫三個欄位（程式會拿去資料庫查證，選真的有論文在用的說法）：' +
+      'meaning＝這個中文說法在講什麼現象或情況（一句繁體中文，例如「社工不足」是指機構或地方政府聘用的社工人數不夠、每人負責太多個案）；' +
+      'desc_en＝用一句完整的英文描述這個現象（描述情況，不要只翻譯詞本身）；' +
+      'candidates＝從 desc_en 想出 3 到 5 個英文論文標題或摘要實際會用的說法（1 到 4 個英文單字），包含學界的正式名稱，最常用的放第一個。範圍詞與觀點詞這三個欄位留空。',
     user: `報告題目：${clip(title, 120) || '（未填）'}\n要查證的主張：${clip(claim, 300)}\n畫布上的其他內容：${notes.map((n) => clip(n, 80)).filter(Boolean).slice(0, 8).join('；') || '（無）'}`,
     schema: {
       type: 'object', required: ['focus', 'keywords', 'discipline'],
@@ -55,11 +60,11 @@ export async function planSearch({ title, claim, notes = [] }, fetchImpl) {
         discipline: { type: 'string', enum: DISCIPLINES },
         keywords: {
           type: 'array', minItems: 2, maxItems: 9,
-          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 } } },
+          items: { type: 'object', required: ['zh', 'en', 'role', 'synonyms'], properties: { zh: str, en: str, role: { type: 'string', enum: ['core', 'scope', 'aspect'] }, synonyms: { type: 'array', items: str, maxItems: 3 }, meaning: str, desc_en: str, candidates: { type: 'array', items: str, maxItems: 5 } } },
         },
       },
     },
-    maxTokens: 900,
+    maxTokens: 1600,
   }, fetchImpl);
   // 主題詞 → 範圍詞 → 觀點詞：搜尋只用前面的主題詞＋第一個範圍詞，觀點詞給學生看、之後換方向時用，不會讓查詢條件變嚴
   const order = { core: 0, scope: 1, aspect: 2 };
@@ -79,7 +84,8 @@ function normKeywords(list) {
   });
   const keywords = split
     // 中文去掉括號裡的說明：模型會寫「女子教育（學校教育）」，但中文文獻要求關鍵字原樣出現在標題或摘要，括號會讓每篇都對不上
-    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3) }))
+    .map((k) => ({ zh: clip(String(k.zh || '').replace(/[（(][^）)]*[）)]/g, ''), 20), en: clip(k.en, 60).toLowerCase(), role: k.role === 'scope' || k.role === 'aspect' ? k.role : 'core', synonyms: (k.synonyms || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 3),
+      meaning: clip(k.meaning, 120), descEn: clip(k.desc_en, 300), candidates: (k.candidates || []).map((s) => clip(s, 60).toLowerCase()).filter((s) => s && /^[\x20-\x7e]+$/.test(s)).slice(0, 5) }))
     .filter((k) => k.en && /^[\x20-\x7e]+$/.test(k.en) && !seen.has(k.en) && seen.add(k.en));
   // 兩個主題詞重複：一個的每個字都包含在另一個裡（employment ⊂ female employment），留比較具體的那個。
   // 否則等於只查了一個概念，主張的另一半（例如原因）完全沒查到。
@@ -135,11 +141,13 @@ export async function scopeFocus({ topic, items = [] }, fetchImpl) {
  * 依白板內容和小組對聚焦問題的回答，寫出一句可以拿去查文獻的研究問題。
  * @returns {Promise<string>}
  */
+// 圖片的讀取結果前面有「（圖片：檔名）（AI 讀圖，請對照原圖）」，以前每項只取 80 字，圖片內容幾乎都被切掉，
+// 模型回「白板內容被截斷，無法寫出研究問題」（11/11 圖片測試研究實際發生）。改成拿掉前綴、每項取 200 字。
 export async function draftQuestion({ topic, items = [], answers = [], must = [] }, fetchImpl) {
   const out = await chatJSON({
     action: 'proposeQuestion',
-    system: '你是協助大學生做研究報告的研究助理。根據題目、白板內容與小組選定的聚焦方向，寫出一句具體、可以拿去搜尋學術文獻的研究問題（繁體中文，40 字以內）。要包含研究對象、情境與結果；用「如何」「有什麼關聯」「差異為何」這類開放的問法，不要用「會不會」「是否」「嗎」寫成是非題，也不要預設答案。',
-    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(it.text, 80)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
+    system: '你是協助大學生做研究報告的研究助理。根據題目、白板內容與小組選定的聚焦方向，寫出一句具體、可以拿去搜尋學術文獻的研究問題（繁體中文，40 字以內）。只寫一個問句，核心只放一個原因與一個結果，而且以白板上學生最主要的那個問題（通常是第一句）為準，不要換成其他概念（例如白板問「輪班會讓身體變差」，結果就是身體健康，不是職業倦怠）；白板上其他補充的概念（可能的機制、比較的條件、副作用或另一個結果）不要寫進研究問題、也不要用「在其中扮演什麼角色」另外加一句，關鍵字那一步會另外處理；研究對象與情境只寫白板或聚焦方向有提到的，沒有提到就不要自己加上特定族群（例如大學生）。用「如何」「有什麼關聯」「差異為何」這類開放的問法，不要用「會不會」「是否」「嗎」寫成是非題，也不要預設答案。',
+    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(String(it.text || '').replace(/^（圖片：[^）]*）(（AI 讀圖，請對照原圖）)?/, '圖片內容：'), 200)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
     schema: { type: 'object', required: ['question'], properties: { question: str } },
     maxTokens: 200,
   }, fetchImpl);
@@ -251,6 +259,13 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
       'unclear＝摘要只說明研究目的或方法、沒有寫出研究結果，無法判斷；unrelated＝rel 是 0 或 1。\n' +
       '判斷立場要看「研究發現」跟主張的方向是否一致，不是看摘要用了正面還是負面的字。主張說某事會變差，研究也發現變差，就是 support。\n' +
       '主張只說「影響」而沒有說變好或變差時：研究發現確實有影響（不論變好或變差）都算 support，發現沒有影響才是 counter。\n' +
+      // 2026-11-10 h07（網路霸凌與心理健康）實測：「網路受害與憂鬱有關」的研究被判成 mixed，理由是「對象是青少年不是大學生」或「透過焦慮中介」，
+      // 而 mixed 會被放進「反向／限制」，結果 10 篇全部變反向。對象不同應該反映在相關度，不是立場。
+      '立場只看主張的核心關係（例如「A 會讓 B 變差」）在這篇研究裡有沒有被發現：\n' +
+      '・研究對象、國家、年齡層跟主張不同，請反映在 rel（給 2），立場照樣依研究發現判斷，不要因此判成 mixed。\n' +
+      '・研究另外談了中介或調節因素（例如 A 透過焦慮影響 B），只要 A 與 B 的關係有被發現，就是 support。\n' +
+      '・主張包含好幾個部分、這篇只研究其中一部分：就研究到的那部分判斷。\n' +
+      '・mixed 只用在研究結果本身有一部分支持、一部分相反（例如對某些人有影響、對另一些人沒有），或研究明確指出只在特定條件下成立。\n' +
       '摘要裡的「建議」「可能」「未來研究應該」只是作者的推測或主張，不是研究發現；沒有寫出實際的數據或結果，stance 就是 unclear。\n' +
       'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。',
     user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, JUDGE_ABSTRACT_LEN) || '（沒有摘要）'}`,
@@ -294,7 +309,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
     if (v.rel < 2) { removedItems.push({ t: clip(e.t, 60), src: e.src || 'OpenAlex', rel: v.rel }); return; } // 不切題：排除
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
-    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' ? 's' : 'c', // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
+    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' || v.stance === 'mixed' ? 's' : 'c', // mixed（有條件成立）放支持並加標籤，不再放進反向（11/10 h07、h11：部分支持被當反向，整題變成全是反向） // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
       mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
@@ -448,4 +463,76 @@ export async function readInk(imageBase64, hint = '', fetchImpl) {
     timeout: 90000,
   }, fetchImpl);
   return clip(out.text, 120);
+}
+
+/**
+ * 讀學生放到畫布上的圖片（照片、截圖、圖表、手寫筆記），寫成文字，讓「分析整張畫布」也能用到圖片內容。
+ * 只描述圖片裡看得到的東西，不推論；看不出內容時回傳空字串。
+ * @param {string} imageBase64 PNG 的 base64（不含 data: 前綴）
+ * @returns {Promise<string>}
+ */
+export async function readImage(imageBase64, name = '', fetchImpl) {
+  const out = await chatJSON({
+    action: 'readHandwriting', // 跟手寫辨識同一個權限（讀畫布上的圖片）
+    system:
+      '這張圖片是大學生放在小組報告白板上的資料（照片、網頁或論文截圖、圖表、表格、手寫筆記或海報）。' +
+      '請用繁體中文寫 2 到 3 句、合計 100 字以內（不要超過），讓學生能快速確認大方向有沒有讀錯：' +
+      '這張圖在講什麼（主題、變項或欄位）；主要結果或趨勢（例如哪一組比較高、正相關或負相關、有沒有顯著）；最多舉 2 個關鍵數字，照抄原文的數值，並寫清楚是哪兩個變項或哪一格（表格要對準行與列；不確定就不要舉數字）。' +
+      '只寫圖上看得到的內容，不要推論或評論；看不清楚的地方直接說看不清楚。看不出任何內容就回傳空字串。',
+    user: name ? `檔名：${clip(name, 60)}（檔名只供參考，以圖片內容為準）` : '請讀這張圖片。',
+    images: [imageBase64],
+    schema: { type: 'object', required: ['text'], properties: { text: str } },
+    maxTokens: 400,
+    timeout: 90000,
+  }, fetchImpl);
+  // 模型常寫超過 100 字：在 200 字內最後一個句號斷開，不要斷在句子中間（11/11 測 6 張論文圖表，有 4 張被切在半句）
+  const t = clip(out.text, 200), cut = t.lastIndexOf('。');
+  return t.length >= 200 && cut > 60 ? t.slice(0, cut + 1) : t;
+}
+
+/**
+ * 重新分析新增內容時：不重新聚焦題目，只說明這次新增了什麼，並建議要不要重新聚焦（由學生決定）。
+ * @returns {Promise<{summary:string, suggest:'keep'|'refocus', reason:string}>}
+ */
+export async function reviewAdditions({ question, added = [] }, fetchImpl) {
+  const out = await chatJSON({
+    action: 'analyzeScope',
+    system: '你是協助大學生做小組研究報告的研究助理。小組已經有研究問題，之後又在白板上新增了內容。' +
+      '請用繁體中文寫：summary＝這次新增了什麼（一句，40 字以內，只描述，不評論）；' +
+      'suggest＝keep（新增內容仍在原本研究問題的範圍內，或只是補充細節）或 refocus（新增內容改變了研究對象、原因或結果，原本的研究問題已經涵蓋不了）；' +
+      'reason＝為什麼（一句，40 字以內）。不要替學生決定，只給建議。',
+    user: `目前的研究問題：${clip(question, 200)}\n新增的內容：${added.map((t) => clip(t, 200)).slice(0, 8).join('；') || '（無）'}`,
+    schema: { type: 'object', required: ['summary', 'suggest', 'reason'], properties: { summary: str, suggest: { type: 'string', enum: ['keep', 'refocus'] }, reason: str } },
+    maxTokens: 250,
+  }, fetchImpl);
+  return { summary: clip(out.summary, 80), suggest: out.suggest === 'refocus' ? 'refocus' : 'keep', reason: clip(out.reason, 80) };
+}
+
+// 關鍵字查證（組員設計的流程）：AI 先寫出中文說法的意思、英文長句描述、3～5 個候選說法（planSearch 的 meaning／desc_en／candidates），
+// 再到 OpenAlex 查每個候選說法「單獨有幾篇論文用」以及「跟另一個主題詞一起出現幾篇」；
+// AI 原本的說法有人用就直接用，否則把有人用的候選連同論文標題交給 AI，依意思選論文用法相符的說法（pickTerms）。
+// 查不到（網路錯誤）時保留 AI 原本的詞，不影響流程。回傳新的 plan（keywords 已換過）與查證報告（plan.grounding）。
+export async function groundPlan(plan, fetchImpl) {
+  if (!plan || !Array.isArray(plan.keywords)) return plan;
+  const r = await groundPlanKeywords(plan.keywords, fetchImpl, { pick: (items) => pickTerms(items, fetchImpl) });
+  return { ...plan, keywords: r.keywords, grounding: r.report };
+}
+
+// items：[{ zh, meaning, descEn, options: [{ t, n, pair, with, titles }] }] → 每一項選中的說法（都不符時是空字串）
+export async function pickTerms(items, fetchImpl) {
+  const block = items.map((it, i) => `【概念 ${i + 1}】${clip(it.zh, 20)}：${clip(it.meaning, 120)}\n英文描述：${clip(it.descEn, 300)}\n` +
+    it.options.map((o) => `- "${o.t}"：${o.n} 篇論文的標題或摘要用到${Number.isFinite(o.pair) && o.with ? `，其中 ${o.pair} 篇也提到 "${o.with}"` : ''}；例：${(o.titles || []).map((t) => `「${clip(t, 120)}」`).join(' ') || '（沒有抓到標題）'}`).join('\n')).join('\n\n');
+  const out = await chatJSON({
+    action: 'proposeKeywords',
+    system: '你在幫學生確認搜尋用的英文關鍵字。每個概念有幾個候選英文說法，附上用到它的論文篇數與論文標題例子。' +
+      '請看論文標題，判斷論文裡這個說法實際在講的事情，跟學生這個中文概念的意思是否相同；選意思相同、而且論文數較多的那個。' +
+      '意思不同（例如只是字面相近、講的是另一個現象、範圍大很多）就不要選。' +
+      '但「稍微籠統、意思仍然涵蓋這個概念」的說法可以選：如果意思最精準的那個跟另一個主題詞一起出現的論文很少（少於 10 篇），而另一個說法意思也對、篇數多很多，選篇數多的，因為太少的話搜尋會找不到足夠的文獻。' +
+      '全部都不符時回答空字串。只回答候選中的原文說法，每個概念回答一個，依概念順序放進 picks 陣列。',
+    user: block,
+    schema: { type: 'object', required: ['picks'], properties: { picks: { type: 'array', items: str } } },
+    maxTokens: 200,
+  }, fetchImpl);
+  // 模型偶爾把只有一項的答案寫成字串而不是陣列（21 題實測 h01 發生），兩種都收
+  return [].concat(out.picks ?? []).map((s) => clip(s, 60).replace(/^["“]|["”]$/g, '').toLowerCase());
 }

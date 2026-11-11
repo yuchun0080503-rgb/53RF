@@ -138,7 +138,7 @@ test('judgeWorks／refineEvidence：一次只問一篇；排除不切題的、�
   const f2 = sequence(replies());
   const r = await refineEvidence({ claim: '主張', evidence: ev, model: 'Claude' }, f2);
   assert.deepEqual([r.judged, r.removed], [4, 1]);
-  assert.deepEqual(r.evidence.map((e) => [e.id, e.k, e.rel]), [['a', 's', '高'], ['d', 'u', '高'], ['c', 'c', '中'], ['e', 's', undefined]]);
+  assert.deepEqual(r.evidence.map((e) => [e.id, e.k, e.rel]), [['a', 's', '高'], ['d', 'u', '高'], ['c', 's', '中'], ['e', 's', undefined]]); // c 是 mixed（有條件成立）：放支持並加標籤
   assert.equal(r.evidence[0].f, '過度依賴 AI 會降低獨立思考。');
   assert.equal(r.evidence[0].fo, '原摘要a');
   assert.equal(r.evidence[1].unc, true);
