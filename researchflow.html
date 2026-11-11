@@ -1009,10 +1009,10 @@ const rptLabel=q=>window.RFCOURSE?RFCOURSE.reportLabel(q.reportType,q.reportUrl)
 // 小組報告：獨立的視窗（不在研究檔案裡）。所有組員都能看與開啟連結；只有 Owner 可以貼上、修改、移除。
 function openRP(){const q=p,d=$("#prp"),own=canEdit()&&myRole()==="Owner",u=fixUrl(q.reportUrl);
  d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h2 style="margin:0">小組報告</h2><button id="rc0" aria-label="關閉">關閉</button></div>
- <div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，會自動判斷是哪一種；排演室也會用這份連結。${own?"貼錯了可以直接改，或按「移除連結」。":"只有 Owner 可以設定連結。"}</div>
+ <div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，會自動判斷是哪一種；排演室也會用這份連結。${own?"貼上後按「儲存」；之後貼錯了，按「小組報告」旁邊的 ✕ 就能清掉重貼。":"只有 Owner 可以設定連結。"}</div>
  <label for="r1">報告連結</label><input id="r1" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${own?"":"readonly"}>
  <div class="sm mute" id="r1t" style="margin-top:4px">${q.reportUrl&&rptType(q)?"判斷為："+esc(rptType(q)):""}</div>
- <div class="acts" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ro" ${u?"":"disabled"}>${I("ext")}開啟${q.reportUrl?esc(rptLabel(q)):"報告"}</button>${own&&q.reportUrl?'<button id="rx">移除連結</button>':""}<span style="flex:1"></span>${own?'<button class="pri" id="rs">儲存</button>':""}</div>`;
+ <div class="acts" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ro" ${u?"":"disabled"}>${I("ext")}開啟${q.reportUrl?esc(rptLabel(q)):"報告"}</button><span style="flex:1"></span>${own?'<button class="pri" id="rs">儲存</button>':""}</div>`;
  $("#rc0").onclick=()=>d.close();
  $("#ro").onclick=()=>{const v=fixUrl(own?$("#r1").value:q.reportUrl);if(v)window.open(v,"_blank","noopener")};
  const r1=$("#r1"),r1t=$("#r1t");r1.oninput=()=>{const v=fixUrl(r1.value)||r1.value,ty=window.RFCOURSE?RFCOURSE.reportTypeOf(v):"";r1t.textContent=ty?"判斷為："+ty:"";$("#ro").disabled=!fixUrl(r1.value)};
@@ -1024,8 +1024,6 @@ function openRP(){const q=p,d=$("#prp"),own=canEdit()&&myRole()==="Owner",u=fixU
   if(raw&&!url){alert("報告連結的格式不正確，請貼上完整的網址（例如 https://docs.google.com/…）。");r1.focus();return}
   if(url===fixUrl(q.reportUrl)){d.close();return}
   if(await save(url,url?"設定小組報告連結。":"移除小組報告連結。"))d.close()};
- if($("#rx"))$("#rx").onclick=async()=>{if(!confirm("移除小組報告連結？\n"+q.reportUrl+"\n\n移除後可以重新貼上新的連結。"))return;
-  if(await save("","移除小組報告連結。")){d.close();setStat("已移除報告連結")}};
  d.showModal();if(own&&!q.reportUrl)setTimeout(()=>r1.focus(),60)}
 // 還沒有連結：按「小組報告」開視窗貼連結（只有 Owner）；已經有連結：按鈕變成單一的連結按鈕，直接開啟；按旁邊的 ✕ 清掉連結，按鈕就變回「小組報告」
 $("#rpt").onclick=()=>{const u=fixUrl(p.reportUrl);if(u){window.open(u,"_blank","noopener");return}
