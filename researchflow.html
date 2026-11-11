@@ -171,7 +171,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .hl.sync{opacity:.55}
 .tag.ai{background:var(--ac);color:#fff;border-color:var(--ac)}
 .tag.sys{background:var(--warn);color:#fff;border-color:var(--warn)}
-.tag.sync{background:transparent;border-color:transparent;padding-left:0}
+.tag.sync{background:transparent;border-color:transparent;padding-left:0}.trf{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}.trf .tag{cursor:pointer;background:var(--bg);font:inherit;font-size:12px}.trf .tag.on{background:var(--ac);border-color:var(--ac);color:#fff}.tag.trcat{color:var(--fg);background:var(--soft)}
 /* 兩種查證模式各有自己的顏色：正反例證＝綠／橘兩色（兩方並陳），主張論證＝單一藍色（專注一個主張） */
 .mode-procon,.mode-claim{background-repeat:no-repeat;background-size:6px 100%;padding-left:20px!important}
 .mode-procon{background-image:linear-gradient(var(--ok) 50%,#e2662b 50%)}
@@ -2303,11 +2303,21 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
    +`<p class="note">這是 Agent 用來記住進度的摘要，之後不用每次重新讀取整張畫布與所有歷史紀錄。</p>`}
  if(pane==="team"){el.innerHTML=teamHTML(false);bindTeam(el)}
  if(pane==="slides")el.innerHTML=slidesHTML();
- if(pane==="tr"){el.innerHTML=`<h3>研究歷程</h3><p class="sm mute" style="margin-top:-4px">依時間排序，深色標籤代表由 Agent 產生的內容，淺灰的同步紀錄可略過不看。</p>`
-  +p.trace.slice().reverse().map(t=>{const k=t.k==="ai"?"ai":t.k==="sync"?"sync":t.k==="sys"?"sys":"";
-   return `<div class="hl tt ${k==="sync"?"sync":""}"><span>${t.t}</span><span><div><span class="tag ${k}">${t.k==="ai"?"Agent":t.k==="sync"?"同步":t.k==="sys"?"權限":"學生"}</span>${k!=="sync"?` <b>${esc(t.w)}</b>`:""}</div><div>${esc(t.x)}</div></span></div>`}).join("")}
+ if(pane==="tr"){const all=p.trace.slice().reverse().map(x=>({...x,c:trCatOf(x)})),cats=[...TR_CATS.map(c=>c[0]),"其他"],whos=[...new Set(all.map(x=>x.w).filter(Boolean))];
+  if(trCat&&!all.some(x=>x.c===trCat))trCat="";if(trWho&&!whos.includes(trWho))trWho="";
+  const shown=all.filter(x=>(!trCat||x.c===trCat)&&(!trWho||x.w===trWho));
+  el.innerHTML=`<h3>研究歷程</h3><p class="sm mute" style="margin-top:-4px">依時間排序。上面可以依「哪一類事情」或「誰做的」篩選；深色標籤代表由 Agent 產生的內容，淺灰的同步紀錄可略過不看。</p>
+  <div class="sm mute" style="margin-top:8px">事情類別</div><div class="trf">${trChips([["","全部",all.length],...cats.filter(c=>all.some(x=>x.c===c)).map(c=>[c,c,all.filter(x=>x.c===c).length])],trCat,"trcat")}</div>
+  <div class="sm mute">誰做的</div><div class="trf">${trChips([["","所有人",null],...whos.map(w=>[w,w,all.filter(x=>x.w===w).length])],trWho,"trwho")}</div>`
+  +(shown.length?shown.map(t=>{const k=t.k==="ai"?"ai":t.k==="sync"?"sync":t.k==="sys"?"sys":"";
+   return `<div class="hl tt ${k==="sync"?"sync":""}"><span>${t.t}</span><span><div><span class="tag ${k}">${t.k==="ai"?"Agent":t.k==="sync"?"同步":t.k==="sys"?"權限":"學生"}</span> <span class="tag trcat">${esc(t.c)}</span>${t.w?` <b>${esc(t.w)}</b>`:""}</div><div>${esc(t.x)}</div></span></div>`}).join(""):'<p class="sm mute">這個條件下沒有紀錄。</p>')}
  bind(el);el.querySelectorAll("i[data-i]").length&&icons(el);evDrawerRender();
  if(busy)el.querySelectorAll("button[data-a],button[data-q]").forEach(b=>b.disabled=true)}
+// 研究歷程分類：歷程紀錄沒有分類欄位，依內容文字判斷（順序有先後，先符合先算）；只影響顯示與篩選，不改資料
+const TR_CATS=[["排演室",/排演/],["分工",/分工|任務|工作清單/],["設定與權限",/權限|研究檔案|報告連結|邀請|加入課程|加入「|預設查證模式|組員設定|老師/],["Agent 分析",/Research Question|研究問題|搜尋策略|AI 讀取|聚焦|鎖定|要求 Agent 分析|AI 建議/],["證據",/證據|搜尋|文獻|來源|查證|收藏|輪數|反面例證|版本|範圍/],["畫布",/新增|刪除|移動|編輯|手寫|群組|複製|圖片|錄音|箭頭|連線|標籤|研究階段|物件|文字方塊|討論板/]];
+const trCatOf=t=>{const x=String(t.x||"");for(const[n,re]of TR_CATS)if(re.test(x))return n;return t.k==="sync"?"畫布":"其他"};
+let trCat="",trWho="";
+const trChips=(items,cur,a)=>items.map(([k,l,n])=>`<button class="tag${cur===k?" on":""}" data-a="${a}" data-k="${esc(k)}" aria-pressed="${cur===k}">${esc(l)}${n!=null?" "+n:""}</button>`).join("");
 const zhBusy=new Set();
 // 重點整理（取代原本 80 字的中文摘要）：研究問題、對象與方法、主要發現、限制、對你們報告的用處。
 // 有 AI 時由 Claude 依摘要整理（RFAI.keyPoints），存在 e.kp；中英日文獻都整理。沒有 AI 時英文摘要退回機器翻譯（e.zh）。
@@ -2488,6 +2498,8 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
  // 證據版本抽屜的開關與比較對象只是畫面，不存檔，唯讀的人也能用（切換版本 evver 才需要編輯權限）
+ if(a==="trcat"){trCat=k;renderPane();return}
+ if(a==="trwho"){trWho=k;renderPane();return}
  if(a==="evdrawer"){evDrawer=!evDrawer;if(evDrawer)evOpenCard=S.evVer||1;renderPane();return}
  if(a==="evtoggle"){evOpenCard=evOpenCard===+k?0:+k;renderPane();return}
  if(a==="evbase"){evBase=+k;renderPane();return}
