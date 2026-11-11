@@ -1024,6 +1024,8 @@ function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
   let changed=false;todoTick();
   if(st.rehearsal&&st.rehearsal.json&&st.rehearsal.json!==proj._rj){try{proj.R=JSON.parse(st.rehearsal.json);proj._rj=st.rehearsal.json;if(rehQ===proj)renderReh()}catch(e){console.error("[ResearchFlow] 排演室資料格式錯誤：",e)}}
   if(st.current&&st.current.json&&st.current.json!==proj._sj){try{proj.S={...fresh(),...JSON.parse(st.current.json)};proj._sj=st.current.json;changed=true}catch(e){console.error("[ResearchFlow] 研究狀態格式錯誤：",e)}}
+  // 首頁研究卡片的階段：研究狀態是開網頁後才陸續讀到的，讀到後要更新卡片（不然重新整理後全部顯示「畫布討論／Agent 尚未分析」，要點進去一次才會對）
+  if(changed){const n=proj.S.step||0;proj.stage=n?(["畫布討論","畫布讀取確認","範圍聚焦","範圍聚焦","搜尋準備","證據補強","整理階段"][n]||proj.stage):"畫布討論";if(p!==proj){clearTimeout(window.__rpT);window.__rpT=setTimeout(()=>{try{renderProj()}catch(e){console.warn(e)}},200)}}
   if(p!==proj)return;
   S=proj.S;
   // 使用者正在側欄輸入文字時，只有別人真的改了流程狀態才整個重畫，否則只更新提示，避免把打到一半的字洗掉
