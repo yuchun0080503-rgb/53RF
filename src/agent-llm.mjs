@@ -309,7 +309,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
     if (v.rel < 2) { removedItems.push({ t: clip(e.t, 60), src: e.src || 'OpenAlex', rel: v.rel }); return; } // 不切題：排除
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
-    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' || v.stance === 'mixed' ? 's' : 'c', // mixed（有條件成立）放支持並加標籤，不再放進反向（11/10 h07、h11：部分支持被當反向，整題變成全是反向） // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
+    kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' ? 's' : 'c', // mixed（有條件成立）放回「反向／限制」並加標籤（初賽以來的做法）。11/10 曾改放支持，11/11 評測成功率 75%→25%，先改回，之後再測哪個好 // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
       mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
