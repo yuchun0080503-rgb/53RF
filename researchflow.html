@@ -289,7 +289,8 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .rhtop{margin:10px 0 4px;padding:8px 12px;border-left:3px solid var(--ac);background:color-mix(in srgb,var(--ac) 6%,transparent);border-radius:0 10px 10px 0;font-size:14px}.rhtop ol{margin:4px 0 0;padding-left:20px}
 .rhit{padding:10px 0;border-top:1px dashed var(--line)}.rhit-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}.rhit-h .dot{margin-right:0}.rhit ul{margin:4px 0 0;padding-left:18px;font-size:14px;line-height:1.55}
 .rhtrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.rhtrow .acts{margin:0}
-.rhdl{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.rhdl .rhcard{margin-top:10px}.rhdl ul{list-style:none;padding-left:0}.rhdl li+li{margin-top:4px}.rhck{display:flex;gap:6px;align-items:flex-start;font-size:14px;cursor:pointer}.rhck input{margin:3px 0 0;width:auto}
+.rhdl{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.rhdl .rhcard{margin-top:10px}.rhdl-t{margin:14px 0 0;font-size:15px}.rhdl-h{display:flex;align-items:baseline;gap:8px}.rhdl li+li{margin-top:4px}
+.rhev summary{display:inline-block;cursor:pointer;list-style:none;font-size:12.5px;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:1px 10px}.rhev summary::-webkit-details-marker{display:none}.rhev[open] summary{color:var(--fg);border-color:var(--fg)}.rhev ul{margin:6px 0 0}.rhck{display:flex;gap:6px;align-items:flex-start;font-size:14px;cursor:pointer}.rhck input{margin:3px 0 0;width:auto}
 .rhcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:10px}
 .rhc{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;transition:background .2s}.rhc.on{background:color-mix(in srgb,var(--ac) 9%,transparent);border-color:var(--ac)}
 .rhc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:13px;color:var(--mute)}.rhc-h b{font-size:15px;color:var(--fg);flex-basis:100%}
@@ -403,7 +404,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-16";
+window.RF_VER = "2026.11.11-17";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -1870,18 +1871,18 @@ async function rehGen(q,action){const flow=rehFlow(q),base=rehInput(q,flow),inp=
  catch(err){alert(err?.message||err)}
  finally{rehBusy="";renderReh()}}
 function rehTrace(q,x){if(LIVE()&&q.fid)traceLive(q.fid,"Agent",x,"ai");else (q.trace=q.trace||[]).push({t:nowT(),w:"Agent",x,k:"ai",at:Date.now()})}
-// 簡報對照評分配比：src＝"google"（伺服器讀公開的 Google 簡報／文件）或 File（.pptx，在瀏覽器裡讀出文字）
+// 簡報對照評分配比：src＝"google"（伺服器讀公開的 Google 簡報／文件）或 File（.pptx／.pdf，在瀏覽器裡讀出文字）
 async function rehDeck(q,src){const flow=rehFlow(q),base=rehInput(q,flow);rehBusy="deckCheck";renderReh();
  try{let deck=null;
-  if(src instanceof File){if(!/\.pptx$/i.test(src.name))throw new Error("請上傳 .pptx 檔（Canva：分享 → 下載 → PowerPoint；PowerPoint：檔案 → 下載副本）。");
-   const slides=await RFPPTX.slidesFromPptx(await src.arrayBuffer());deck={src:"pptx",name:src.name.slice(0,80),kind:"slides",slides,at:Date.now(),url:q.reportUrl||""}}
+  if(src instanceof File){const isPdf=/\.pdf$/i.test(src.name);if(!isPdf&&!/\.pptx$/i.test(src.name))throw new Error("請上傳 .pptx 或 .pdf 檔（Canva：分享 → 下載 → PDF 或 PowerPoint；PowerPoint：檔案 → 下載副本）。");
+   const buf=await src.arrayBuffer(),slides=isPdf?await RFPPTX.slidesFromPdf(buf):await RFPPTX.slidesFromPptx(buf);deck={src:"pptx",name:src.name.slice(0,80),kind:"slides",slides,at:Date.now(),url:q.reportUrl||""}}
   else if((q.R||{}).deck&&q.R.deck.src==="pptx"&&src==="again")deck=q.R.deck;
   const inp={...base,...(deck?{slides:deck.slides,deckKind:deck.kind}:{slides:[],googleUrl:fixUrl(q.reportUrl)})};
   let data=null,by="";
   if(LIVE()&&RFDB.rehearse&&window.RFLLM&&(await RFLLM.detect()).ok){data=await RFDB.rehearse(q.fid,"deckCheck",inp);by=AIN()}
-  else{if(!deck)throw new Error("展示模式不能自動讀 Google 簡報，請用「上傳 .pptx」試試看。");data=RFREH.ruleDeckCheck(inp);by="規則式比對（沒有使用 AI，只看關鍵字）";rehTrace(q,`排演室：Agent 建議（${RH_N.deckCheck}；${by}）。`)}
+  else{if(!deck)throw new Error("展示模式不能自動讀 Google 簡報，請用「上傳簡報檔」試試看。");data=RFREH.ruleDeckCheck(inp);by="規則式比對（沒有使用 AI，只看關鍵字）";rehTrace(q,`排演室：Agent 建議（${RH_N.deckCheck}；${by}）。`)}
   if(data._deck){deck={src:"google",name:rptLabel(q),kind:data._deck.kind,slides:data._deck.slides,at:Date.now(),url:q.reportUrl||""};delete data._deck}
-  if(!deck)throw new Error("沒有讀到簡報內容，請再試一次或改用上傳 .pptx。");
+  if(!deck)throw new Error("沒有讀到簡報內容，請再試一次或改用上傳簡報檔。");
   q.R={...(q.R||{}),deck,check:{data,by,at:Date.now()}};saveR(q);log(U[ME].n,`在排演室檢查簡報（${deck.src==="google"?"Google 連結":"上傳 "+deck.name}，${deck.slides.length} ${deck.kind==="doc"?"段":"頁"}）。`)}
  catch(err){alert(err?.message||err)}
  finally{rehBusy="";renderReh()}}
@@ -1918,11 +1919,11 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const pace=deck?RFREH.deckPace(deck.slides.length,flow.total):"",unit=deck&&deck.kind==="doc"?"段":"頁";
  const deckMain=!edit?"":L<2?`<span class="sm mute">需要 AI 權限 Level 2</span>`:busy("deckCheck")?`<button disabled>讀取與檢查中…（約 30 秒）</button>`
   :isG?`<button class="${chk?"":"pri"}" data-rdk="google" ${rehBusy?"disabled":""}>${I("search")}${chk?"重新檢查":"檢查簡報"}</button>`
-  :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報（.pptx）"}</button>`;
- const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳 .pptx</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
+  :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報（.pptx／.pdf）"}</button>`;
+ const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳 .pptx／.pdf</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
  const deckHint=isG?"按「檢查簡報」由系統讀你們的 Google 檔案（要先在 Google「共用」設成知道連結的任何人可檢視）。"
-  :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載成 .pptx 再上傳（Canva：分享 → 下載 → PowerPoint）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
-  :"還沒有設定小組報告連結：可以先上傳 .pptx 檢查，或到研究檔案貼上 Google 簡報連結。";
+  :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載成 .pptx 或 .pdf 再上傳（Canva：分享 → 下載 → PDF 或 PowerPoint）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
+  :"還沒有設定小組報告連結：可以先上傳 .pptx 或 .pdf 檢查，或到研究檔案貼上 Google 簡報連結。";
  const itemRow=x=>{const [n,c]=ST_N[x.status]||ST_N.unknown;return `<div class="rhit"><div class="rhit-h"><i class="dot ${c}"></i><b>${esc(x.name)}</b><span class="pill">${x.pct}%</span><span class="sm st-${c}">${n}</span>${x.pages.length?`<span class="sm mute">${pgT(x.pages,deck&&deck.kind)}</span>`:""}</div>
   ${x.found?`<div class="sm mute">${esc(x.found)}</div>`:""}${x.suggest.length?`<ul>${x.suggest.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}</div>`};
  const deckSec=`<section class="tcard"><div class="tch"><h2>簡報 × 評分配比</h2><span class="acts">${deckMain}</span></div>
@@ -1932,20 +1933,20 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
    ${chk.data.items.map(itemRow).join("")}
    ${(chk.data.stage||[]).length?`<p class="sm mute" style="margin:10px 0 0">${esc(chk.data.stage.map(x=>x.name+" "+x.pct+"%").join("、"))} 屬於上台表現，不從簡報判斷，請看下方「計時與上台表現」。</p>`:""}`
   :`<p class="sm mute" style="margin:0">依老師的評分配比逐項看簡報：哪些已經呈現、在哪幾${unit||"頁"}、還缺什麼。只給建議，不打分數、不改寫投影片。</p>`}
-  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}</p><input type="file" id="rhfile" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
+  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
  // ---- 計時與上台表現 ----
  const dl=plan&&(plan.data.delivery||[]).length?plan.data.delivery:stage.map(r=>({name:r.name,pct:r.pct,tips:RFREH.stageTips(r)}));
  const timeSec=`<section class="tcard"><div class="tch"><h2>計時與上台表現</h2><span class="sm mute" id="rhnow"></span></div>
   <div class="rhtrow"><div class="rhtimer" id="rhclock">00:00</div><div class="acts"><button class="pri" id="rhts">${rehT.start?"暫停":rehT.acc?"繼續":"開始"}</button><button class="lnk" id="rhtr">重設</button></div></div>
-  ${dl.length?`<div class="rhdl">${dl.map(x=>`<div class="rhcard"><b>${esc(x.name)}</b> <span class="pill">${x.pct}%</span><ul>${x.tips.map(t=>`<li><label class="rhck"><input type="checkbox">${esc(t)}</label></li>`).join("")}</ul></div>`).join("")}</div>
-   <p class="sm mute" style="margin:6px 0 0">評分配比裡和上台表現有關的項目${plan&&(plan.data.delivery||[]).length?"（Agent 依你們的內容給的練習重點）":"（產生講者提示卡後會換成依你們內容的建議）"}；排演時逐項自我檢查，勾選不會儲存。</p>`
+  ${dl.length?`<h3 class="rhdl-t">上台表現怎麼做</h3><p class="sm mute" style="margin:2px 0 0">老師的評分配比有和上台表現有關的項目，下面是排演時可以照著練的具體建議${plan&&(plan.data.delivery||[]).length?"（Agent 依你們的內容寫的）":"（產生講者提示卡後，會換成依你們內容寫的建議）"}。</p>
+   <div class="rhdl">${dl.map(x=>`<div class="rhcard"><div class="rhdl-h"><b>${esc(x.name)}</b><span class="sm mute">占評分 ${x.pct}%</span></div><ul>${x.tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`).join("")}</div>`
    :`<p class="sm mute" style="margin:8px 0 0">老師的評分配比沒有上台表現類的項目；排演時照段落時間練習即可。</p>`}</section>`;
  // ---- 講者提示卡 ----
  const cardHTML=x=>{const c=card(x.id),pts=c.points||[],kn=c.know||[],rf=[...new Set(pts.flatMap(p=>p.refs||[]))];
   return `<div class="rhc" data-seg="${x.id}"><div class="rhc-h"><b>${esc(x.title)}</b><span>${x.min} 分</span><span>${x.speaker?esc(uname(x.speaker)):'<span class="mute">未指派講者</span>'}</span>${(c.pages||[]).length?`<span class="mute">${pgT(c.pages,deck&&deck.kind)}</span>`:""}</div>
    ${x.id==="conclusion"?`<div class="rhc-r mute">結論由小組自己寫</div>`:c.remember?`<div class="rhc-r">★ ${esc(c.remember)}</div>`:""}
    ${pts.length?`<div class="rhc-l">${x.id==="conclusion"?"小組要回答":"要講"}</div><ol>${pts.map(p=>`<li>${esc(p.text)}</li>`).join("")}</ol>`:kn.length?`<div class="rhc-l">${x.id==="conclusion"?"小組要回答":"上台前要先懂"}</div><ul>${kn.map(k=>`<li>${esc(k)}</li>`).join("")}</ul>`:""}
-   ${rf.length?`<div class="sm"><span class="rhc-l">秀證據</span> ${esc(refsT(rf).join("、"))}</div>`:""}
+   ${rf.length?`<details class="rhev"><summary>秀證據（${rf.length}）</summary><ul>${refsT(rf).map(t=>`<li>${esc(t)}</li>`).join("")}</ul></details>`:""}
    ${c.next?`<div class="sm rhc-n">→ ${esc(c.next)}</div>`:""}
    </div>`};
  const cardSec=`<section class="tcard"><div class="tch"><h2>講者提示卡</h2><span class="acts">${genBtn(planAction(q),2,"提示卡")}</span></div>

@@ -62,3 +62,50 @@ export async function slidesFromPptx(data, inflate = inflateRaw) {
   for (const [i, e] of es.slice(0, LIM.slides).entries()) out.push({ n: i + 1, text: slideText(await readEntry(u8, e, inflate)) });
   return out;
 }
+
+// ---------------- PDF ----------------
+// PDF 的文字用 pdf.js（Mozilla，Apache-2.0，放在 src/vendor/pdfjs）讀：只有上傳 PDF 時才載入（約 1.6 MB）。
+// 中文 PDF 需要 cmaps（字碼對照表），也放在同一個資料夾。
+let pdfLib = null;
+async function loadPdfjs() {
+  if (pdfLib) return pdfLib;
+  const lib = await import('./vendor/pdfjs/pdf.min.mjs');
+  lib.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
+  pdfLib = lib;
+  return lib;
+}
+/**
+ * 一頁的文字：pdf.js 的文字片段依順序接起來，片段標了換行（hasEOL）就換行；空白合併、每頁最多 600 字。
+ * @param {{str:string, hasEOL?:boolean}[]} items
+ */
+export function pdfPageText(items) {
+  let s = '';
+  for (const it of items || []) { s += String(it && it.str || ''); if (it && it.hasEOL) s += '\n'; }
+  // 有些 PDF（例如 macOS、部分 Office 匯出）把中文字對應成「康熙部首」符號（⽣ 而不是 生），看起來一樣但搜尋比對不到：換回一般漢字
+  s = s.replace(/[\u2E80-\u2EFF\u2F00-\u2FDF]/g, (c) => c.normalize('NFKC'));
+  s = s.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  return s.length > LIM.chars ? s.slice(0, LIM.chars - 1) + '…' : s;
+}
+/**
+ * @param {Uint8Array|ArrayBuffer} data PDF 檔案內容
+ * @param {object} [opt] {lib, cMapUrl}：測試時傳入 Node 載入的 pdf.js
+ * @returns {Promise<{n:number,text:string}[]>}
+ */
+export async function slidesFromPdf(data, { lib, cMapUrl } = {}) {
+  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (u8.length > LIM.bytes) throw new Error('PDF 檔太大（超過 40 MB），請壓縮圖片後再試。');
+  const pdfjs = lib || await loadPdfjs();
+  let doc;
+  try {
+    doc = await pdfjs.getDocument({ data: u8, cMapUrl: cMapUrl || new URL('./vendor/pdfjs/cmaps/', import.meta.url).href, cMapPacked: true, isEvalSupported: false }).promise;
+  } catch (e) { throw new Error(/password/i.test(String(e && e.name || e)) ? '這份 PDF 有密碼保護，請移除密碼後再上傳。' : '讀不到這份 PDF，請確認檔案沒有損壞。'); }
+  try {
+    const out = [];
+    for (let i = 1; i <= Math.min(doc.numPages, LIM.slides); i++) {
+      const page = await doc.getPage(i);
+      out.push({ n: i, text: pdfPageText((await page.getTextContent()).items) });
+    }
+    if (!out.some((p) => p.text)) throw new Error('這份 PDF 讀不到文字（可能整份都是圖片）。請改傳 .pptx，或從簡報軟體重新匯出 PDF。');
+    return out;
+  } finally { doc.destroy(); }
+}

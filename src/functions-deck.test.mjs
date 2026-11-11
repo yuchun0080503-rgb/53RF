@@ -69,3 +69,10 @@ test('Google 文件：切成約 600 字一段，在段落之間切', () => {
   assert.deepEqual(c.map((x) => x.text.length), [300, 401, 600, 600, 100]);
   assert.deepEqual(c.map((x) => x.n), [1, 2, 3, 4, 5]);
 });
+
+test('PDF：一頁的文字片段依序接起來、依換行標記分行、空白合併、每頁最多 600 字', () => {
+  assert.equal(pptx.pdfPageText([{ str: 'AI 與', hasEOL: false }, { str: '學生學習', hasEOL: true }, { str: '  主張：  自主思考 ', hasEOL: true }, { str: '', hasEOL: true }]), 'AI 與學生學習\n主張： 自主思考');
+  assert.equal(pptx.pdfPageText([{ str: '字'.repeat(700) }]).length, 600);
+  assert.equal(pptx.pdfPageText([]), '');
+  assert.equal(pptx.pdfPageText([{ str: '學\u2F63常\u2F64\u2F63成式：AI，' }]), '學生常用生成式：AI，'); // 部首符號換回漢字，全形標點不動
+});
