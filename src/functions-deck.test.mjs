@@ -76,3 +76,12 @@ test('PDF：一頁的文字片段依序接起來、依換行標記分行、空�
   assert.equal(pptx.pdfPageText([]), '');
   assert.equal(pptx.pdfPageText([{ str: '學\u2F63常\u2F64\u2F63成式：AI，' }]), '學生常用生成式：AI，'); // 部首符號換回漢字，全形標點不動
 });
+
+test('Safari 補丁：瀏覽器沒有 ReadableStream 的 for await 時補上，補上後可以逐段讀；已經有的不動', async () => {
+  class FakeRS { constructor(chunks) { this.c = chunks; } getReader() { const c = this.c; let i = 0; return { read: async () => (i < c.length ? { done: false, value: c[i++] } : { done: true }), releaseLock() {} }; } }
+  assert.equal(pptx.patchStreamIterator(FakeRS), true);
+  const got = [];
+  for await (const x of new FakeRS(['a', 'b'])) got.push(x);
+  assert.deepEqual(got, ['a', 'b']);
+  assert.equal(pptx.patchStreamIterator(FakeRS), false); // 已經有了就不再改
+});

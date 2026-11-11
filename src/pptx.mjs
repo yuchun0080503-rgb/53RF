@@ -67,8 +67,21 @@ export async function slidesFromPptx(data, inflate = inflateRaw) {
 // PDF 的文字用 pdf.js（Mozilla，Apache-2.0，放在 src/vendor/pdfjs）讀：只有上傳 PDF 時才載入（約 1.6 MB）。
 // 中文 PDF 需要 cmaps（字碼對照表），也放在同一個資料夾。
 let pdfLib = null;
+// Safari（到 2026 年仍是）不支援用 for await 逐段讀 ReadableStream，pdf.js 讀文字（getTextContent）要用到：先補上。
+// 只在瀏覽器沒有這個功能時才加，Chrome／Firefox 不受影響。
+export function patchStreamIterator(RS = globalThis.ReadableStream) {
+  if (!RS || typeof RS.prototype[Symbol.asyncIterator] === 'function') return false;
+  RS.prototype[Symbol.asyncIterator] = async function* () {
+    const reader = this.getReader();
+    try {
+      for (;;) { const { done, value } = await reader.read(); if (done) return; yield value; }
+    } finally { reader.releaseLock(); }
+  };
+  return true;
+}
 async function loadPdfjs() {
   if (pdfLib) return pdfLib;
+  patchStreamIterator();
   const lib = await import('./vendor/pdfjs/pdf.min.mjs');
   lib.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
   pdfLib = lib;
