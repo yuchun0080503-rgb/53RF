@@ -28,7 +28,8 @@ function titleSlide(topic, sub) {
     + box(4, 'Subtitle', M, 3931920, W - 2 * M, 1371600, sub ? para(sub, { sz: 2000, color: C.mute }) : ''));
 }
 function contentSlide(title, bullets, cite, n) {
-  const ps = (bullets || []).map((b) => para(b, { bullet: true, sz: 2400 })).join('');
+  const long = (bullets || []).some((b) => String(b).length > 45);
+  const ps = (bullets || []).map((b) => para(b, { bullet: true, sz: long ? 2000 : 2400 })).join('');
   return slideXml(box(2, 'Title', M, 457200, W - 2 * M, 914400, para(title, { sz: 3600, b: true, color: C.title }), 'b')
     + bar(3, M, 1463040, W - 2 * M, 12700, C.line)
     + box(4, 'Body', M, 1645920, W - 2 * M, 4206240, ps)
@@ -47,8 +48,12 @@ const rels = (list) => `${XML}<Relationships xmlns="http://schemas.openxmlformat
  */
 export function buildPptx({ topic = '', question = '', slides = [], refs = [] } = {}) {
   const list = [titleSlide(topic || '研究報告', question)];
-  slides.slice(0, 40).forEach((s, i) => list.push(contentSlide(s.title || `第 ${i + 1} 頁`, (s.bullets || []).slice(0, 8), (s.cite || []).length ? '引用：' + s.cite.map((c) => `[${c}]`).join('') : '', i + 2)));
-  if (refs.length) list.push(contentSlide('參考文獻', refs.slice(0, 12), '', list.length + 1));
+  // 一頁放不下就拆成好幾頁（標題加「（續）」）：最多 5 點、總字數約 220 字。組員回報 AI 整理的大綱太多點會擠在同一頁、超出頁面
+  const chunks = (items, max = 5, chars = 220) => { const out = [[]]; let n = 0;
+    for (const b of items) { const l = String(b).length; if (out[out.length - 1].length && (out[out.length - 1].length >= max || n + l > chars)) { out.push([]); n = 0; } out[out.length - 1].push(b); n += l; }
+    return out; };
+  slides.slice(0, 40).forEach((s, i) => chunks(s.bullets || []).forEach((part, j) => list.push(contentSlide((s.title || `第 ${i + 1} 頁`) + (j ? '（續）' : ''), part, (s.cite || []).length ? '引用：' + s.cite.map((c) => `[${c}]`).join('') : '', list.length + 1))));
+  if (refs.length) chunks(refs.slice(0, 30), 6, 360).forEach((part, j) => list.push(contentSlide('參考文獻' + (j ? '（續）' : ''), part, '', list.length + 1)));
   const n = list.length;
   const files = [
     ['[Content_Types].xml', `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>${list.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')}</Types>`],
