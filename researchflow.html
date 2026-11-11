@@ -404,7 +404,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-24";
+window.RF_VER = "2026.11.11-25";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -1024,6 +1024,8 @@ function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
   let changed=false;todoTick();
   if(st.rehearsal&&st.rehearsal.json&&st.rehearsal.json!==proj._rj){try{proj.R=JSON.parse(st.rehearsal.json);proj._rj=st.rehearsal.json;if(rehQ===proj)renderReh()}catch(e){console.error("[ResearchFlow] 排演室資料格式錯誤：",e)}}
   if(st.current&&st.current.json&&st.current.json!==proj._sj){try{proj.S={...fresh(),...JSON.parse(st.current.json)};proj._sj=st.current.json;changed=true}catch(e){console.error("[ResearchFlow] 研究狀態格式錯誤：",e)}}
+  // 首頁研究卡片的階段：研究狀態是開網頁後才陸續讀到的，讀到後要更新卡片（不然重新整理後全部顯示「畫布討論／Agent 尚未分析」，要點進去一次才會對）
+  if(changed){const n=proj.S.step||0;proj.stage=n?(["畫布討論","畫布讀取確認","範圍聚焦","範圍聚焦","搜尋準備","證據補強","整理階段"][n]||proj.stage):"畫布討論";if(p!==proj){clearTimeout(window.__rpT);window.__rpT=setTimeout(()=>{try{renderProj()}catch(e){console.warn(e)}},200)}}
   if(p!==proj)return;
   S=proj.S;
   // 使用者正在側欄輸入文字時，只有別人真的改了流程狀態才整個重畫，否則只更新提示，避免把打到一半的字洗掉
@@ -1245,7 +1247,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
   if((e.buttons&32)||e.button===5){dm="era";holdEra=true;erased=0;eraseAt(q);return}
   if((e.buttons&2)||e.button===2){const a=PEN.side();if(a==="era"){dm="era";holdEra=true;erased=0;eraseAt(q)}else if(a==="undo")penDo("undo");return}}
  if(tool==="pen")cur=[[q[0],q[1],e.timeStamp]];
- else if(tool==="txt")openEd(null,q);
+ else if(tool==="txt"){const o=hit(q);if(o&&o.type==="text"&&!o.url)openEd(o,[o.x,o.y]);else openEd(null,q)} // 點在已有的文字上：編輯它；點空白處：新增
  else if(tool==="era"){dm="era";erased=0;eraseAt(q)}
  else if(tool==="link"){const o=hit(q);
   if(linkFrom&&o&&o.id!==linkFrom){p.objs.push(mkO({type:"link",by:ME,a:linkFrom,b:o.id}));linkFrom=null;op("建立內容之間的關係連線");draw()} // 舊做法：先點一個框、再點另一個框
@@ -1535,7 +1537,7 @@ function openEd(o,q){const i=document.createElement("textarea"),z=p.v.z;i.classN
   if(o){delete editing[o.id];if(t&&t!==o.text){o.text=t;o.mod=ME;o.ver++;op("完成編輯文字（失焦後同步）")}else{draw()}}
   else if(t){p.objs.push(mkO({type:"text",by:ME,x:q[0],y:q[1],text:t}));op("新增文字方塊（完成編輯後同步）")}};
  i.onblur=fin;i.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();fin()}if(e.key==="Escape"){i.value=o?o.text:"";fin()}}}
-cv.ondblclick=e=>{if(!canEdit())return;const q=toW(e),o=hit(q);if(o&&o.type==="text")openEd(o,[o.x,o.y])};
+cv.ondblclick=e=>{if(!canEdit()||tool==="txt"||tool==="pen")return;const q=toW(e),o=hit(q);if(o&&o.type==="text"&&!o.url)openEd(o,[o.x,o.y]);else if(!o){sel.clear();insp();openEd(null,q)}}; // 連點兩下：文字上＝編輯；空白處＝直接新增文字（不用先切到文字工具）
 addEventListener("keydown",e=>{if(!p||$("#v-ws").classList.contains("hide")||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
  if(e.key===" "){space=true;e.preventDefault()}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?redo():undo()}
@@ -2399,7 +2401,10 @@ function savedHTML(){const sv=S.saved||[];if(!sv.length)return"";
 // 證據版本列：有兩個以上版本時才出現。目前版本用深色按鈕；其他版本的按鈕滑過會顯示當時的關鍵字與搜尋時間
 // 「v2 相較 v1 的差別」：多找到幾篇文獻、關鍵字／畫布／研究問題改了什麼、支持與證據力的變化。比較對象預設是最早的版本，可以改選別的版本。
 // evNewSet：正在看的這一版比對象多出來的文獻 id，證據清單的標題旁會標「相較 vN 新增」。evBase 只存在本機，不會同步給組員。
-let evBase=null,evNewSet=null,evNewBase=0,evDrawer=false,evOpenCard=0;
+let evBase=null,evNewSet=null,evNewBase=0,evDrawer=false,evOpenCard=0,evPeek=0;
+// 新版本還在搜尋時，點舊版本卡片＝唯讀預覽（不切換，不影響正在搜尋的人）
+const evPeekHTML=v=>{const g=(f,t)=>{const l=(v.ev||[]).filter(f);return l.length?`<div class="sm" style="margin-top:8px"><b>${t}（${l.length}）</b>${l.map(e=>`<div style="margin-top:3px">・${esc(e.t)}（${esc(e.y||"")}）${e.mix?' <span class="tag">有條件成立</span>':""}</div>`).join("")}</div>`:""};
+ return `<div class="evmore"><div class="sm mute" style="margin-top:8px">唯讀預覽：v${S.evVer||1} 搜尋完成前不能切換到這一版，但可以先看內容。</div>${g(e=>e.k==="s","支持")}${g(e=>e.k==="c","限制／反向")}${g(e=>e.k==="u","立場待確認")}${(v.ev||[]).length?"":'<div class="sm mute" style="margin-top:8px">這一版沒有證據。</div>'}</div>`};
 // 證據版本比較：回傳 {all（各版本，含正在看的）, cur, first（最早的版本號）, bn（比較對象）, d（diffVersions 的結果；正在看的就是比較對象時為 null）}。
 // 比較對象 evBase 預設是最早的版本，可以在抽屜裡改選；只存在本機，不同步給組員。
 function evCmp(cur){
@@ -2432,17 +2437,17 @@ function evVerBar(){const cur=S.evVer||1,c=evCmp(cur);evNewSet=null;if(c.all.len
  return `<div class="evh"><div class="evtabs"><b>證據版本</b>${tabs}<button class="evtog" data-a="evdrawer" aria-expanded="${evDrawer}" aria-label="${evDrawer?"收起":"展開"}證據版本列表" title="${evDrawer?"收起":"展開"}證據版本列表">≡</button></div><div class="sm mute" style="margin-top:6px"><b>v${cur}</b>（${S.ev.length} 篇）${esc(sum)}</div>${evPending()?evPendHTML():""}</div>`}
 // 每個版本的「誰按了搜尋」：v1 是第一次按下分析的人，之後每次「重新分析」開出的新版本記下按的人（S.evBy，舊資料沒有就顯示未記錄）
 // 進行中的提示與「放棄這一版」按鈕（證據頁的版本列與抽屜裡正在看的卡片都會出現）
-const evPendHTML=()=>`<div class="sm" style="margin-top:6px"><span class="tag ai">進行中</span> ${esc(evPendingBy())} 正在重新分析，證據 v${S.evVer||1} 還沒搜尋完。搜尋完成前其他版本無法切換。${canEdit()?' <button data-a="evdrop" style="font-size:12px;padding:2px 10px">放棄這一版</button>':""}</div>`;
+const evPendHTML=()=>`<div class="sm" style="margin-top:6px"><span class="tag ai">進行中</span> ${esc(evPendingBy())} 正在重新分析，證據 v${S.evVer||1} 還沒搜尋完。搜尋完成前不能切換版本，但可以點其他版本的卡片先看內容。${canEdit()?' <button data-a="evdrop" style="font-size:12px;padding:2px 10px">放棄這一版</button>':""}</div>`;
 const evWho=v=>{const b=v.evBy;if(!b)return'<span class="mute">開始搜尋的人：未記錄</span>';const d=new Date(b.at||0),t=b.at?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
  return `${U[b.u]?av(b.u,18):""} <span>${esc(b.n||uname(b.u))}${t?" 於 "+t:""} 開始搜尋</span>`};
 // 版本列表（右側抽屜）：每版一張卡片，點下去切換到那一版並往下展開（與其他版本的比較、關鍵字、研究問題、證據結構）；點正在看的那張可收合
 function evRowsHTML(c,cur){
  const baseObj=c.all.find(x=>x.n===(evBase&&c.all.some(y=>y.n===evBase)?evBase:c.first));
- return c.all.map(v=>{const on=v.n===cur,open=on&&evOpenCard===v.n,n=(v.ev||[]).length,kws=(v.kw||[]).slice(0,3).join("、")||"—";
+ return c.all.map(v=>{const on=v.n===cur,peek=!on&&evPeek===v.n&&evPending(),open=(on&&evOpenCard===v.n)||peek,n=(v.ev||[]).length,kws=(v.kw||[]).slice(0,3).join("、")||"—";
   const dv=v.n===baseObj.n?null:RFAGENT.diffVersions(baseObj,v,lvOf);
   const line=v.n===baseObj.n?"比較基準":dv.searched?`${dv.added.length?`多找到 ${dv.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${dv.kwAdded.length||dv.kwRemoved.length?`+${dv.kwAdded.length}／−${dv.kwRemoved.length}`:"沒變"}`:"還沒搜尋";
-    const more=open?`<div class="evmore">${on&&evPending()?evPendHTML():""}${evDiffBody(c)||'<div class="sm mute" style="margin-top:10px">這是比較基準，其他版本會跟它比較。要看別版的差別，點那一版的卡片。</div>'}</div>`:"";
-  return `<div class="evrow${on?" on":""}"><button class="evhd" data-a="${on?"evtoggle":"evver"}" data-k="${v.n}" aria-expanded="${open}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"}><span aria-hidden="true">${open?"▾":"▸"}</span><span style="display:block;min-width:0;flex:1"><b>證據 v${v.n}</b>（${n} 篇）${on?' <span class="tag ai">正在看</span>':""}<span class="sm mute" style="display:block">搜尋 ${v.rounds||0} 輪・關鍵字 ${esc(kws)}${(v.kw||[]).length>3?"…":""}</span><span class="sm" style="display:block">${esc(line)}</span><span class="sm evwho">${evWho(v)}</span></span></button>${more}</div>`}).join("")+(canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>')}
+    const more=peek?evPeekHTML(v):open?`<div class="evmore">${on&&evPending()?evPendHTML():""}${evDiffBody(c)||'<div class="sm mute" style="margin-top:10px">這是比較基準，其他版本會跟它比較。要看別版的差別，點那一版的卡片。</div>'}</div>`:"";
+  return `<div class="evrow${on?" on":""}"><button class="evhd" data-a="${on?"evtoggle":"evver"}" data-k="${v.n}" aria-expanded="${open}" ${on?'aria-current="true"':""} ${canEdit()||on||evPending()?"":"disabled"}><span aria-hidden="true">${open?"▾":"▸"}</span><span style="display:block;min-width:0;flex:1"><b>證據 v${v.n}</b>（${n} 篇）${on?' <span class="tag ai">正在看</span>':""}<span class="sm mute" style="display:block">搜尋 ${v.rounds||0} 輪・關鍵字 ${esc(kws)}${(v.kw||[]).length>3?"…":""}</span><span class="sm" style="display:block">${esc(line)}</span><span class="sm evwho">${evWho(v)}</span></span></button>${more}</div>`}).join("")+(canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>')}
 // 右側抽屜：貼著右側欄右緣，往左蓋住一部分證據頁（不會超出右側欄）；用證據頁上的「≡」或抽屜標題列的「≡」、Esc 收合
 function evDrawerRender(){const el=$("#evd");if(!el)return;
  if(!el.dataset.b){el.dataset.b="1";el.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&!b.disabled)act(b.dataset.a,b.dataset.k)})}
@@ -2502,7 +2507,7 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(a==="evdrop"){if(!evPending())return;const prev=Math.max(...S.evVers.map(x=>x.n));
   if(!confirm(`放棄證據 v${S.evVer||1}（還沒搜尋）並回到 v${prev}？\n這一版的分析進度會丟掉，其他組員正在做的話也會一起中斷。`))return;
   if(evSwitch(prev)){evBase=null;evOpenCard=prev;log(w,`放棄還沒搜尋的證據版本，回到證據 v${prev}。`)}}
- else if(a==="evver"&&+k!==(S.evVer||1)&&evPending()){alert(`${evPendingBy()} 正在重新分析（證據 v${S.evVer||1} 還沒搜尋完），現在切換會把他的畫面換掉。\n請等搜尋完成，或按「放棄這一版」。`);return}
+ else if(a==="evver"&&+k!==(S.evVer||1)&&evPending()){evPeek=evPeek===+k?0:+k;renderPane();return} // 搜尋中：只預覽舊版本，不切換
  else if(a==="evver"){if(evSwitch(+k)){evBase=null;log(w,`切換到證據 v${k}。`);evOpenCard=+k}} // 切換後抽屜維持開著，並展開那一版的內容
  if(a==="fix"){log(w,"標示 AI 讀取內容需修正；修改畫布後可重新分析。");S.step=0;S.ver=null}
  if(a==="ok1"){S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"||o.type==="img"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,o.type==="img"?"修正 AI 對圖片內容的讀取結果。":"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});S.step=2;S.tok+=900;log(w,"確認 AI 的讀取結果。");lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}）。`);log("Agent","判斷 Research Question 過於廣泛。","ai")}
