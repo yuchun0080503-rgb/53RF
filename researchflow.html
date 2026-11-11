@@ -410,7 +410,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-26";
+window.RF_VER = "2026.11.11-27";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -1907,7 +1907,7 @@ function rehHome(){const box=$("#boxR"),sel=$("#rhp");if(!box||!sel)return;const
  box.classList.toggle("hide",ROLE==="t"||!mine.length);const keep=sel.value;
  sel.innerHTML=mine.map(q=>`<option value="${esc(pidOf(q))}">${esc((q.groupName?q.groupName+"・":"")+q.name)}</option>`).join("");if(keep&&mine.some(q=>pidOf(q)===keep))sel.value=keep}
 $("#rhgo").onclick=()=>{const q=projects.find(x=>pidOf(x)===$("#rhp").value);if(q)openReh(q)};
-function openReh(q){rehQ=q;p=q;S=q.S;attachLiveState(q);show("reh");renderReh();scrollTo({top:0})}
+function openReh(q){rehQ=q;p=q;q._autoDeck=null;q._deckErr="";S=q.S;attachLiveState(q);show("reh");renderReh();scrollTo({top:0})}
 function rehStop(){clearInterval(rehT.timer);rehT.timer=0;if(rehT.start){rehT.acc+=Date.now()-rehT.start;rehT.start=0}}
 function saveR(q){const j=JSON.stringify(q.R||{});q._rj=j;if(LIVE()&&q.fid&&RFDB.saveRehearsal)RFDB.saveRehearsal(q.fid,j,ME).catch(err=>{console.error(err);alert("排演室的內容沒有存成功："+(err?.message||err))})}
 const RH_N={rehearsalFlow:"講者提示卡與台下提問",rehearsalOutline:"講者提示卡（含要講的重點）與台下提問",rehearsalInteraction:"互動建議",deckCheck:"簡報對照評分配比"};
@@ -1923,7 +1923,8 @@ async function rehGen(q,action){const flow=rehFlow(q),base=rehInput(q,flow),inp=
  finally{rehBusy="";renderReh()}}
 function rehTrace(q,x){if(LIVE()&&q.fid)traceLive(q.fid,"Agent",x,"ai");else (q.trace=q.trace||[]).push({t:nowT(),w:"Agent",x,k:"ai",at:Date.now()})}
 // 簡報對照評分配比：src＝"google"（伺服器讀公開的 Google 簡報／文件）或 File（.pptx／.pdf，在瀏覽器裡讀出文字）
-async function rehDeck(q,src){const flow=rehFlow(q),base=rehInput(q,flow);rehBusy="deckCheck";renderReh();
+// auto＝打開排演室時自動檢查（有 Google 簡報／文件連結、還沒檢查過這個連結）：失敗時不跳視窗，原因顯示在這一區
+async function rehDeck(q,src,auto){const flow=rehFlow(q),base=rehInput(q,flow);rehBusy="deckCheck";q._deckErr="";renderReh();
  try{let deck=null;
   if(src instanceof File){const isPdf=/\.pdf$/i.test(src.name);if(!isPdf&&!/\.pptx$/i.test(src.name))throw new Error("請上傳 .pptx 或 .pdf 檔（Canva：分享 → 下載 → PDF 或 PowerPoint；PowerPoint：檔案 → 下載副本）。");
    const buf=await src.arrayBuffer(),slides=isPdf?await RFPPTX.slidesFromPdf(buf):await RFPPTX.slidesFromPptx(buf);deck={src:"pptx",name:src.name.slice(0,80),kind:"slides",slides,at:Date.now(),url:q.reportUrl||""}}
@@ -1934,8 +1935,8 @@ async function rehDeck(q,src){const flow=rehFlow(q),base=rehInput(q,flow);rehBus
   else{if(!deck)throw new Error("展示模式不能自動讀 Google 簡報，請用「上傳簡報檔」試試看。");data=RFREH.ruleDeckCheck(inp);by="規則式比對（沒有使用 AI，只看關鍵字）";rehTrace(q,`排演室：Agent 建議（${RH_N.deckCheck}；${by}）。`)}
   if(data._deck){deck={src:"google",name:rptLabel(q),kind:data._deck.kind,slides:data._deck.slides,at:Date.now(),url:q.reportUrl||""};delete data._deck}
   if(!deck)throw new Error("沒有讀到簡報內容，請再試一次或改用上傳簡報檔。");
-  q.R={...(q.R||{}),deck,check:{data,by,at:Date.now()}};saveR(q);log(U[ME].n,`在排演室檢查簡報（${deck.src==="google"?"Google 連結":"上傳 "+deck.name}，${deck.slides.length} ${deck.kind==="doc"?"段":"頁"}）。`)}
- catch(err){alert(err?.message||err)}
+  q.R={...(q.R||{}),deck,check:{data,by,at:Date.now()}};saveR(q);log(auto?"Agent":U[ME].n,`${auto?"打開排演室時自動":"在排演室"}檢查簡報（${deck.src==="google"?"Google 連結":"上傳 "+deck.name}，${deck.slides.length} ${deck.kind==="doc"?"段":"頁"}）。`)}
+ catch(err){if(auto)q._deckErr=String(err?.message||err);else alert(err?.message||err)}
  finally{rehBusy="";renderReh()}}
 function rehMarkSeen(q){const ids=(q.tasks||[]).filter(t=>t.type==="present"&&t.assignee===ME).map(t=>t.id);if(!ids.length||!q.reportUrl)return;
  if(LIVE()&&q.fid)RFDB.markDeckSeen(q.fid,ids,q.reportUrl).catch(err=>alert("沒有記錄成功："+(err?.message||err)));
@@ -1972,7 +1973,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
   :isG?`<button class="${chk?"":"pri"}" data-rdk="google" ${rehBusy?"disabled":""}>${I("search")}${chk?"重新檢查":"檢查簡報"}</button>`
   :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報"}</button>`;
  const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳檔案</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
- const deckHint=isG?"按「檢查簡報」由系統讀你們的 Google 檔案（要先在 Google「共用」設成知道連結的任何人可檢視）。"
+ const deckHint=isG?"有 Google 簡報／文件連結時，打開排演室會自動讓 Agent 讀取並對照評分配比（要先在 Google「共用」設成知道連結的任何人可檢視）；簡報改過可以按「重新檢查」。"
   :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載後上傳（Canva：分享 → 下載）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
   :"還沒有設定小組報告連結：可以先上傳簡報檔檢查，或到研究檔案貼上 Google 簡報連結。";
  const itemRow=x=>{const [n,c]=ST_N[x.status]||ST_N.unknown;return `<div class="rhit"><div class="rhit-h"><i class="dot ${c}"></i><b>${esc(x.name)}</b><span class="pill">${x.pct}%</span><span class="sm st-${c}">${n}</span>${x.pages.length?`<span class="sm mute">${pgT(x.pages,deck&&deck.kind)}</span>`:""}</div>
@@ -1984,7 +1985,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
    ${chk.data.items.map(itemRow).join("")}
    ${(chk.data.stage||[]).length?`<p class="sm mute" style="margin:10px 0 0">${esc(chk.data.stage.map(x=>x.name+" "+x.pct+"%").join("、"))} 屬於上台表現，不從簡報判斷，請看下方「計時與上台表現」。</p>`:""}`
   :`<p class="sm mute" style="margin:0">依老師的評分配比逐項看簡報：哪些已經呈現、在哪幾${unit||"頁"}、還缺什麼。只給建議，不打分數、不改寫投影片。</p>`}
-  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}${edit&&L>=2?`<br>上傳檔案支援 .pptx、.pdf`:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
+  ${q._deckErr?`<p class="cstat bad" style="margin:10px 0 0">自動讀取簡報失敗：${esc(q._deckErr)}</p>`:""}<p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}${edit&&L>=2?`<br>上傳檔案支援 .pptx、.pdf`:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
  // ---- 講者提示卡 ----
  const cardHTML=x=>{const c=card(x.id),pts=c.points||[],kn=c.know||[],rf=[...new Set(pts.flatMap(p=>p.refs||[]))];
   return `<div class="rhc" data-seg="${x.id}"><div class="rhc-h"><b>${esc(x.title)}</b><span>${x.min} 分</span><span>${x.speaker?esc(uname(x.speaker)):'<span class="mute">未指派講者</span>'}</span>${(c.pages||[]).length?`<span class="mute">${pgT(c.pages,deck&&deck.kind)}</span>`:""}</div>
@@ -2066,7 +2067,9 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const kh=$("#rhkh");if(kh)kh.onclick=()=>{const {sheet,count,dropped}=RFREH.kahootSheet(R.inter.data.quiz,"ResearchFlow 排演室："+q.name);if(!count){alert("沒有可以匯出的題目。");return}
   const b=new Blob([RFXLSX.buildXlsx(sheet)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),a=document.createElement("a");
   a.href=URL.createObjectURL(b);a.download=(q.name.replace(/[\\/:*?"<>|]/g,"_")||"排演室")+"-Kahoot.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);if(dropped)alert(`已匯出 ${count} 題；${dropped} 題格式不符 Kahoot 規定（例如少於 2 個選項），沒有匯出。`)};
- rehTick()}
+ rehTick();
+ // 有 Google 簡報／文件連結、還沒檢查過這個連結（或連結換了）：自動讀取並對照評分配比。每個連結每次開啟只試一次，失敗就等使用者按按鈕
+ if(isG&&edit&&L>=2&&LIVE()&&!rehBusy&&!(chk&&deck&&deck.url===q.reportUrl)&&q._autoDeck!==q.reportUrl){q._autoDeck=q.reportUrl;setTimeout(()=>{if(rehQ===q&&!rehBusy)rehDeck(q,"google",true)},0)}}
 
 /* ---------------- 評分配比（T1；驗證與版本在 src/rubric.mjs） ---------------- */
 // 這份研究適用的評分配比（作業的或課程的）；沒有就是 null
