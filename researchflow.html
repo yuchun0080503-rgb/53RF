@@ -75,14 +75,11 @@ textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;bo
 .tabs button.on{color:#fff;background:var(--ac);border-color:var(--ac)}
 .pane{overflow:auto;padding:20px 18px;flex:1;font-size:14px;line-height:1.6}
 .pw{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}.pw>.pane{flex:1;min-height:0}
-/* 證據版本：≡ 按鈕那一列，與蓋在右側欄上的版本抽屜 */
-.evh{display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin-bottom:10px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg);cursor:pointer}
-.evh .evb{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;font-size:18px;line-height:1}
-.evd{position:absolute;inset:0;z-index:30;pointer-events:none}.evd.on{pointer-events:auto}
-.evd .bd{position:absolute;inset:0;background:rgba(0,0,0,.25);opacity:0;transition:opacity .18s}.evd.on .bd{opacity:1}
-.evd .pn{position:absolute;left:0;top:0;bottom:0;width:min(340px,92%);overflow:auto;background:var(--bg);border-right:1px solid var(--line);box-shadow:8px 0 30px rgba(0,0,0,.12);padding:14px;transform:translateX(-102%);transition:transform .2s}.evd.on .pn{transform:none}
+/* 證據版本：頁籤列（v1 v2 v3 一鍵切換）＋一行差別摘要＋可展開的各版比較（都在證據頁裡面，不蓋到別的地方） */
+.evh{margin-bottom:10px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.evtabs{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.evtab{padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:13px}.evtab.on{background:var(--ac);border-color:var(--ac);color:#fff}.evtab[disabled]{opacity:.5;cursor:default}
+.evtog{margin-left:auto;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:13px}
 .evrow{display:flex;gap:10px;width:100%;text-align:left;margin-top:8px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg);cursor:pointer}.evrow.on{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
-@media(prefers-reduced-motion:reduce){.evd .bd,.evd .pn{transition:none}}
 .pane h3{font-size:11.5px;font-weight:700;margin:26px 0 8px;color:var(--mute);letter-spacing:.06em;text-transform:uppercase}.pane h3:first-child{margin-top:2px}
 
 .ah{display:flex;gap:12px;align-items:center;padding:13px 15px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 7%,var(--bg)),color-mix(in srgb,var(--ac2) 6%,var(--bg)));border:1px solid var(--line);margin-bottom:12px}
@@ -382,7 +379,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-4";
+window.RF_VER = "2026.11.11-5";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -2284,44 +2281,17 @@ function evDiffBody(c){const d=c.d;if(!d||!d.searched)return"";
 function evVerBar(){const cur=S.evVer||1,c=evCmp(cur);evNewSet=null;if(c.all.length<2)return"";
  if(c.d&&c.d.searched){evNewSet=new Set(c.d.added.map(e=>e.id));evNewBase=c.bn}
  const sum=c.d?evLine(c.d,cur,c.bn):"最早的版本，其他版本會跟它比較";
- return `<button class="evh" data-a="evdrawer" aria-haspopup="dialog" aria-expanded="${evDrawer}" title="展開證據版本列表"><span class="evb" aria-hidden="true">≡</span><span style="display:block;min-width:0"><b>證據 v${cur}</b>（${S.ev.length} 篇）<span class="sm mute" style="display:block">${esc(sum)}</span></span></button>`}
-// 版本抽屜：蓋在右側欄上（#evd 在 #pane 旁邊，不會被證據頁重畫洗掉）。每個版本一列：篇數、搜尋輪數、關鍵字、跟比較對象的差別一行；
-// 點版本就切換並收起；點背景、✕ 或按 Esc 收起。正在看的版本下面展開完整差別。切換版本會改到整組共用的狀態，所以唯讀的人只能看、不能切。
-function evDrawerRender(){const el=$("#evd");if(!el)return;
- const cur=S.evVer||1,c=evCmp(cur);
- if(pane!=="ev"||c.all.length<2){evDrawer=false;el.className="evd";el.innerHTML="";return}
+ const tabs=c.all.map(v=>{const on=v.n===cur;return `<button class="evtab${on?" on":""}" data-a="evver" data-k="${v.n}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"} title="證據 v${v.n}（${(v.ev||[]).length} 篇）">v${v.n}</button>`}).join("");
+ return `<div class="evh"><div class="evtabs"><b>證據版本</b>${tabs}<button class="evtog" data-a="evdrawer" aria-expanded="${evDrawer}">${evDrawer?"收起比較":"≡ 比較各版"}</button></div><div class="sm mute" style="margin-top:6px"><b>v${cur}</b>（${S.ev.length} 篇）${esc(sum)}</div>${evDrawer?evRowsHTML(c,cur):""}</div>`}
+function evRowsHTML(c,cur){
  const baseObj=c.all.find(x=>x.n===(evBase&&c.all.some(y=>y.n===evBase)?evBase:c.first));
  const rows=c.all.map(v=>{const on=v.n===cur,n=(v.ev||[]).length,kws=(v.kw||[]).slice(0,3).join("、")||"—";
   const dv=v.n===baseObj.n?null:RFAGENT.diffVersions(baseObj,v,lvOf);
   const line=v.n===baseObj.n?"比較基準":dv.searched?`${dv.added.length?`多找到 ${dv.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${dv.kwAdded.length||dv.kwRemoved.length?`+${dv.kwAdded.length}／−${dv.kwRemoved.length}`:"沒變"}`:"還沒搜尋";
   return `<button class="evrow${on?" on":""}" data-a="evver" data-k="${v.n}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"}><span aria-hidden="true">${on?"●":"○"}</span><span style="display:block;min-width:0"><b>證據 v${v.n}</b>（${n} 篇）${on?' <span class="tag ai">正在看</span>':""}<span class="sm mute" style="display:block">搜尋 ${v.rounds||0} 輪・關鍵字 ${esc(kws)}${(v.kw||[]).length>3?"…":""}</span><span class="sm" style="display:block">${esc(line)}</span></span></button>`}).join("");
- el.className="evd";
- el.innerHTML=`<div class="bd" data-a="evdrawer"></div><div class="pn" role="dialog" aria-label="證據版本"><div style="display:flex;align-items:center;gap:8px"><b>證據版本</b><span class="sm mute" style="flex:1">重新分析會另開新版本</span><button data-a="evdrawer" aria-label="關閉" style="padding:2px 9px">✕</button></div>${rows}${canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>'}${evDiffBody(c)}</div>`;
- bind(el);
- if(evDrawer){void el.offsetWidth;el.classList.add("on")}} // 先以收起的狀態畫出來、再加上 on，滑出的動畫才會播
-addEventListener("keydown",e=>{if(e.key==="Escape"&&evDrawer){evDrawer=false;evDrawerRender()}});
-function evHTML(){evNewSet=null;return evVerBar()+savedHTML()+evHTML0()}
-function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)e.k="u"}); // 舊資料：立場待確認以前被放進反向，顯示時改回待確認
- if(!S.ev.length)return `<h3>Evidence Map</h3><p class="sm mute">確認研究問題並完成搜尋後，證據會出現在這裡。沒有可驗證來源的資料不會被標記為證據。</p>`;
- const sp=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),tot=sp.length+cn.length;
- // 「加入畫布」時可以選這筆證據要支撐哪個主張：預設選主張論證模式正在論證的那個，或證據上記錄的相關論點，否則第一個
- const claimOpts=contentObjs().filter(o=>o.tag==="claim"),guessClaim=e=>(claimOpts.find(o=>objLabel(o)===(S.claim||"").slice(0,24))||claimOpts.find(o=>e.c&&(o.text||o.aiRead)===e.c)||claimOpts[0]||{}).id;
- const src=e=>/^https:\/\//.test(e.url||"")?`<p><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">開啟原始來源</a>${e.au?"　"+esc(e.au):""}${e.vn?"．"+esc(e.vn):""}</p>`:"";
- const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.assigned?' <span class="tag ai">老師指定閱讀</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}${evNewSet&&evNewSet.has(e.id)?` <span class="tag ai">相較 v${evNewBase} 新增</span>`:""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}${(()=>{const kp=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp,unk=x=>!x||x==="摘要未說明",real=x=>x&&!/^摘要(沒有|未)(說明|寫出)/.test(x);
- const who=(unk(e.p)||unk(e.m))&&kp&&real(kp.method)?`<p>對象與方法（依摘要整理）：${esc(kp.method)}</p>`:`<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}</p>`;
- const lv=lvOf(e),dk=e.lv==="不明"?lvKp(e):null;
- return who+(e.lv?`<p>證據力：${esc(lv)}${lv==="不明"?"（摘要看不出研究方法，請讀原文判斷）":"（依研究方法「"+esc(dk?dk.m+"」，取自 AI 整理的對象與方法":e.m+"」")+"判定：回顧與實驗高，追蹤、問卷與統計比較中，訪談低）"}</p>`:"")})()}<p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc((()=>{const kl=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp).limits:"";return /^尚未判讀/.test(e.l||"")&&kl&&!/^摘要(沒有|未)(說明|寫出)/.test(kl)?kl+"（依摘要整理）":e.l})())}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||(MODE()==="claim"&&e.k==="s"&&S.claim?S.claim:"尚未指定（加入畫布時在右邊選要支撐的主張）"))}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
- const li=k=>S.ev.map((e,i)=>e.k===k?item(e,i):"").join("")||`<p class="sm mute">尚無資料</p>`;
- // 主張論證模式：只列支持主張的證據，依證據力分層；反面例證只有小組要求過才出現在最下面
- if(MODE()==="claim"){const sup=S.ev.map((e,i)=>[e,i]).filter(x=>x[0].k==="s"),grp=f=>sup.filter(x=>f(lvOf(x[0]))).map(x=>item(x[0],x[1])).join("")||`<p class="sm mute">尚無資料</p>`;
-  return `<h3>主張的論證證據</h3><div class="box sm mode-claim"><b>${esc(S.claim||S.rq)}</b><div class="mute" style="margin-top:3px">主張論證模式：只列出支持這個主張的證據，依證據力由高到低排列。共 ${sup.length} 筆。</div></div>
-  <h3>證據力高：系統性回顧、實驗研究</h3>${grp(l=>l==="高")}<h3>證據力中：長期追蹤、問卷調查</h3>${grp(l=>l==="中")}<h3>證據力較低或方法不明</h3>${grp(l=>l!=="高"&&l!=="中")}
-  ${S.ev.some(e=>e.k==="u")?`<h3>立場待確認（不計入論證強度）</h3><p class="sm mute" style="margin-top:-2px">這些文獻跟主張有關，但摘要沒有寫出研究結果、只看得出部分相關，或（網路搜尋找到的中文文獻）沒有取得摘要，AI 判斷不出是否支持。請打開原文閱讀，確認支持主張後按「讀過了，列為支持」。</p>${li("u")}`:""}
-  ${zhMore()}
-  ${S.wantCounter===true?`<h3>反面例證（參考用）</h3><p class="sm mute" style="margin-top:-2px">這是應你們的要求另外找的，用來預想別人可能怎麼反駁，不計入論證強度。</p>${li("c")}`:""}
-  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
- return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${cn.length/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　限制／反向 ${cn.length}</span></div><h3>支持證據</h3>${li("s")}<h3>限制／反向證據</h3>${li("c")}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
- <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+ return rows+(canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>')+evDiffBody(c)}
+// 舊的抽屜已改成證據頁內的頁籤與展開比較（evVerBar／evRowsHTML）；#evd 只留空殼
+function evDrawerRender(){const el=$("#evd");if(el){el.className="evd";el.innerHTML=""}}
 
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
