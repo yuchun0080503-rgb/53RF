@@ -126,8 +126,61 @@ export function assignQA(qs, { speakers = [], researchers = [] } = {}) {
 }
 
 export const SIDE_ROLES = ['簡報操作', '計時', '扮演台下提問者', '記錄回饋'];
+// 台下提問的風格（後端 functions/rehearsal.js 有同樣的 id，由測試檢查一致）
+export const QA_STYLES = { source: '質疑來源', counter: '舉反例', whatif: '假如…', life: '生活連結', deeper: '追問細節', devil: '唱反調' };
+
+// ---------------- 評分配比裡的「上台表現」與簡報檢查 ----------------
+// 上台表現類：只算講者的項目，或名稱提到上台、表達、時間、眼神…（後端有同樣的判斷）。這些項目不從簡報判斷，改在排演時練習。
+const STAGE_RE = /上台|台風|口條|口語|口頭|表達|表現|時間控制|時間掌握|眼神|音量|肢體|互動|問答|臨場|發表/;
+export const isStageItem = (r) => !!r && (r.to === 'speaker' || STAGE_RE.test(String(r.name || '')));
+// 老師沒有設定評分配比時，簡報檢查先用的一般標準（後端有同一份）
+export const DEFAULT_CRITERIA = [
+  { name: '研究問題清楚', pct: 20, to: 'all' }, { name: '證據與引用', pct: 30, to: 'all' }, { name: '限制與反思', pct: 20, to: 'all' },
+  { name: '結論與主張一致', pct: 15, to: 'all' }, { name: '版面清楚易讀', pct: 15, to: 'all' },
+];
+// 沒有 AI 時的上台表現提醒（依項目名稱的關鍵字）
+const STAGE_TIPS = [
+  { re: /時間/, tips: ['用排演室的計時器跑一次完整流程', '每段超過時間就先跳下一段，記下哪段超時'] },
+  { re: /眼神|肢體|台風/, tips: ['每講完一個重點看向台下不同區域', '請組員錄影，回看有沒有一直看螢幕'] },
+  { re: /音量|口條|口語|口頭|表達/, tips: ['請坐最後一排的組員確認聽得清楚', '重點前停一拍，不要一直說「然後」'] },
+  { re: /互動|問答/, tips: ['用「問答練習」抽題，每題 30 秒內回答', '答不出來時先說會再查證，不要硬答'] },
+];
+export function stageTips(r) {
+  const hit = STAGE_TIPS.filter((x) => x.re.test(String(r.name || ''))).flatMap((x) => x.tips);
+  return (hit.length ? hit : ['不看稿講完自己負責的段落', '請組員依這一項給一個具體回饋']).slice(0, 3);
+}
+/**
+ * 簡報頁數和報告時間是否相稱（約每分鐘 1 頁；不是硬性規定，只是提醒）
+ * @returns {string} 空字串表示沒問題
+ */
+export function deckPace(pages, talkMin) {
+  const n = Number(pages) || 0, m = Number(talkMin) || DEFAULT_MIN;
+  if (!n) return '';
+  if (n > m * 1.6) return `簡報 ${n} 頁、報告 ${m} 分鐘，平均每頁不到 ${Math.round((m * 60) / n)} 秒，可能講不完`;
+  if (n < m / 3) return `簡報只有 ${n} 頁、報告 ${m} 分鐘，每頁要講很久，可以考慮把重點拆開`;
+  return '';
+}
 // 沒有上台的組員在排演時可以做的事（依序輪流）
 export const sideRoles = (memberIds, speakers) => (memberIds || []).filter((u) => !(speakers || []).includes(u)).map((u, i) => ({ u, role: SIDE_ROLES[i % SIDE_ROLES.length] }));
+
+/**
+ * 沒有 AI 時的簡報檢查：只看評分項目名稱的關鍵字有沒有出現在簡報裡（不判斷內容好不好）。
+ * @returns 和後端 deckCheck 相同的格式；找得到關鍵字的項目標 unknown（未判斷）、找不到標 missing
+ */
+export function ruleDeckCheck({ rubric = [], slides = [], deckKind = 'slides' } = {}) {
+  const own = (rubric || []).filter((r) => !isStageItem(r)), items = own.length ? own : DEFAULT_CRITERIA, unit = deckKind === 'doc' ? '段' : '頁';
+  const kw = (name) => uniq(String(name).split(/[\s（）()、與和及的／/]+/).flatMap((w) => (w.length <= 2 ? [w] : Array.from({ length: w.length - 1 }, (_, i) => w.slice(i, i + 2)))).filter((w) => w.length >= 2));
+  return {
+    items: items.map((r) => {
+      const ks = kw(r.name), pages = (slides || []).filter((p) => ks.some((k) => String(p.text || '').includes(k))).map((p) => p.n).slice(0, 6);
+      return { name: r.name, pct: r.pct, status: pages.length ? 'unknown' : 'missing', pages,
+        found: pages.length ? `第 ${pages.join('、')} ${unit}提到相關的詞` : '簡報裡找不到相關的詞',
+        suggest: [pages.length ? '內容是否完整要用 AI 檢查才能判斷' : `確認簡報有沒有呈現「${r.name}」`] };
+    }),
+    stage: (rubric || []).filter(isStageItem).map((r) => ({ name: r.name, pct: r.pct })),
+    top: [], defaultRubric: !own.length, pages: (slides || []).length, deckKind,
+  };
+}
 
 // ---------------- Kahoot 匯出 ----------------
 // 依 Kahoot 官方說明（support.kahoot.com「How to import questions from a spreadsheet to your kahoot」，2026-11-10 讀取）
@@ -180,23 +233,33 @@ export function ruleContent(action, inp = {}) {
     conclusion: CONCLUSION_Q,
     qa: ['先聽完問題再回答', '回答時說出是哪一篇證據', '不知道時說明會再查證'],
   };
+  const remember = {
+    open: inp.question ? `我們想知道：${inp.question}` : '這個問題為什麼重要',
+    method: `我們查了 ${(inp.evidence || []).length} 篇文獻`,
+    finding: inp.claim ? `證據支持：${inp.claim}` : (sup[0] && (sup[0].point || sup[0].t)) || '主要發現',
+    counter: con[0] ? `也有不同的結果：${con[0].t}` : '這個研究的限制',
+    conclusion: '', qa: '先聽完問題、說出用的是哪一篇證據',
+  };
+  const qa = [
+    ...con.slice(0, 1).map((e) => ({ q: short(`「${short(e.t, 24)}」的結果跟你們相反，那你們還站得住嗎？`, 60), style: 'counter', level: 3, about: 'counter', refs: [e.n], hint: '承認差異，說明研究對象或情境不同' })),
+    ...sup.slice(0, 1).map((e) => ({ q: short(`「${short(e.t, 24)}」這篇是怎麼做的？樣本夠大嗎？`, 60), style: 'source', level: 2, about: 'support', refs: [e.n], hint: '說出研究方法與對象，承認樣本限制' })),
+    { q: short(inp.claim ? `如果大家都不用 AI，「${short(inp.claim, 20)}」還會發生嗎？` : '如果換一群人，結果還會一樣嗎？', 60), style: 'whatif', level: 2, about: 'scope', refs: [], hint: '說明結論適用的範圍' },
+    { q: '你們自己平常是怎麼用的？有發生過這種情況嗎？', style: 'life', level: 1, about: 'scope', refs: [], hint: '舉組員自己的例子，再接回證據' },
+    { q: '有沒有可能剛好相反，是原本就比較依賴的人才常用？', style: 'devil', level: 3, about: 'method', refs: [], hint: '說明相關不等於因果、哪篇證據能回應' },
+  ].slice(0, 6);
+  const delivery = (inp.rubric || []).filter(isStageItem).map((r) => ({ name: r.name, pct: r.pct, tips: stageTips(r) }));
+  const tips = ['依段落計時，每段超時就先跳到下一段', '講者交接時說一句銜接的話'];
   if (action === 'rehearsalFlow') {
     return {
-      segments: SEGMENTS.map((s) => ({ id: s.id, know: know[s.id].map((x) => short(x)).slice(0, 3) })),
-      qa: [
-        ...con.slice(0, 2).map((e) => ({ q: short(`「${short(e.t, 24)}」的結果和你們不同，你們怎麼看？`, 60), about: 'counter', refs: [e.n] })),
-        ...sup.slice(0, 1).map((e) => ({ q: short(`「${short(e.t, 24)}」的研究對象和你們的主張一樣嗎？`, 60), about: 'support', refs: [e.n] })),
-        { q: '你們怎麼確定這些來源可信？', about: 'method', refs: [] },
-        { q: '這個結論適用到哪些人或情境？', about: 'scope', refs: [] },
-      ],
-      tips: ['依段落計時，每段超時就先跳到下一段', '講者交接時說一句銜接的話'],
-      by: 'rule',
+      segments: SEGMENTS.map((s) => ({ id: s.id, remember: short(remember[s.id], 30), pages: [], know: know[s.id].map((x) => short(x)).slice(0, 3) })),
+      qa, tips, delivery, by: 'rule',
     };
   }
   if (action === 'rehearsalOutline') {
+    const nextOf = (i) => (SEGMENTS[i + 1] ? `接到「${SEGMENTS[i + 1].title}」` : '');
     return {
-      segments: SEGMENTS.filter((s) => s.id !== 'qa').map((s) => ({ id: s.id, points: (s.id === 'conclusion' ? CONCLUSION_Q : know[s.id]).slice(0, 4).map((x) => ({ text: short(x), refs: [] })) })),
-      by: 'rule',
+      segments: SEGMENTS.map((s, i) => ({ id: s.id, remember: short(remember[s.id], 30), pages: [], points: (s.id === 'conclusion' ? CONCLUSION_Q : s.id === 'qa' ? [] : know[s.id]).slice(0, 3).map((x) => ({ text: short(x, 30), refs: [] })), next: s.id === 'qa' || s.id === 'conclusion' ? '' : nextOf(i) })),
+      qa, tips, delivery, by: 'rule',
     };
   }
   // 互動題：「下面哪一篇支持我們的主張？」這類題目，正確答案一定來自小組自己的證據分類

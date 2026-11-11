@@ -19,6 +19,7 @@ const MIN_LEVEL = {
   rehearsalFlow: 2,
   rehearsalInteraction: 2,
   rehearsalOutline: 3,
+  deckCheck: 2, // 簡報對照評分配比：逐項指出簡報裡有沒有、在哪幾頁、要補什麼；不打分數、不改寫投影片
   generateReport: Infinity,
 };
 

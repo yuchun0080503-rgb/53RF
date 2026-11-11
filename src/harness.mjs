@@ -23,9 +23,10 @@ export const MIN_LEVEL = {
   summarizeEvidence: 3,
   slideOutline: 3, // 投影片文字大綱：只整理小組自己的內容與證據，結論頁不代寫（寫作助理才開放）
   // 排演室：提示詞由伺服器組（functions/rehearsal.js），不產生逐字稿與結論
-  rehearsalFlow: 2, // 報告流程、時間配額、交接卡、問答分工
+  rehearsalFlow: 2, // 講者提示卡（讓台下記住的事、上台前要先懂的事）、台下提問
   rehearsalInteraction: 2, // 台下問答題、互動遊戲題、開場提問
-  rehearsalOutline: 3, // 講稿大綱（每段重點，不是逐字稿）
+  rehearsalOutline: 3, // 講者提示卡的「要講的重點」與轉場提示（不是逐字稿）
+  deckCheck: 2, // 簡報對照評分配比：逐項指出簡報裡有沒有、在哪幾頁、要補什麼；不打分數、不改寫投影片
   generateReport: Infinity,
 };
 
