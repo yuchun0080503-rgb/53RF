@@ -230,7 +230,10 @@ function clean(action, data, inp) {
     const got = arr(d.items, 12).filter((x) => x && typeof x.name === 'string');
     return {
       items: items.map((r) => {
-        const x = got.find((y) => y.name === r.name);
+        // AI 有時會把名稱寫成「研究問題清楚（20%）」或多空白：去掉括號、百分比和空白再比；還是對不上而且項目數量相同時，照順序對應
+        const nm = (s) => String(s || '').replace(/[（(][^）)]*[）)]/g, '').replace(/[\s%％]/g, '').replace(/[0-9]+$/, '');
+        const x = got.find((y) => y.name === r.name) || got.find((y) => nm(y.name) === nm(r.name))
+          || (got.length === items.length ? got[items.indexOf(r)] : null);
         return x ? { name: r.name, pct: r.pct, status: ['ok', 'weak', 'missing'].includes(x.status) ? x.status : 'weak', pages: okPages(x.pages), found: str(x.found, LIM.found), suggest: arr(x.suggest, 3).map((t) => str(t, LIM.suggest)).filter(Boolean) }
           : { name: r.name, pct: r.pct, status: 'unknown', pages: [], found: '', suggest: [] };
       }),
