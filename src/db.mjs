@@ -733,6 +733,11 @@ export async function saveSnooze(uid, snooze) {
   await updateDoc(doc(db, 'users', uid), { snooze });
 }
 
+// 置頂的研究（自己看到的順序）：存研究 id 的陣列，最多 100 個
+export async function savePins(uid, pins) {
+  await setDoc(doc(db, 'users', uid), { pins: (Array.isArray(pins) ? pins : []).map(String).slice(0, 100) }, { merge: true });
+}
+
 // 老師提醒同學：文件 id 由事項決定（todo.mjs 的 nudgeChecks），24 小時內重複送出會被 firestore.rules 拒絕
 export function subscribeNudges(projectId, onChange, onError) {
   return onSnapshot(collection(db, 'projects', projectId, 'nudges'), (snap) => onChange(snap.docs.map((d) => {
