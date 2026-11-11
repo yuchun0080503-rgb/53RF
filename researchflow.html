@@ -15,7 +15,7 @@ button:hover:not(:disabled){background:var(--soft)}button:disabled{opacity:.45;c
 button.pri{background:var(--fg);color:var(--bg);border-color:var(--fg)}button.pri:hover:not(:disabled){opacity:.85;background:var(--fg)}
 button.on{border-color:var(--ac);color:var(--ac)}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 10px;width:100%}
+input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 10px;width:100%;min-width:0;max-width:100%;box-sizing:border-box}input[type=date]{display:block;min-height:38px}
 select{width:auto;padding:5px 8px}
 h1,h2,h3{margin:0;font-weight:600}.mute{color:var(--mute)}.sm{font-size:13px}.sp{flex:1}.hide{display:none!important}
 label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
@@ -73,7 +73,7 @@ textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;bo
 .tabs button{flex:none;border:1px solid transparent;border-radius:99px;padding:7px 13px;color:var(--mute);font-size:12.5px;background:var(--bg);display:flex;align-items:center;gap:5px}
 .tabs button .ic{margin:0;width:14px;height:14px}
 .tabs button.on{color:#fff;background:var(--ac);border-color:var(--ac)}
-.pane{overflow:auto;padding:20px 18px;flex:1;font-size:14px;line-height:1.6}
+.pane{overflow:auto;overflow-x:hidden;padding:20px 18px;flex:1;font-size:14px;line-height:1.6}
 .pw{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}.pw>.pane{flex:1;min-height:0}
 /* 證據版本：頁籤列（v1 v2 v3 一鍵切換）＋一行差別摘要＋可展開的各版比較（都在證據頁裡面，不蓋到別的地方） */
 .evh{margin-bottom:10px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
@@ -160,7 +160,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .tqk{width:24px;height:24px;padding:0;display:inline-grid;place-items:center;border-radius:50%;flex:none}.tqk svg{width:14px;height:14px}.tqk[aria-expanded="true"]{background:var(--ac);color:#fff;border-color:var(--ac)}
 .tqc{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px 32px}.tqc button{font-size:12.5px;padding:3px 10px;border-radius:999px}.tqc button svg{width:12px;height:12px;margin-right:3px}
 .tk .tclaim{font-size:12.5px;padding:2px 10px;margin-top:5px}
-.tadd{display:grid;gap:6px;margin:10px 0 4px}.tadd div{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
+.tadd{display:grid;gap:6px;margin:10px 0 4px}.tadd div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}.tadd div .pri{grid-column:1/-1}
 #tm{width:min(1040px,96vw)}.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}.tgrid h3:first-child{margin-top:8px}
 @media(max-width:760px){.tgrid{grid-template-columns:1fr;gap:8px}}
 .stage{display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 9%,var(--bg)),color-mix(in srgb,var(--ac2) 7%,var(--bg)));border:1px solid var(--line);margin-bottom:4px}
@@ -916,7 +916,7 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  d.innerHTML=`<h2>研究檔案</h2>${own?"":'<p class="sm mute">只有 Owner 可以編輯；你目前為唯讀。</p>'}
  <label>報告／研究名稱</label><input id="d1" value="${esc(q.name)}" ${dis}>${q.courseId?`<label>課程</label><input id="d2" value="${esc(q.course)}" disabled><div class="sm mute" style="margin-top:4px">已用課程代碼加入課程${(q.members.find(m=>m.role==="Teacher")&&U[q.members.find(m=>m.role==="Teacher").u])?"（老師："+esc(U[q.members.find(m=>m.role==="Teacher").u].n)+"）":""}，課程名稱由老師設定。</div>${asgOf(courseOfP(q)).length?`<label>作業</label><select id="dasg" ${dis}><option value="">還沒選</option>${asgOf(courseOfP(q)).map(a=>`<option value="${esc(a.id)}" ${a.id===q.assignmentId?"selected":""}>${esc(a.title)}${a.due?"（截止 "+esc(a.due)+"）":""}</option>`).join("")}</select>`:""}`
   :`<label>課程名稱</label><input id="d2" value="${esc(q.course)}" ${dis}>${own?`<div style="display:flex;gap:8px;margin-top:8px"><input id="dj" placeholder="有老師給的課程代碼？輸入後加入課程" autocomplete="off" style="text-transform:uppercase"><button id="djb">加入課程</button></div><div id="djs" class="cstat"></div>`:""}`}<label>老師要求</label><input id="d3" value="${esc(q.req)}" ${dis}>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>截止日期</label><input id="d4" type="date" value="${q.due}" ${dis}></div><div><label>研究領域</label><input id="d5" value="${esc(q.field)}" ${dis}></div></div>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px"><div><label>截止日期</label><input id="d4" type="date" value="${q.due}" ${dis}></div><div><label>研究領域</label><input id="d5" value="${esc(q.field)}" ${dis}></div></div>
  <h3 style="margin:20px 0 4px">組員與權限</h3><div class="sm mute">Owner：管理專案、邀請與移除成員；Editor：編輯畫布、執行 Agent；Viewer：僅查看。</div>${mem}
  ${own?`<div class="mrow" style="grid-template-columns:1fr 110px auto"><input id="ne" placeholder="新組員 Email"><select id="nr"><option>Editor</option><option>Viewer</option>${LIVE()?"<option>Teacher</option>":""}</select><button id="na">${I("plus")}邀請</button></div>`:""}
  <h3 style="margin:20px 0 4px">預設查證模式</h3><div class="sm mute">Agent 搜尋證據的方式；每次查證前的確認頁也可以臨時改。</div>
@@ -1767,9 +1767,9 @@ function openCourse(c){const d=$("#pd"),isNew=!c,v=c||{name:"",teacherReq:"",due
  d.innerHTML=`<h2>${isNew?"建立課程":"課程設定"}</h2><p class="sm mute" style="margin:6px 0 0">${isNew?"建立後會得到一組 6 碼課程代碼。把代碼給學生，學生建立研究時輸入，就會加入這門課。":"修改後，之後用代碼加入的研究會套用新設定；已經加入的研究，AI 權限請到各組頁面調整。"}</p>
  <label for="k1">課程名稱</label><input id="k1" value="${esc(v.name)}" placeholder="例如：教育科技導論">
  <label for="k2">老師要求（學生建立研究時自動帶入）</label><input id="k2" value="${esc(v.teacherReq||"")}" placeholder="例如：需含正反證據與參考文獻">
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="k3">報告截止日期</label><input id="k3" type="date" value="${v.dueDate||""}"></div><div><label for="k5">代碼有效到</label><input id="k5" type="date" value="${v.codeExpires||SEM_END}"></div></div>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px"><div><label for="k3">報告截止日期</label><input id="k3" type="date" value="${v.dueDate||""}"></div><div><label for="k5">代碼有效到</label><input id="k5" type="date" value="${v.codeExpires||SEM_END}"></div></div>
  <p class="sm mute" style="margin:6px 0 0">代碼預設用到這學期結束（${SEM_END}）。過期後學生不能再用代碼加入，已經加入的研究不受影響。</p>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="k9">上台報告日（沒有分作業時）</label><input id="k9" type="date" value="${v.talkDate||""}"></div><div><label for="k10">報告幾分鐘</label><input id="k10" type="number" min="3" max="60" value="${v.talkMin||""}" placeholder="例如：10"></div></div>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px"><div><label for="k9">上台報告日（沒有分作業時）</label><input id="k9" type="date" value="${v.talkDate||""}"></div><div><label for="k10">報告幾分鐘</label><input id="k10" type="number" min="3" max="60" value="${v.talkMin||""}" placeholder="例如：10"></div></div>
  <label for="k4">新加入研究的 AI 權限</label><select id="k4">${LVN.map((n,l)=>`<option value="${l}" ${l===+v.defaultAiLevel?"selected":""}>Level ${l}．${n}</option>`).join("")}</select>
  <p class="sm mute" id="k4d" style="margin:6px 0 0"></p>
  <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:14px"><input type="checkbox" id="k8" style="width:auto;margin:0" ${v.requireSid?"checked":""}>學生必須填寫學號</label><p class="sm mute" style="margin:2px 0 0">學生加入後會被提醒補填。學號只有學生本人和你看得到，組員看不到。</p>
