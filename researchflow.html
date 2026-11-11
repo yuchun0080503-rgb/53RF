@@ -1919,11 +1919,11 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const pace=deck?RFREH.deckPace(deck.slides.length,flow.total):"",unit=deck&&deck.kind==="doc"?"段":"頁";
  const deckMain=!edit?"":L<2?`<span class="sm mute">需要 AI 權限 Level 2</span>`:busy("deckCheck")?`<button disabled>讀取與檢查中…（約 30 秒）</button>`
   :isG?`<button class="${chk?"":"pri"}" data-rdk="google" ${rehBusy?"disabled":""}>${I("search")}${chk?"重新檢查":"檢查簡報"}</button>`
-  :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報（.pptx／.pdf）"}</button>`;
- const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳 .pptx／.pdf</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
+  :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報"}</button>`;
+ const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳檔案</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
  const deckHint=isG?"按「檢查簡報」由系統讀你們的 Google 檔案（要先在 Google「共用」設成知道連結的任何人可檢視）。"
-  :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載成 .pptx 或 .pdf 再上傳（Canva：分享 → 下載 → PDF 或 PowerPoint）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
-  :"還沒有設定小組報告連結：可以先上傳 .pptx 或 .pdf 檢查，或到研究檔案貼上 Google 簡報連結。";
+  :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載後上傳（Canva：分享 → 下載）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
+  :"還沒有設定小組報告連結：可以先上傳簡報檔檢查，或到研究檔案貼上 Google 簡報連結。";
  const itemRow=x=>{const [n,c]=ST_N[x.status]||ST_N.unknown;return `<div class="rhit"><div class="rhit-h"><i class="dot ${c}"></i><b>${esc(x.name)}</b><span class="pill">${x.pct}%</span><span class="sm st-${c}">${n}</span>${x.pages.length?`<span class="sm mute">${pgT(x.pages,deck&&deck.kind)}</span>`:""}</div>
   ${x.found?`<div class="sm mute">${esc(x.found)}</div>`:""}${x.suggest.length?`<ul>${x.suggest.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>`:""}</div>`};
  const deckSec=`<section class="tcard"><div class="tch"><h2>簡報 × 評分配比</h2><span class="acts">${deckMain}</span></div>
@@ -1933,7 +1933,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
    ${chk.data.items.map(itemRow).join("")}
    ${(chk.data.stage||[]).length?`<p class="sm mute" style="margin:10px 0 0">${esc(chk.data.stage.map(x=>x.name+" "+x.pct+"%").join("、"))} 屬於上台表現，不從簡報判斷，請看下方「計時與上台表現」。</p>`:""}`
   :`<p class="sm mute" style="margin:0">依老師的評分配比逐項看簡報：哪些已經呈現、在哪幾${unit||"頁"}、還缺什麼。只給建議，不打分數、不改寫投影片。</p>`}
-  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
+  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}${edit&&L>=2?`<br>上傳檔案支援 .pptx、.pdf`:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
  // ---- 計時與上台表現 ----
  const dl=plan&&(plan.data.delivery||[]).length?plan.data.delivery:stage.map(r=>({name:r.name,pct:r.pct,tips:RFREH.stageTips(r)}));
  const timeSec=`<section class="tcard"><div class="tch"><h2>計時與上台表現</h2><span class="sm mute" id="rhnow"></span></div>
