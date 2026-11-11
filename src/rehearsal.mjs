@@ -286,8 +286,8 @@ export function ruleContent(action, inp = {}) {
 }
 
 // ---------------- 互動：先判斷「為什麼要互動」，再選最適合的形式（不限 Kahoot） ----------------
-// 目的三種：ideas 讓台下多提出想法／check 測試台下有沒有聽懂（對錯）／fun 老師要求有趣（演戲、辯論、拍影片…）
-export const GOALS = { ideas: '讓台下多提出想法', check: '測試台下有沒有聽懂（對錯）', fun: '讓報告有趣（演戲、辯論、拍影片）' };
+// 目的三種：ideas 讓台下多提出想法／check 測試台下有沒有聽懂（是非題、選擇題）／fun 老師要求有趣（演戲、辯論、拍影片…）
+export const GOALS = { ideas: '讓台下多提出想法', check: '測試台下有沒有聽懂（出是非題或選擇題）', fun: '讓報告有趣（演戲、辯論、拍影片）' };
 // 形式清單（後端 functions/rehearsal.js 有同樣的 id 與目的，由測試檢查一致）。
 // device：台下需不需要手機；min：大約要幾分鐘；people：至少要幾位組員；prep：要事先準備
 export const FORMATS = [

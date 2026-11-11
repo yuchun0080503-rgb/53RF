@@ -267,18 +267,19 @@ async function judgeOne(claim, w, fetchImpl, timeout = 90000) {
       '・主張包含好幾個部分、這篇只研究其中一部分：就研究到的那部分判斷。\n' +
       '・mixed 只用在研究結果本身有一部分支持、一部分相反（例如對某些人有影響、對另一些人沒有），或研究明確指出只在特定條件下成立。\n' +
       '摘要裡的「建議」「可能」「未來研究應該」只是作者的推測或主張，不是研究發現；沒有寫出實際的數據或結果，stance 就是 unclear。\n' +
-      'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。',
+      'finding：用一句繁體中文（30 字以內）寫出這篇研究的主要發現，只能根據摘要；stance 是 unclear 或 unrelated 時 finding 留空字串。\n' +
+      'diff：rel 是 2 時，用 15 字以內寫出跟主張哪裡不同，開頭寫「對象不同：」或「情境不同：」（例如「對象不同：國小學生」）；rel 不是 2 時留空字串。',
     user: `學生的主張：${clip(claim, 300)}\n\n文獻標題：${clip(w.title, 200)}\n摘要：${clip(w.abstract, JUDGE_ABSTRACT_LEN) || '（沒有摘要）'}`,
     schema: {
       type: 'object', required: ['rel', 'stance', 'finding'],
-      properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str },
+      properties: { rel: { type: 'integer', minimum: 0, maximum: 3 }, stance: { type: 'string', enum: ['support', 'counter', 'mixed', 'unclear', 'unrelated'] }, finding: str, diff: str },
     },
     maxTokens: 160,
     timeout,
   }, fetchImpl);
   if (!Number.isFinite(out.rel)) return { rel: -1, stance: 'unrelated', finding: '' }; // 模型沒有給相關度：當作這一篇判讀失敗
   const rel = Math.max(0, Math.min(3, Math.round(out.rel)));
-  return { rel, stance: rel < 2 ? 'unrelated' : out.stance, finding: clip(out.finding, 80) };
+  return { rel, stance: rel < 2 ? 'unrelated' : out.stance, finding: clip(out.finding, 80), diff: rel === 2 ? clip(out.diff || '', 24) : '' };
 }
 
 /**
@@ -310,7 +311,7 @@ export async function refineEvidence({ claim, evidence, model = '' }, fetchImpl)
     // 摘要沒有寫出研究結果（unclear）：模型無法判斷立場，沿用規則式的初步分類，並提醒要讀原文
     const unclear = v.stance === 'unclear' || !v.finding;
     kept.push({ rel: v.rel - (unclear ? 0.5 : 0), e: { ...e, k: unclear ? 'u' : v.stance === 'support' ? 's' : 'c', // mixed（有條件成立）放「反向／限制」並加標籤（跟初賽相同）。11/11 改回：放支持時 20 題評測成功率 25%，放反向／限制 75%；要不要另開一欄由小組測試後決定 // u＝立場待確認：摘要沒寫結果，不放進支持或反向（以前會沿用規則式分類，常被誤放進反向）
-      mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接',
+      mix: v.stance === 'mixed' || undefined, rel: v.rel === 3 ? '高' : '中', d: v.rel === 3 ? '直接' : '間接', dif: (v.rel === 2 && v.diff) || undefined,
       f: unclear ? '摘要沒有寫出研究結果，需要閱讀原文才能判斷。' : v.finding, fo: e.f, ai: model || 'Claude', unc: unclear || undefined } });
   });
   kept.sort((a, b) => b.rel - a.rel);
