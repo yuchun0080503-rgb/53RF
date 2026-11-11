@@ -74,6 +74,17 @@ textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;bo
 .tabs button .ic{margin:0;width:14px;height:14px}
 .tabs button.on{color:#fff;background:var(--ac);border-color:var(--ac)}
 .pane{overflow:auto;padding:20px 18px;flex:1;font-size:14px;line-height:1.6}
+.pw{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}.pw>.pane{flex:1;min-height:0}
+/* 證據版本：頁籤列（v1 v2 v3 一鍵切換）＋一行差別摘要＋可展開的各版比較（都在證據頁裡面，不蓋到別的地方） */
+.evh{margin-bottom:10px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.evtabs{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.evtab{padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:13px}.evtab.on{background:var(--ac);border-color:var(--ac);color:#fff}.evtab[disabled]{opacity:.5;cursor:default}
+.evtog{margin-left:auto;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:18px;line-height:1;padding:0}.evtog[aria-expanded="true"]{background:var(--ac);border-color:var(--ac);color:#fff}
+.evrow{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}.evrow.on{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.evhd{display:flex;gap:10px;width:100%;text-align:left;padding:9px 10px;border:0;background:none;cursor:pointer;color:inherit;font:inherit}.evmore{padding:0 10px 10px;border-top:1px dashed var(--line)}.evwho{display:flex;align-items:center;gap:5px;margin-top:2px}.evwho .av{flex:none}
+.pw{overflow:hidden}
+.evd{position:absolute;top:0;bottom:0;right:0;width:min(88%,390px);z-index:30;display:flex;flex-direction:column;background:var(--bg);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.14);transform:translateX(102%);visibility:hidden;transition:transform .2s,visibility 0s .2s}.evd.on{transform:none;visibility:visible;transition:transform .2s}
+.evdh{display:flex;align-items:center;gap:8px;padding:14px 14px 10px}.evdb{flex:1;min-height:0;overflow:auto;padding:0 14px 14px}
+@media(prefers-reduced-motion:reduce){.evd{transition:none}}
 .pane h3{font-size:11.5px;font-weight:700;margin:26px 0 8px;color:var(--mute);letter-spacing:.06em;text-transform:uppercase}.pane h3:first-child{margin-top:2px}
 
 .ah{display:flex;gap:12px;align-items:center;padding:13px 15px;border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 7%,var(--bg)),color-mix(in srgb,var(--ac2) 6%,var(--bg)));border:1px solid var(--line);margin-bottom:12px}
@@ -90,7 +101,7 @@ textarea.ti{resize:none;overflow:hidden;line-height:22px;white-space:pre-wrap;bo
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;box-shadow:0 0 0 3px color-mix(in srgb, currentColor 16%, transparent)}.g{background:var(--ok);color:var(--ok)}.y{background:var(--warn);color:var(--warn)}.r{background:var(--bad);color:var(--bad)}
 .hl{display:grid;grid-template-columns:118px 1fr;column-gap:14px;padding:10px 2px;border-bottom:1px solid var(--line);align-items:start;font-size:13.5px;line-height:1.55}
 .hl.tt{grid-template-columns:50px 1fr}
-.hl span:first-child{color:var(--mute);font-size:12px;padding-top:2px}
+.hl>span:first-child{color:var(--mute);font-size:12px;padding-top:2px}
 .hl span:last-child{color:var(--fg);word-break:break-word;display:block}
 .hl span:last-child div{margin-top:4px}
 .hl span:last-child div:first-child{margin-top:0}
@@ -364,7 +375,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 
 <section id="v-ws" class="hide"><div id="ws">
   <div class="cv">
-    <div class="pbar"><button id="back"><i data-i="back"></i>返回</button><b id="pt"></b><span class="tag" id="pst"></span><span class="tag" id="rolelab"></span><span class="tag" id="pmode"></span><span class="tag" id="aimodel"></span><span class="sp"></span><span id="pres" class="stack"></span><button id="fbb" class="hide"><i data-i="clip"></i><span id="fbbt">老師回饋</span></button><button id="rdb" class="hide"><i data-i="folder"></i><span id="rdbt">指定閱讀</span></button><button id="rbb" class="hide"><i data-i="target"></i>評分配比</button><button id="rpt"><i data-i="ext"></i>小組報告</button><button id="cfg"><i data-i="gear"></i>研究檔案</button></div>
+    <div class="pbar"><button id="back"><i data-i="back"></i>返回</button><b id="pt"></b><span class="tag" id="pst"></span><span class="tag" id="rolelab"></span><span class="tag" id="pmode"></span><span class="tag" id="aimodel"></span><span class="sp"></span><span id="pres" class="stack"></span><button id="fbb" class="hide"><i data-i="clip"></i><span id="fbbt">老師回饋</span></button><button id="rdb" class="hide"><i data-i="folder"></i><span id="rdbt">指定閱讀</span></button><button id="rbb" class="hide"><i data-i="target"></i>評分配比</button><button id="rpt"><i data-i="ext"></i>小組報告</button><button id="rptx" class="hide" aria-label="移除小組報告連結" title="移除報告連結（貼錯時可以清掉重貼）">✕</button><button id="cfg"><i data-i="gear"></i>研究檔案</button></div>
     <div class="cvw" id="cvw">
       <div class="tools" role="toolbar" aria-label="畫布工具">
         <button id="undo" title="返回上一個操作 (Ctrl+Z)" aria-label="返回上一個操作"><i data-i="undo"></i></button><button id="redo" title="取消返回 (Ctrl+Shift+Z)" aria-label="取消返回"><i data-i="redo"></i></button><span class="vr"></span>
@@ -381,7 +392,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
   </div>
   <aside class="side"><div id="sdrag" title="拖曳調整右側欄寬度（點兩下恢復預設）" aria-hidden="true"></div>
     <div class="tabs" role="tablist"><button data-p="agent" class="on"><i data-i="spark"></i>Agent</button><button data-p="ev"><i data-i="search"></i>證據</button><button data-p="hl"><i data-i="pulse"></i>進度檢核</button><button data-p="team"><i data-i="user"></i>分工</button><button data-p="st"><i data-i="clip"></i>研究狀態</button><button data-p="tr"><i data-i="clock"></i>歷程</button><button data-p="slides"><i data-i="frame"></i>簡報</button><button data-p="pins"><i data-i="target"></i>留言<span id="pinct"></span></button></div>
-    <div class="pane" id="pane"></div>
+    <div class="pw"><div class="pane" id="pane"></div><div class="evd" id="evd"></div></div>
   </aside>
 </div></section>
 
@@ -392,14 +403,14 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-1";
+window.RF_VER = "2026.11.11-16";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
 try { window.RFQR = (await import("./src/vendor/qrcode.mjs")).default; } catch (err) { console.info("[ResearchFlow] 無法載入 QR code 產生器：", err?.message || err); }
 try { window.RFCOURSE = await import("./src/course.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 course.mjs：", err?.message || err); }
 // 各領域資料庫的清單與自動挑選（老師端勾選、學生端顯示會查哪些資料庫）
-try { window.RFSRC = await import("./src/searchLogic.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
+try { window.RFSRC = await import("./src/searchLogic.mjs"); window.RFROUTE = await import("./src/sources.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 searchLogic.mjs：", err?.message || err); }
 try { window.RFTEAM = await import("./src/teamwork.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入 teamwork.mjs：", err?.message || err); }
 // 待辦列表（學生端與老師端共用的判斷、緊急程度顏色、排序、稍後提醒）
 try { window.RFREH = await import("./src/rehearsal.mjs"); window.RFXLSX = await import("./src/xlsx.mjs"); window.RFPPTX = await import("./src/pptx.mjs"); } catch (err) { console.info("[ResearchFlow] 無法載入排演室模組：", err?.message || err); }
@@ -443,16 +454,23 @@ const U={A:{n:"家欣",c:CO[0],email:"jiaxin@gmail.com",id:"RF-U-7F3A21"},B:{n:"
 const TAGS={claim:"主張",counter:"反向觀點",question:"待驗證問題",evidence:"證據"},STG=["研究問題","假設","證據","討論","結論"];
 const LVN=["No AI","Research Assistant","Thinking Assistant","Writing Assistant"];
 let ROLE="s",ME="A",p=null,S=null,sel=new Set(),tool="sel",pane="agent",editing={},linkFrom=null,uid=100;
-const fresh=()=>({step:0,ver:null,rd:[],scope:{},rq:"",kw:[],rounds:0,ev:[],msg:"",tok:0,skip:false,qs:[],sum:"",scopeReasons:null,qs3:null,tooBroad:null,topic:"",q0:"",strat:null,sq:[],cq:[],mode:"",claim:"",held:[],gone:[],wantCounter:null,saved:[],kwEn:{},kwCore:[],evVer:1,evVers:[],cv:[]});
+const fresh=()=>({evBy:null,step:0,ver:null,rd:[],scope:{},rq:"",kw:[],rounds:0,ev:[],msg:"",tok:0,skip:false,qs:[],sum:"",scopeReasons:null,qs3:null,tooBroad:null,topic:"",q0:"",strat:null,sq:[],cq:[],mode:"",claim:"",held:[],gone:[],wantCounter:null,saved:[],kwEn:{},kwCore:[],evVer:1,evVers:[],cv:[]});
 // 證據版本：每次重新分析另開一個版本（證據 v1、v2…），舊版整份保留（證據、搜尋輪數與查詢、關鍵字、研究問題），在證據頁上方切換。
 // S.evVer 是目前版本號；其他版本的快照放在 S.evVers。切換時把目前這份存起來、換上選的那份，其餘程式一樣只讀 S.ev 等欄位。
-const EVF=["ev","held","qs","rounds","dbs","refl","broad","skip","sum","msg","kw","kwCore","kwEn","kwSyn","kwAspect","kwWeak","rq","cv"];
+const EVF=["ev","held","qs","rounds","dbs","refl","broad","skip","sum","msg","kw","kwCore","kwEn","kwSyn","kwAspect","kwWeak","rq","cv","evBy"];
 const evClone=x=>x===undefined?undefined:JSON.parse(JSON.stringify(x));
 function evStash(){const o={n:S.evVer||1,at:Date.now()};EVF.forEach(k=>{if(S[k]!==undefined)o[k]=evClone(S[k])});S.evVers=(S.evVers||[]).filter(x=>x.n!==o.n).concat(o).sort((a,b)=>a.n-b.n)}
-function evNew(){evStash();const n=Math.max(...S.evVers.map(x=>x.n))+1;
- S.ev=[];S.held=[];S.qs=[];S.rounds=0;S.dbs=[];S.refl=[];S.broad=0;S.skip=false;S.sum="";S.msg="";S.evVer=n; // 關鍵字與研究問題先沿用，確認策略時會依新的畫布內容重新規劃
+// 還沒搜尋過的版本（0 篇、0 輪）沒有用處：離開它（切換版本、開新一輪）時直接丟掉，不留在版本列表裡
+const evEmpty=x=>!(x.rounds||(x.ev||[]).length);
+// 「進行中」：正在看的版本還沒搜尋過、而且還有別的版本＝有人按了重新分析、正在確認策略或準備搜尋。這時不讓別人切走（版本是整組共用的，切走會把正在操作的人的畫面換掉），只能等搜尋完或由人按「放棄這一版」
+const evPending=()=>evEmpty(S)&&(S.evVers||[]).length>0;
+const evPendingBy=()=>(S.evBy&&(S.evBy.n||uname(S.evBy.u)))||"有人";
+function evNew(){evStash();S.evVers=S.evVers.filter(x=>!evEmpty(x));const n=Math.max(...S.evVers.map(x=>x.n))+1;
+ S.ev=[];S.held=[];S.qs=[];S.rounds=0;S.dbs=[];S.refl=[];S.broad=0;S.skip=false;S.sum="";S.msg="";S.evBy=null;S.evVer=n; // 關鍵字與研究問題先沿用，確認策略時會依新的畫布內容重新規劃
  return n}
-function evSwitch(n){if(n===(S.evVer||1))return false;const t=(S.evVers||[]).find(x=>x.n===n);if(!t)return false;evStash();S.evVers=S.evVers.filter(x=>x.n!==n);
+function evSwitch(n){if(n===(S.evVer||1))return false;const t=(S.evVers||[]).find(x=>x.n===n);if(!t)return false;
+ if(!(evEmpty(S)&&S.evVers.length))evStash(); // 正在看的是空版本、而且還有別的版本：不保存，直接丟掉
+ S.evVers=S.evVers.filter(x=>x.n!==n&&!evEmpty(x));
  const d=fresh();EVF.forEach(k=>{S[k]=t[k]!==undefined?evClone(t[k]):d[k]});S.evVer=n;return true}
 const hasZh=s=>/[一-鿿]/.test(s);
 // 版本鎖定：小組確認讀取結果（關卡 1）時，把這次要分析的內容存成快照（S.snap）。之後的聚焦、研究問題、關鍵字、搜尋都讀快照，
@@ -496,18 +514,20 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
  // 聚焦問題的選擇（對象、情境、要比較的結果）放在最前面：以前只進研究問題的文字，沒有進關鍵字規劃，搜尋就漏了「結果」那一半（例如行人體感溫度）
  const focusNotes=QS().map(q=>S.scope[q[1]]?"聚焦選擇："+S.scope[q[1]]:"").filter(Boolean);
  const notes=[...focusNotes,...rdItems().map(o=>o.text).filter(Boolean)];
- RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
+ // 規劃完再到 OpenAlex 查證主題詞（看候選說法實際有幾篇論文在用），查不到就用原本的規劃
+ RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>RFAI.groundPlan?RFAI.groundPlan(r).catch(()=>r):r).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
   S.kwEn=S.kwEn||{};S.kwSyn={};
-  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
+  const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=!k.grounded&&k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
    if(known&&known.en.toLowerCase()!==en){syn=[en,...syn];en=known.en}
-   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect"}});
+   if(hasZh(name))S.kwEn[name]=en;S.kwSyn[en.toLowerCase()]=syn.slice(0,4);return{name:hasZh(name)?name:en,core:k.role==="core",aspect:k.role==="aspect",weak:!!k.weak}});
   const mine=S.kw.filter(k=>!before.includes(k)&&!ks.some(x=>x.name===k));
   // 觀點詞：畫布上提到的其他概念（比較的條件、可能的機制、子問題），列出來讓小組看到有沒有漏掉，但不加進搜尋條件（加了會讓查詢太嚴）
   S.kwAspect=ks.filter(k=>k.aspect).map(k=>k.name);
   const cv=canvasTerms().filter(t=>!ks.some(x=>x.name===t)&&!mine.includes(t)); // 畫布短詞不會被模型規劃的結果蓋掉
   cv.forEach(t=>{if(hasZh(t)&&!S.kwEn[t])translateKw(t)});
-  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=[];S.kwBy=AIN();S.focus=r.focus;S.disc=r.discipline||"";S.kwV=2;
-  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);saveS();re()},
+  S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=ks.filter(k=>k.weak).map(k=>k.name);S.kwBy=AIN();S.focus=r.focus;if(S.discBy!=="學生")S.disc=r.discipline||"";S.kwV=2;
+  aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);
+  (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?(g.how==="none"?"論文裡的用法跟這個意思都不同":"都太少人用")+"，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="ai"?"（看過論文標題，用法跟意思相符）":"")+(g.anchor&&Number.isFinite(g.pair)?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
  err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
 function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||!S.kw.length)return;
@@ -903,8 +923,8 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  <select id="dmo" ${dis} style="margin-top:8px" aria-label="預設查證模式">${["procon","claim"].map(m=>`<option value="${m}" ${m===(q.mode||"procon")?"selected":""}>${MODE_N[m]}</option>`).join("")}</select>
  <h3 style="margin:20px 0 4px">AI 權限</h3><div class="sm mute">由老師設定 Agent 可以協助到什麼程度；設定由後端強制執行，組員無法自行調整。</div>
  <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><select id="dlv" ${teach?"":"disabled"} aria-label="AI 權限 Level">${LVN.map((n,l)=>`<option value="${l}" ${l===q.LV?"selected":""}>Level ${l}．${n}</option>`).join("")}</select><span class="sm mute" id="dlvs">${teach?"變更後立即生效":"只有老師可以調整"}</span></div>
- <h3 style="margin:20px 0 4px">小組報告</h3><div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，類型會自動判斷（判斷錯了再手動改）；之後可在畫布上方一鍵開啟。</div>
- <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;margin-top:8px"><select id="d6" ${dis} aria-label="報告類型">${(window.RFCOURSE?RFCOURSE.REPORT_TYPES:["PowerPoint","Canva","Google Slides","Google Docs","Notion","其他"]).map(t=>`<option ${t===(rptType(q)||"PowerPoint")?"selected":""}>${t}</option>`).join("")}</select><input id="d7" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${dis}></div>
+ <h3 style="margin:20px 0 4px">小組報告</h3><div class="sm mute">貼上 PowerPoint（含線上版）、Canva、Google Slides／Docs 等報告連結，會自動判斷是哪一種；之後可在畫布上方一鍵開啟。貼錯了可以直接改，或清空後儲存。</div>
+ <div style="margin-top:8px"><input id="d7" placeholder="https://..." value="${esc(q.reportUrl||"")}" ${dis}></div><div class="sm mute" id="d6t" style="margin-top:4px">${q.reportUrl&&rptType(q)?"判斷為："+esc(rptType(q)):""}</div>
  <label>邀請連結</label><div style="display:flex;gap:8px"><input readonly value="${LIVE()?esc(q._lastInvite||""):"https://researchflow.app/join/"+q.code}" placeholder="${own?"在上方輸入 Email 並按「邀請」，會產生一次性連結":"只有 Owner 可以產生邀請連結"}" id="lk"><button id="cp">${I("copy")}複製</button></div>
  <div class="acts" style="justify-content:flex-end;margin-top:22px"><button id="dc">關閉</button>${own?'<button class="pri" id="ds">儲存變更</button>':""}</div>`;
  const live=LIVE();
@@ -946,7 +966,7 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  $("#dc").onclick=()=>d.close();
  $("#ds")&&($("#ds").onclick=async()=>{rd();
   const asel=$("#dasg"),aPick=asel?asgOf(courseOfP(q)).find(a=>a.id===asel.value):null,asgF=asel?{assignmentId:aPick?aPick.id:"",assignmentTitle:aPick?aPick.title:""}:{};
-  const fields={...asgF,name:$("#d1").value,course:$("#d2").value,req:$("#d3").value,due:$("#d4").value,field:$("#d5").value,reportType:$("#d6")?.value||q.reportType,reportUrl:fixUrl($("#d7")?.value),mode:$("#dmo")?.value||q.mode};
+  const fields={...asgF,name:$("#d1").value,course:$("#d2").value,req:$("#d3").value,due:$("#d4").value,field:$("#d5").value,reportType:(window.RFCOURSE&&RFCOURSE.reportTypeOf(fixUrl($("#d7")?.value)))||"",reportUrl:fixUrl($("#d7")?.value),mode:$("#dmo")?.value||q.mode};
   if($("#d7")?.value.trim()&&!fields.reportUrl){alert("報告連結的格式不正確，請貼上完整的網址（例如 https://docs.google.com/…）。");$("#d7").focus();return}
   // 改了預設查證模式：還沒開始搜尋的研究直接套用新的模式（之前在確認頁臨時選的模式會蓋過預設值，看起來就像沒改到）
   const modeChanged=fields.mode!==q.mode;if(modeChanged&&!q.S.rounds)q.S.mode="";
@@ -960,8 +980,8 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
    return;
   }
   Object.assign(q,fields);q.trace.push({t:nowT(),w:U[ME].n,x:"更新研究檔案與組員設定。",k:"user"});d.close();renderProj();if(p===q){openWsUI();renderPane()}});
- // 貼上或修改報告連結時自動選好類型；判斷不出來（不是網址）就不動
- const d7=$("#d7"),d6=$("#d6");if(d7&&d6&&window.RFCOURSE)d7.oninput=()=>{const t=RFCOURSE.reportTypeOf(fixUrl(d7.value)||d7.value);if(t)d6.value=t};
+ // 貼上或修改報告連結時，在欄位下方顯示判斷出的類型（儲存時自動寫入 reportType，不用再手動選）
+ const d7=$("#d7"),d6t=$("#d6t");if(d7&&d6t&&window.RFCOURSE)d7.oninput=()=>{const t=RFCOURSE.reportTypeOf(fixUrl(d7.value)||d7.value);d6t.textContent=t?"判斷為："+t:""};
  d.showModal()}
 $("#cfg").onclick=()=>openPD(projects.indexOf(p));
 // 網址沒寫 http(s):// 就補上；不是 http／https 的（例如 javascript:）一律不接受
@@ -972,6 +992,13 @@ const rptLabel=q=>window.RFCOURSE?RFCOURSE.reportLabel(q.reportType,q.reportUrl)
 $("#rpt").onclick=()=>{const u=fixUrl(p.reportUrl);if(u){window.open(u,"_blank","noopener");return}
  if(!canEdit()||myRole()!=="Owner"){alert(p.reportUrl?"報告連結的格式不正確，請 Owner 到「研究檔案」重新貼上。":"還沒有設定報告連結。只有 Owner 可以在「研究檔案」裡設定。");return}
  openPD(projects.indexOf(p));setTimeout(()=>$("#d7")?.focus(),80)};
+// 貼錯連結時：按 ✕ 清掉報告連結與類型，之後可以在「小組報告」或「研究檔案」重新貼上
+$("#rptx").onclick=async()=>{if(!p.reportUrl||!canEdit()||myRole()!=="Owner")return;
+ if(!confirm("移除小組報告連結？\n"+p.reportUrl+"\n\n移除後可以重新貼上新的連結。"))return;
+ const q=p;
+ try{if(LIVE()&&q.fid)await RFDB.updateProjectSettings(q.fid,{reportUrl:"",reportType:""})}catch(err){alert("移除失敗："+(err?.message||err));return}
+ q.reportUrl="";q.reportType="";if(LIVE()&&q.fid)traceLive(q.fid,U[ME].n,"移除小組報告連結。","user");
+ renderProj();openWsUI();setStat("已移除報告連結")};
 
 /* 工作空間 */
 const cv=$("#cv"),ctx=cv.getContext("2d",{desynchronized:true});
@@ -983,7 +1010,7 @@ function openWs(i){p=projects[i];S=p.S;sel.clear();tool="sel";editing={};linkFro
 function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb","_unsubPins","_unsubNudges"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
 // 離開畫布只停止畫布同步；研究狀態、歷程、分工、留言、提醒繼續訂閱（主頁的待辦列表要用）
 function leaveWs(){if($("#ws").classList.contains("full")){setFull(false);try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}}if(p&&p._unsubObjs){p._unsubObjs();p._unsubObjs=null}LS("rf.open","");goHome()}
-/* 小組共用的 Agent 流程狀態、Canvas 版本、Token 用量、研究歷程（live 模式）：訂閱 Firestore，組員做的每一步大家都看得到 */
+/* 小組共用的 Agent 流程狀態、畫布版本、Token 用量、研究歷程（live 模式）：訂閱 Firestore，組員做的每一步大家都看得到 */
 function attachLiveState(proj){if(!LIVE()||!proj.fid||proj._unsubState)return;
  proj._unsubState=RFDB.subscribeResearchState(proj.fid,st=>{
   if(st.canvas)proj.ver=st.canvas.ver||0;
@@ -1050,13 +1077,13 @@ function attachLiveObjects(proj){if(window.RF_MODE!=="live"||!proj.fid||proj._un
   else{proj.H=proj.H.slice(0,proj.hi+1);proj.H.push(JSON.stringify(objs));proj.hi=proj.H.length-1}
   draw();insp();renderPane();teachTick()
  },err=>{console.error("[ResearchFlow] 讀取畫布物件失敗：",err);setStat("讀取畫布物件失敗，請檢查網路或 Firebase 設定","r")})}
-// bump：這次同步算不算「一次畫布修改」（要不要讓共用的 Canvas 版本號 +1）。使用者的操作（op／復原／重做）算；
+// bump：這次同步算不算「一次畫布修改」（要不要讓共用的 畫布版本號 +1）。使用者的操作（op／復原／重做）算；
 // Agent 只是在物件上標記「已讀取／已確認／辨識結果」時不算，否則剛分析完就會被提示「畫布有新修改」。
 function syncObjsLive(bump=true){if(!LIVE()||!p||!p.fid||!canEdit())return;
  p._pushed=p._pushed||new Map();
  const{upserts,deletes,nextPushed}=diffForPush(p.objs,p._pushed);
  p._pushed=nextPushed;
- if(bump)RFDB.bumpCanvasVersion(p.fid).catch(err=>console.error("[ResearchFlow] 更新 Canvas 版本失敗：",err));
+ if(bump)RFDB.bumpCanvasVersion(p.fid).catch(err=>console.error("[ResearchFlow] 更新 畫布版本失敗：",err));
  upserts.forEach(o=>RFDB.setCanvasObject(p.fid,o.id,toRemoteObj(o),ME).catch(err=>console.error("[ResearchFlow] 同步畫布物件失敗：",err)));
  deletes.forEach(id=>RFDB.deleteCanvasObject(p.fid,id).catch(err=>console.error("[ResearchFlow] 刪除畫布物件失敗：",err)))}
 /* AI（Claude，經後端代理）。AI()：這個研究現在能不能用模型——已登入、後端可用，而且老師沒有把 AI 權限關掉（Level 0）。 */
@@ -1108,6 +1135,7 @@ const aiLog=x=>{if(LIVE()&&p.fid)RFDB.addTrace(p.fid,{w:"Agent",x,k:"ai"},ME).ca
 function openWsUI(){aiChip();fbChip();if(window.RFLLM)RFLLM.detect().then(aiChip);$("#pt").textContent=p.name;$("#pst").textContent=p.stage;$("#rolelab").textContent=isT()?"老師：唯讀檢視．AI 權限 Level "+p.LV:myRole()==="Viewer"?"Viewer：唯讀":"AI 權限 Level "+p.LV;
  $("#pres").innerHTML=p.members.filter(m=>!U[m.u].pending).map(m=>av(m.u,26)).join("");
  $("#rpt").innerHTML=`${I("ext")}${p.reportUrl?esc(rptLabel(p)):"小組報告"}`;
+ $("#rptx").classList.toggle("hide",!(p.reportUrl&&canEdit()&&myRole()==="Owner")); // 只有 Owner 能設定報告連結，所以也只有 Owner 看得到移除鈕
  $("#rpt").title=p.reportUrl?"開啟「"+rptLabel(p)+"」："+p.reportUrl:"尚未設定報告連結，點一下即可加入";
  $$(".tools button:not(#undo):not(#redo)").forEach(b=>b.disabled=!canEdit()&&b.dataset.t&&!["hand","sel","pin"].includes(b.dataset.t));$("#pintool").classList.toggle("hide",!isT());$("#imgup").disabled=!canEdit();pinTab();$("#undo").disabled=$("#redo").disabled=!canEdit();$("#sim").classList.toggle("hide",isT()||LIVE())}
 function resize(){const r=$("#cvw").getBoundingClientRect(),d=devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);p&&draw()} // 顯示大小由 CSS 決定（填滿外框），這裡只設定畫素數量
@@ -1345,13 +1373,29 @@ async function addImages(files,at){files=[...files].filter(f=>/^image\//.test(f.
  const big=files.find(f=>f.size>20*1024*1024);if(big){alert("「"+big.name+"」超過 20MB，請換一張小一點的圖片。");return}
  const r=cv.getBoundingClientRect();let [x,y]=at||[(r.width/2-p.v.x)/p.v.z-180,(r.height/2-p.v.y)/p.v.z-120];
  for(const f of files){while(p.objs.some(k=>k.type==="img"&&Math.abs(k.x-x)<12&&Math.abs(k.y-y)<12)){x+=32;y+=32} // 同一個位置已經有圖片就錯開，不要整張疊在一起
-  const [nw,nh]=await imgSize(f),iw=Math.min(360,nw||360),ih=Math.round(iw*(nh||3)/(nw||4));
+  const [nw,nh]=await imgSize(f),iw=Math.min(240,nw||240),ih=Math.round(iw*(nh||3)/(nw||4));
   const o=mkO({type:"img",by:ME,x,y,iw,ih,url:"",name:f.name.slice(0,80),aiRead:"（圖片："+f.name.slice(0,40)+"）"});p.objs.push(o);draw();setStat("圖片上傳中…");
   try{if(LIVE()&&p.fid){const u=await RFDB.uploadImage(p.fid,f);o.url=u.url;o.path=u.path}
    else o.url=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=no;fr.readAsDataURL(f)});
-   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）")}
+   o.mod=ME;o.ver++;op("加入圖片："+f.name.slice(0,40));setStat(LIVE()?"圖片已上傳（原圖，組員都看得到）":"圖片已加入（展示模式不會儲存）");readImgAI(o,f)}
   catch(err){p.objs=p.objs.filter(k=>k!==o);draw();alert("圖片上傳失敗："+(err?.message||err))}
   x+=24;y+=24}}
+// 圖片辨識：上傳後請 AI 看圖片內容寫成文字（放進「AI 讀取結果」，可修正），分析畫布時才會用到圖片裡的資訊。
+// 後端一次只收 1 張、base64 2MB 以內的 PNG，所以先縮到長邊 1280 像素，太大再縮。
+async function imgB64(f){const u=URL.createObjectURL(f);try{const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=u});
+ for(let side=1280;side>=400;side=Math.round(side*.75)){const k=Math.min(1,side/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.naturalWidth*k));c.height=Math.max(1,Math.round(im.naturalHeight*k));
+  const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const b=c.toDataURL("image/png").split(",")[1];if(b.length<1.9e6)return b}
+ return ""}finally{URL.revokeObjectURL(u)}}
+async function readImgAI(o,f){if(!AIV())return;const proj=p,ph="（圖片："+String(f.name).slice(0,40)+"）";
+ try{const b=await imgB64(f);if(!b)return;setStat("AI 讀取圖片內容中…");const txt=await RFAI.readImage(b,f.name);
+  if(p!==proj||!txt||!p.objs.includes(o)||o.aiRead!==ph)return; // 等待期間學生已經自己改了讀取結果就不覆蓋
+  o.aiRead=ph+"（AI 讀圖，請對照原圖）"+txt;o.hwBy=AIN();o.mod=ME;o.ver++;draw();insp();syncObjsLive(false);aiLog(`${AIN()} 讀取圖片「${String(f.name).slice(0,40)}」：${txt.slice(0,60)}${txt.length>60?"…":""}`);setStat("已讀取圖片內容（可在右邊修正）");if(pane==="agent"&&S.step===1)renderPane()}
+ catch(e){console.warn("[ResearchFlow] AI 讀取圖片失敗，保留檔名：",e?.message||e);setStat("圖片已加入（AI 沒有讀到內容，可自己在右邊補充說明）")}}
+// 網站更新後，舊分頁還在跑舊程式（11/10：在部署前打開的分頁，上傳圖片沒有被 AI 讀、聚焦問題變成通用範例）。每 5 分鐘與切回分頁時檢查版本號，有新版本就提示重新整理。
+async function verCheck(){try{if(document.getElementById("newver"))return;const t=await (await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})).text(),m=t.match(/RF_VER = "([^"]+)"/);
+ if(m&&window.RF_VER&&m[1]!==window.RF_VER){const d=document.createElement("div");d.id="newver";d.setAttribute("role","status");d.style.cssText="position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:999;background:#1d1d1f;color:#fff;padding:8px 10px 8px 16px;border-radius:99px;font-size:14px;box-shadow:0 4px 16px #0003;display:flex;gap:10px;align-items:center";
+  d.innerHTML='網站有新版本，重新整理才會用到 <button style="color:#1d1d1f;background:#fff;border:0;border-radius:99px;padding:4px 12px;font-size:13px">重新整理</button>';d.querySelector("button").onclick=()=>location.reload();document.body.appendChild(d)}}catch{}}
+setInterval(verCheck,300000);addEventListener("focus",verCheck);
 $("#imgup").onclick=()=>$("#imgf").click();
 $("#imgf").onchange=e=>{addImages(e.target.files);e.target.value=""};
 $("#cvw").addEventListener("dragover",e=>{if([...(e.dataTransfer?.items||[])].some(i=>i.kind==="file")){e.preventDefault();e.dataTransfer.dropEffect="copy"}});
@@ -1443,6 +1487,18 @@ async function pinDelete(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)
  try{if(LIVE()&&p.fid)await RFDB.deletePin(p.fid,pn.id);else p.pins=p.pins.filter(x=>x!==pn);closePin();pinTab();if(pane==="pins")renderPane()}
  catch(err){alert("刪除失敗："+(err?.message||err))}}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#ws").classList.contains("full")&&!document.fullscreenElement&&!document.querySelector("dialog[open]")&&document.activeElement.tagName!=="INPUT")setFull(false)});
+// 點彈窗外面的灰色背景＝按 Esc：走同一條路（送出 cancel 事件，沒被擋下才關閉），所以確認視窗當成「取消」、必須選擇的視窗（查證模式）會照原本的 oncancel 擋住。
+// 有輸入欄位的彈窗（研究檔案、個人檔案、評分配比等）：沒改過東西就直接關；已經改了內容（目前的值跟一打開時不同）會先問「放棄變更並關閉？」，避免填到一半不小心丟掉。
+// 按下與放開都要在背景上才算，在輸入框拖曳選字、放開在彈窗外不會誤關。
+let dlgDownOut=false;
+const dlgOutside=(d,e)=>{const r=d.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom};
+document.addEventListener("pointerdown",e=>{dlgDownOut=e.target instanceof HTMLDialogElement&&e.target.open&&dlgOutside(e.target,e)});
+const dlgDirty=d=>[...d.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]):not([readonly]),textarea,select')].some(x=>x.tagName==="SELECT"?x.selectedIndex!==Math.max(0,[...x.options].findIndex(o=>o.defaultSelected)):/^(checkbox|radio)$/.test(x.type)?x.checked!==x.defaultChecked:x.value!==x.defaultValue);
+let dlgAsking=false;
+document.addEventListener("click",async e=>{const d=e.target;if(!(d instanceof HTMLDialogElement)||!d.open||dlgAsking)return;
+ const was=dlgDownOut;dlgDownOut=false;if(!was||!dlgOutside(d,e))return;
+ if(d.id!=="ask"&&dlgDirty(d)){dlgAsking=true;const ok=await ask("這個視窗有還沒儲存的變更，要放棄並關閉嗎？","放棄並關閉","繼續編輯");dlgAsking=false;if(!ok||!d.open)return}
+ const ev=new Event("cancel",{cancelable:true});d.dispatchEvent(ev);if(!ev.defaultPrevented)d.close()});
 $$(".tools [data-t]").forEach(b=>b.onclick=()=>{tool=b.dataset.t;linkFrom=null;$$(".tools [data-t]").forEach(x=>x.classList.toggle("on",x===b));cv.style.cursor=tool==="sel"?"default":tool==="hand"?"grab":"crosshair";draw()});
 function openEd(o,q){const i=document.createElement("textarea"),z=p.v.z;i.className="ti";i.rows=1;i.value=o?o.text:"";i.style.left=(q[0]*z+p.v.x)+"px";i.style.top=(q[1]*z+p.v.y-16)+"px";
  if(o&&(o.ml||o.text.includes("\n")))i.style.width=Math.max(220,(tlay(o).w+14)*z)+"px";
@@ -1521,13 +1577,13 @@ const RD=[[0,1],[2,3],[4]],RQ=[["generative AI university students self-directed
 const NEED={analyze:1,re:1,ok1:1,ask:1,rq:2,myrq:1,go:1,round:1,expand:1,board:2,sum:3,outline:3,report:99};
 const lockedHTML=()=>`<div class="box"><b>此作業未開放 AI</b><p class="sm mute" style="margin:6px 0 0">老師設定為 Level 0。你們仍可使用共享畫布、專案管理與協作功能。</p></div>`;
 const repBtn=()=>`<div class="box sm" style="margin-top:22px"><div class="mute">目前權限：Level ${p.LV}（${LVN[p.LV]}）</div><div class="acts" style="margin-top:8px"><button data-a="report">${I("file")}請 Agent 完成整份報告</button></div></div>`;
-function stale(){if(!S.ver||S.step<1||p.ver<=S.ver||p.LV===0)return "";const n=p.ver-S.ver;return `<div class="box warn sm">自上次 Agent 分析（v${S.ver}）後，Canvas 已有 ${n} 項新修改。${S.snap&&S.snap.length?"這一輪分析鎖定的是 v"+(S.snapVer||S.ver)+" 的內容，新修改不會影響目前的結果。":""}是否分析新的研究內容？${S.rounds||S.ev.length?`<div class="mute" style="margin-top:4px">已搜尋過的證據會保存成「證據 v${S.evVer||1}」，用新內容另開下一個版本重新搜尋，之後可以在證據頁切換。</div>`:""}<div class="acts"><button class="pri" data-a="re">重新分析新增內容</button></div></div>`}
+function stale(){if(!S.ver||S.step<1||p.ver<=S.ver||p.LV===0)return "";const n=p.ver-S.ver;return `<div class="box warn sm">自上次 Agent 分析（v${S.ver}）後，畫布已有 ${n} 項新修改。${S.snap&&S.snap.length?"這一輪分析鎖定的是 v"+(S.snapVer||S.ver)+" 的內容，新修改不會影響目前的結果。":""}是否分析新的研究內容？${S.rounds||S.ev.length?`<div class="mute" style="margin-top:4px">已搜尋過的證據會保存成「證據 v${S.evVer||1}」，用新內容另開下一個版本重新搜尋，之後可以在證據頁切換。</div>`:""}<div class="acts"><button class="pri" data-a="re">重新分析新增內容</button></div></div>`}
 function updStale(){const e=$("#stl");if(e){e.innerHTML=stale();bind(e)}}
 function agentHTML(){const s=S.step;
  const st=["待命，等待你們分析研究方向。","等待你們確認手寫與內容的讀取結果。","研究範圍偏廣，需要先聚焦。","等待你們回答聚焦問題。","等待你們確認研究問題與搜尋策略。",`已搜尋 ${S.rounds}／${capOf()} 輪，等待你們決定下一步。`,"證據已確認完成，可以開始整理報告。"][s];
  return `<div class="ah"><span class="ab">${SPARK(26)}</span><div><b>Research Agent</b><div class="sm mute">${st}</div></div></div>
  <div class="flow">${STEPS.map((x,i)=>i!==s&&i<=Math.max(s,S.max||0)&&canEdit()?`<span class="${i<s?"d":""} go" data-a="jump" data-k="${i}" role="button" tabindex="0" title="${i<s?"回到這一步修改":"回到剛才的進度"}">${x}</span>`:`<span class="${i<s?"d":i===s?"c":""}">${x}</span>`).join("")}</div>${Math.max(s,S.max||0)>0&&canEdit()?`<p class="sm mute" style="margin:-4px 0 8px">點上方任何一個走過的步驟都可以回去修改，已經找到的證據會保留。</p>`:""}
- <div class="hl sm"><span>Canvas 版本</span><span>${S.snap&&S.snap.length?"已鎖定 v"+(S.snapVer||S.ver):"分析 "+(S.ver?"v"+S.ver:"—")}／最新 v${p.ver}</span></div><div class="hl sm"><span>${LIVE()?"搜尋輪數":"Token 用量與搜尋輪數（示範）"}</span><span>${LIVE()?"":S.tok.toLocaleString()+" / 60,000　"}${S.rounds}／${capOf()}</span></div>
+ <div class="hl sm"><span>畫布版本</span><span>${S.snap&&S.snap.length?"已鎖定 v"+(S.snapVer||S.ver):"分析 "+(S.ver?"v"+S.ver:"—")}／最新 v${p.ver}</span></div><div class="hl sm"><span>${LIVE()?"搜尋輪數":"Token 用量與搜尋輪數（示範）"}</span><span>${LIVE()?"":S.tok.toLocaleString()+" / 60,000　"}${S.rounds}／${capOf()}</span></div>
  <div id="stl">${stale()}</div>`+(busy?`<div class="box sm warn"><b>Agent 處理中</b><div class="mute">${esc(busy)}</div></div>`:"")+aiNote()+(p.LV===0?lockedHTML():body())+repBtn()}
 // 聚焦問題：live 模式用 Agent 針對這份畫布提出的問題（S.qs3），demo 模式用內建範例。格式統一成 [問題, 代號, 選項]
 const scv=k=>String(S.scope[k]||"").split("、").map(x=>x.trim()).filter(Boolean);
@@ -1539,12 +1595,12 @@ const anlHint=()=>anlN()?`目前選取了 ${anlN()} 項，Agent 只會讀這些�
 function anlSync(){const b=$("#anlBtn span"),h=$("#anlHint");if(b)b.textContent=anlLabel();if(h)h.textContent=anlHint()}
 function body(){const s=S.step,sc=S.scope;
  if(s===0)return `<p class="sm mute" id="anlHint">${anlHint()}</p><div class="acts"><button class="pri" data-a="analyze" id="anlBtn" ${canEdit()?"":"disabled"}>${I("spark")}<span>${anlLabel()}</span></button></div>`;
- if(s===1){const rd=S.rd.map(getO).filter(Boolean),row=o=>o.type==="link"||o.hwSub?"":`<div class="box sm">${av(o.by,18)} ${o.type==="text"?esc(o.text):`${o.shape?"圖示":"手寫內容"}　<input id="rd${o.id}" value="${esc(o.aiRead)}" aria-label="AI 讀取結果">${(o.alts||[]).length?`<div class="chips" style="margin:6px 0 0"><span class="mute" style="font-size:12px;align-self:center">其他可能：</span>${o.alts.map(x=>`<button data-alt="rd${o.id}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`:""}`}</div>`;
+ if(s===1){const rd=S.rd.map(getO).filter(Boolean),row=o=>o.type==="link"||o.hwSub?"":`<div class="box sm">${av(o.by,18)} ${o.type==="text"?esc(o.text):o.type==="img"?`圖片內容${/^（圖片：[^）]*）$/.test(o.aiRead||"")&&AIV()?` <button data-a="readimg" data-k="${esc(o.id)}" style="font-size:12px;padding:2px 9px">讓 AI 讀這張圖</button>`:""}<textarea id="rd${o.id}" rows="4" style="width:100%;box-sizing:border-box;margin-top:6px;font:inherit" aria-label="AI 讀取結果">${esc(o.aiRead)}</textarea>`:`${o.shape?"圖示":o.type==="audio"?"錄音":"手寫內容"}　<input id="rd${o.id}" value="${esc(o.aiRead)}" aria-label="AI 讀取結果">${(o.alts||[]).length?`<div class="chips" style="margin:6px 0 0"><span class="mute" style="font-size:12px;align-self:center">其他可能：</span>${o.alts.map(x=>`<button data-alt="rd${o.id}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`:""}`}</div>`;
   const g=(t,l)=>{const a=rd.filter(o=>t?o.tag===t:!["claim","counter","question"].includes(o.tag));return a.length?`<h3>${l}</h3>`+a.map(row).join(""):""};
-  return `<p class="sm mute">分析範圍：${rd.length} 個物件（Canvas Version ${S.ver}）。手寫內容請確認或直接修正。</p>${g("claim","支持方向")}${g("counter","限制方向")}${g("question","待驗證問題")}${g("","其他內容")}${LIVE()?"":`<div class="box sm"><b>初步研究問題</b><br>生成式 AI 是否能幫助大學生學習？</div>`}<div class="acts"><button class="pri" data-a="ok1">${I("check")}讀取正確</button><button data-a="fix">需要修正</button></div>`}
+  return `<p class="sm mute">分析範圍：${rd.length} 個物件（畫布版本 ${S.ver}）。手寫內容請確認或直接修正。</p>${g("claim","支持方向")}${g("counter","限制方向")}${g("question","待驗證問題")}${g("","其他內容")}${LIVE()?"":`<div class="box sm"><b>初步研究問題</b><br>生成式 AI 是否能幫助大學生學習？</div>`}<div class="acts"><button class="pri" data-a="ok1">${I("check")}讀取正確</button><button data-a="fix">需要修正</button></div>`}
  if(s===2){const broad=S.tooBroad!==false,rs=S.scopeReasons||["使用「是否能幫助」等高度概括的問法","未指定研究對象與情境","缺乏明確時間範圍","同時包含效果、風險與學術誠信等不同層次"];
   return `<h3>Agent 判定：${broad?"研究範圍過於廣泛":"研究範圍已足夠聚焦"}</h3>${LIVE()?`<p class="sm mute">${S.scopeBy?esc(S.scopeBy.replace(/（.*$/,""))+" 讀過白板內容後判斷，聚焦選項依你們的題目產生。":"規則式判斷：依固定詞庫檢查對象、情境、結果有沒有交代。"}</p>`:""}${S.q0?`<div class="box sm"><b>初步研究問題</b><br>${esc(S.q0)}</div>`:""}${rs.map(x=>`<div class="hl sm"><span>${I(broad?"alert":"check")}${esc(x)}</span></div>`).join("")}<p class="sm mute">${broad?"Agent 不會替你們縮小問題，也不會立刻搜尋，會先提出引導式問題。":"接下來請確認研究問題與搜尋策略；確認之前 Agent 不會搜尋。"}</p><div class="acts"><button class="pri" data-a="ask">${broad&&QS().length?"開始聚焦":"繼續"}</button></div>`}
- if(s===3)return `<h3>聚焦問題</h3>`+(QS().length?"":`<p class="sm mute">Agent 認為目前的範圍不需要再追問，可以直接進入研究問題。</p>`)+QS().map(q=>`<div class="sm">${esc(q[0])}<span class="mute">（可複選）</span></div><div class="chips">${q[2].map(x=>`<button data-q="${esc(q[1])}" data-v="${esc(x)}" class="${scv(q[1]).includes(x)?"on":""}">${esc(x)}</button>`).join("")}${LIVE()?`<input data-qo="${esc(q[1])}" value="${esc(scv(q[1]).filter(x=>!q[2].includes(x)).join("、"))}" placeholder="其他（自行輸入，多個用、分開）" style="width:150px;font-size:13px;padding:3px 10px;border-radius:99px">`:""}</div>`).join("")+(p.LV>=2?`<div class="acts"><button class="pri" data-a="rq" ${QS().some(q=>!sc[q[1]])?"disabled":""}>產生 Research Question</button></div>`:`<div class="sm mute">此作業未開放研究問題建議，請由小組自行撰寫。</div><input id="myrq" placeholder="輸入你們的 Research Question" style="margin-top:8px"><div class="acts"><button class="pri" data-a="myrq" ${QS().some(q=>!sc[q[1]])?"disabled":""}>使用這個研究問題</button></div>`);
+ if(s===3)return `<h3>聚焦問題</h3>`+(LIVE()&&!S.qs3?`<p class="sm" style="color:var(--warn,#a15c00)">這些是通用的範例選項：AI 這次沒有產生針對你們題目的選項（可能是網路或 AI 暫時無法使用，或網頁是舊版本）。請重新整理網頁後回到「判定範圍」再試一次，或在「其他」自己輸入。</p>`:"")+(S.scopeKept&&Object.keys(S.scope||{}).length?`<p class="sm mute">已帶入上次的聚焦選擇（重新分析不用從頭選），要改再點。</p>`:"")+(QS().length?"":`<p class="sm mute">Agent 認為目前的範圍不需要再追問，可以直接進入研究問題。</p>`)+QS().map(q=>`<div class="sm">${esc(q[0])}<span class="mute">（可複選）</span></div><div class="chips">${q[2].map(x=>`<button data-q="${esc(q[1])}" data-v="${esc(x)}" class="${scv(q[1]).includes(x)?"on":""}">${esc(x)}</button>`).join("")}${LIVE()?`<input data-qo="${esc(q[1])}" value="${esc(scv(q[1]).filter(x=>!q[2].includes(x)).join("、"))}" placeholder="其他（自行輸入，多個用、分開）" style="width:150px;font-size:13px;padding:3px 10px;border-radius:99px">`:""}</div>`).join("")+(p.LV>=2?`<div class="acts"><button class="pri" data-a="rq" ${QS().some(q=>!sc[q[1]])?"disabled":""}>產生 Research Question</button></div>`:`<div class="sm mute">此作業未開放研究問題建議，請由小組自行撰寫。</div><input id="myrq" placeholder="輸入你們的 Research Question" style="margin-top:8px"><div class="acts"><button class="pri" data-a="myrq" ${QS().some(q=>!sc[q[1]])?"disabled":""}>使用這個研究問題</button></div>`);
  if(s===4){upgradeKw();const rows=S.strat?[...S.strat.map(r=>[r.label,r.value]),["搜尋方式","只比對文獻的標題與摘要，而且每個主題詞（或它的同義詞）都要出現；結果依相關度排序"]]:[["研究對象",sc.who],["研究工具","生成式 AI"],["研究情境",sc.ctx],["主要結果",sc.out],["限制／反向結果","認知依賴、批判思考"],["時間範圍","2020–2026"],["證據類型","實證研究（實驗、調查、縱貫）"]];
   const m=MODE(),cm=m==="claim",cands=p.objs.filter(o=>o.type==="text"&&o.tag!=="evidence"&&o.tag!=="question").map(o=>o.text);
   const modeBox=`<div class="box sm mode-${m}"><b>${I("search")}目前的查證模式：${MODE_N[m]}</b>${modeTable(m)}
@@ -1552,9 +1608,10 @@ function body(){const s=S.step,sc=S.scope;
    +(cm?`<h3>要論證的主張</h3><p class="sm mute" style="margin:0 0 6px">主張論證模式一次專注論證一個主張。從畫布上的論點選一個，或自己輸入。</p>
    <div class="chips">${cands.map((t,i)=>`<button data-a="claim" data-k="${i}" class="${S.claim===t?"on":""}">${esc(t)}</button>`).join("")}</div>
    <div style="display:flex;gap:6px"><input id="cli" placeholder="或自行輸入要查證的主張" value="${esc(S.claim&&!cands.includes(S.claim)?S.claim:"")}"><button data-a="claimin">使用</button></div>`:"");
-  return modeBox+`<h3>Research Question</h3><input id="rqi" value="${esc(S.rq)}"><h3>搜尋關鍵字</h3>${LIVE()?`<p class="sm mute" style="margin:0 0 8px">粗體是主題詞，搜尋結果一定會提到它們；虛線框是觀點詞，列出畫布上提到的其他概念，不加進搜尋條件。點關鍵字可以切換成主題詞，點英文可以修改。</p>`:""}${planBusy?`<p class="sm aiby">${I("spark")}${esc(AIN())} 正在依題目與主張規劃關鍵字（約 20 秒），完成後會自動換上…</p>`:S.kwBy?`<p class="sm aiby">${I("spark")}由 ${esc(S.kwBy)} 規劃${S.focus?"：查證重點是「"+esc(S.focus)+"」":""}</p>`:""}<div class="chips">${S.kw.map((k,i)=>`<span class="kwc ${kwIsCore(k)?"core":(S.kwAspect||[]).includes(k)?"asp":""}"><span class="kwn" data-a="kwcore" data-k="${i}" title="${kwIsCore(k)?"主題詞：結果必須提到。點一下改成範圍詞":(S.kwAspect||[]).includes(k)?"觀點詞：畫布上提到的其他概念，不加進搜尋條件。點一下改成主題詞":"範圍詞：用來縮小範圍。點一下改成主題詞"}">${esc(k)}</span>${hasZh(k)?`<span class="mute">→</span>${kwBusy.has(k)?`<span class="mute">翻譯中…</span>`:`<span class="kwt" data-a="kwen" data-k="${i}" title="點一下修改英文">${esc((S.kwEn||{})[k]||"未翻譯")}</span>`}`:""}<button data-a="kwx" data-k="${i}" aria-label="移除關鍵字 ${esc(k)}" title="移除">×</button></span>`).join("")}</div>
+  const addBox=S.addNote?`<div class="box sm"><b>${I("spark")}這次新增的內容</b><br>${esc(S.addNote.summary)}<p class="mute" style="margin:6px 0 0">AI 建議：${S.addNote.suggest==="refocus"?"新增內容可能改變了研究方向，可以考慮重新聚焦題目":"新增內容仍在原本研究問題的範圍內，可以沿用"}（${esc(S.addNote.reason)}）</p>${canEdit()?`<div class="acts" style="margin-top:6px"><button data-a="refocus">重新聚焦題目</button></div>`:""}</div>`:"";
+  return addBox+modeBox+`<h3>Research Question</h3><input id="rqi" value="${esc(S.rq)}"><h3>搜尋關鍵字</h3>${LIVE()?`<p class="sm mute" style="margin:0 0 8px">粗體是主題詞，搜尋結果一定會提到它們；虛線框是觀點詞，列出畫布上提到的其他概念，不加進搜尋條件。點關鍵字可以切換成主題詞，點英文可以修改。</p>`:""}${planBusy?`<p class="sm aiby">${I("spark")}${esc(AIN())} 正在依題目與主張規劃關鍵字（約 20 秒），完成後會自動換上…</p>`:S.kwBy?`<p class="sm aiby">${I("spark")}由 ${esc(S.kwBy)} 規劃${S.focus?"：查證重點是「"+esc(S.focus)+"」":""}</p>`:""}<div class="chips">${S.kw.map((k,i)=>`<span class="kwc ${kwIsCore(k)?"core":(S.kwAspect||[]).includes(k)?"asp":""}"><span class="kwn" data-a="kwcore" data-k="${i}" title="${kwIsCore(k)?"主題詞：結果必須提到。點一下改成範圍詞":(S.kwAspect||[]).includes(k)?"觀點詞：畫布上提到的其他概念，不加進搜尋條件。點一下改成主題詞":"範圍詞：用來縮小範圍。點一下改成主題詞"}">${esc(k)}</span>${hasZh(k)?`<span class="mute">→</span>${kwBusy.has(k)?`<span class="mute">翻譯中…</span>`:`<span class="kwt" data-a="kwen" data-k="${i}" title="點一下修改英文">${esc((S.kwEn||{})[k]||"未翻譯")}</span>`}`:""}<button data-a="kwx" data-k="${i}" aria-label="移除關鍵字 ${esc(k)}" title="移除">×</button></span>`).join("")}</div>
   <div style="display:flex;gap:6px"><input id="kwi" placeholder="新增關鍵字"><button data-a="kwa">${I("plus")}</button></div>
-  <h3>搜尋策略</h3>${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts"><button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button><button data-a="back3">修改範圍</button></div>`}
+  <h3>搜尋策略</h3>${discLine()}${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts"><button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button><button data-a="back3">修改範圍</button></div>`}
  if(s===5){const c=S.ev.filter(e=>e.k==="c").length,sp=S.ev.filter(e=>e.k==="s").length,uv=S.ev.filter(e=>!e.v).length,balanced=enoughOf(p);
  if(MODE()==="claim")return claimStep5();
  return `<h3>正反例證進度</h3><div class="box sm mode-procon"><b>正反例證模式</b><div class="mute" style="margin-top:3px">支持與反向的證據都要找；反向證據至少 3 筆才算平衡。</div><div class="bar" style="margin-top:8px"><i style="width:${sp+c?sp/(sp+c)*100:50}%;background:var(--ok)"></i><i style="width:${sp+c?c/(sp+c)*100:50}%;background:#e2662b"></i></div><span class="mute">支持 ${sp} 筆　｜　反向／限制 ${c} 筆</span></div>${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪查詢</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
@@ -1582,8 +1639,7 @@ function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k=
  ${S.rounds?`<h3>目前主張下可能有的潛在問題</h3>${issues.length?issues.map(x=>`<div class="box sm warn" style="margin:6px 0">${esc(x)}</div>`).join(""):`<p class="sm mute">從主張的寫法和目前的證據來看，沒有發現明顯的問題。</p>`}<div class="box sm" style="margin-top:12px">${ask}</div>`:""}
  ${ok?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}論證的證據已足夠</b><div class="mute" style="margin-top:4px">支持主張 ${sup.length} 筆，其中證據力高 ${high} 筆${uv?`；有 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${S.rounds<capOf()?`<button class="${ok?"":"pri"}" data-a="round">${ok?"繼續":"執行"}第 ${S.rounds+1} 輪：${ROUND_N[S.rounds]||"擴大範圍的補充資料（放寬出版年份）"}</button>`:""}${!ok&&S.rounds>=capOf()?gate4():""}${ok&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${ok&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset" title="清除全部證據版本、搜尋紀錄與關鍵字，從頭開始（收藏的例證保留）">重新開始分析（清除全部證據）</button></div>`}
-function bind(r=document){r.querySelectorAll("details[data-evdiff]").forEach(d=>d.ontoggle=()=>{evDiffOpen=d.open});
- r.querySelectorAll("details[data-ei]").forEach(d=>d.ontoggle=()=>{const e=S.ev[+d.dataset.ei];if(d.open&&e)zhFor(e.id)});
+function bind(r=document){r.querySelectorAll("details[data-ei]").forEach(d=>d.ontoggle=()=>{const e=S.ev[+d.dataset.ei];if(d.open&&e)zhFor(e.id)});
  r.querySelectorAll(".flow .go").forEach(x=>x.onkeydown=e=>{if(e.key==="Enter")x.click()});
  r.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const k=b.dataset.q,v=b.dataset.v,cur=scv(k),nx=cur.includes(v)?cur.filter(x=>x!==v):[...cur,v];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];saveS();renderPane()});
  r.querySelectorAll("[data-alt]").forEach(b=>b.onclick=()=>{const i=document.getElementById(b.dataset.alt);if(i)i.value=b.dataset.v});
@@ -1591,7 +1647,8 @@ function bind(r=document){r.querySelectorAll("details[data-evdiff]").forEach(d=>
   const upd=()=>{const own=i.value.split(/[、,，]/).map(x=>x.trim()).filter(Boolean),nx=[...new Set([...scv(k).filter(x=>opts.includes(x)),...own])];if(nx.length)S.scope[k]=nx.join("、");else delete S.scope[k];
    i.parentNode.querySelectorAll("[data-q]").forEach(b=>b.classList.toggle("on",scv(k).includes(b.dataset.v)));
    r.querySelectorAll('[data-a="rq"],[data-a="myrq"]').forEach(b=>b.disabled=!!busy||QS().some(q=>!S.scope[q[1]]))};
-  i.oninput=upd;i.onchange=()=>{upd();saveS()};i.onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)i.blur()}});r.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>act(b.dataset.a,b.dataset.k))}
+  i.oninput=upd;i.onchange=()=>{upd();saveS()};i.onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)i.blur()}});
+ r.querySelectorAll("[data-disc]").forEach(x=>x.onchange=()=>{const old=S.disc;S.disc=x.value;S.discBy="學生";saveS();log(U[ME].n,`把研究領域從「${RFROUTE.DISCIPLINE_ZH[old]||"自動判斷"}」改成「${RFROUTE.DISCIPLINE_ZH[x.value]}」（會改變加查的資料庫）。`);renderPane()});r.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>act(b.dataset.a,b.dataset.k))}
 /* 進度檢核：每一項都是「數得出來的事實」，不評論內容寫得好不好。
    回傳三組 [標題, 列]；每一列是 [項目, 燈號 g/y/r, 說明, 補充說明的 HTML（可省略）]。
    整理階段的三項全部依畫布判定——系統讀不到學生放在 Google 文件／Canva 的報告本身。 */
@@ -2211,7 +2268,7 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
    +H("研究問題")+F("最初的提問",LIVE()?(S.q0||"尚未分析"):'生成式 AI 是否能幫助大學生學習？')+F("目前確認的版本",S.step>=5?S.rq:"尚未確認，仍在聚焦中")
    +(S.step>=5&&LIVE()?F("聚焦問題的回答",QS().length?QS().map(q=>q[0]+" "+(sc[q[1]]||"—")):["不需要額外聚焦"]):S.step>=5?F("聚焦的對象與情境",[`對象：${sc.who}`,`情境：${sc.ctx}`,"工具：生成式 AI"])+F("關注的結果",[`主要結果：${sc.out}`,"同時留意：認知依賴等限制"]):"")
    +H("證據進度")+F("畫布上的論點",p.objs.filter(o=>o.tag==="claim").length+" 項")+F("支持與反向證據",[`支持證據：${su} 篇`,`反向／限制證據：${cn} 篇`+(S.step>=5&&cn<3?"（Agent 認為還不夠）":"")])+F("已執行的搜尋",S.qs.flat().length+" 條關鍵字")
-   +H("畫布同步狀態")+F("Canvas 版本",`目前 v${p.ver}，Agent 上次分析 ${S.ver?"v"+S.ver:"尚未分析過"}`)+F("已確認的手寫內容",p.objs.filter(o=>o.conf).length+" 項")+F("尚待確認（不列入定論）",un+" 項")
+   +H("畫布同步狀態")+F("畫布版本",`目前 v${p.ver}，Agent 上次分析 ${S.ver?"v"+S.ver:"尚未分析過"}`)+F("已確認的手寫內容",p.objs.filter(o=>o.conf).length+" 項")+F("尚待確認（不列入定論）",un+" 項")
    +H("團隊")+F("成員與角色",p.members.map(m=>U[m.u].n+"．"+m.role))+F("目前 AI 權限",`Level ${p.LV}．${LVN[p.LV]}`)
    +H("目前進度")+F("階段",stageOf())+F("建議下一步",p.LV>=2?next():"此作業尚未開放建議")
    +`<p class="note">這是 Agent 用來記住進度的摘要，之後不用每次重新讀取整張畫布與所有歷史紀錄。</p>`}
@@ -2220,7 +2277,7 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
  if(pane==="tr"){el.innerHTML=`<h3>研究歷程</h3><p class="sm mute" style="margin-top:-4px">依時間排序，深色標籤代表由 Agent 產生的內容，淺灰的同步紀錄可略過不看。</p>`
   +p.trace.slice().reverse().map(t=>{const k=t.k==="ai"?"ai":t.k==="sync"?"sync":t.k==="sys"?"sys":"";
    return `<div class="hl tt ${k==="sync"?"sync":""}"><span>${t.t}</span><span><div><span class="tag ${k}">${t.k==="ai"?"Agent":t.k==="sync"?"同步":t.k==="sys"?"權限":"學生"}</span>${k!=="sync"?` <b>${esc(t.w)}</b>`:""}</div><div>${esc(t.x)}</div></span></div>`}).join("")}
- bind(el);el.querySelectorAll("i[data-i]").length&&icons(el);
+ bind(el);el.querySelectorAll("i[data-i]").length&&icons(el);evDrawerRender();
  if(busy)el.querySelectorAll("button[data-a],button[data-q]").forEach(b=>b.disabled=true)}
 const zhBusy=new Set();
 // 重點整理（取代原本 80 字的中文摘要）：研究問題、對象與方法、主要發現、限制、對你們報告的用處。
@@ -2295,7 +2352,13 @@ const zhMore=()=>{/* 中文資料庫多半沒有開放 API，這裡把關鍵字�
 // 這份研究搜尋時查了哪些資料庫（老師指定的，或依領域自動選的）
 // 「這次查了」：搜尋過就列實際查到資料的資料庫（S.dbs，每輪搜尋結果的 dbNames 合起來，包含依學科自動加查、J-STAGE、中文網路搜尋）；
 // 還沒搜尋時列預定要查的（OpenAlex＋老師指定或依領域自動選的）
-const dbLine=()=>{if(!window.RFSRC)return"";const ks=srcOf(p),c=courseOfP(p),by=c&&Array.isArray(c.sources)?"老師指定":"依研究領域自動選";
+// 研究領域（AI 規劃關鍵字時判斷，S.disc）：決定加查哪些資料庫；顯示在確認策略頁，學生可以改。老師有勾選資料庫時以老師為準。
+const discDbs=()=>{const c=courseOfP(p),locked=!!(c&&Array.isArray(c.sources));if(locked)return{locked,ks:srcOf(p)};
+ const r=window.RFROUTE?RFROUTE.routeFor({discipline:S.disc||"",text:[S.rq,...(S.kw||[])].join(" ")}):{extra:[],discipline:""};return{locked,ks:[...new Set([...srcOf(p),...r.extra])],d:r.discipline}};
+function discLine(){if(!window.RFROUTE||!LIVE())return"";const {locked,ks,d}=discDbs(),Z=RFROUTE.DISCIPLINE_ZH,cur=d||S.disc||"social";
+ const names=["OpenAlex（跨領域）",...ks.map(k=>RFSRC.SOURCES[k]?RFSRC.SOURCES[k].name:k)];
+ return `<div class="hl sm"><span>研究領域</span><span><select data-disc aria-label="研究領域" style="font-size:13px;padding:2px 6px" ${canEdit()?"":"disabled"}>${RFROUTE.DISCIPLINES.map(x=>`<option value="${x}" ${x===cur?"selected":""}>${esc(Z[x])}</option>`).join("")}</select> <span class="mute">${S.discBy==="學生"?"小組選的":S.disc?"AI 判斷，可改":"依關鍵字判斷，可改"}</span></span></div><div class="hl sm"><span>會查的資料庫</span><span>${esc(names.join("、"))}${locked?"（老師指定）":""}</span></div>`}
+const dbLine=()=>{if(!window.RFSRC)return"";const ks=discDbs().ks,c=courseOfP(p),by=c&&Array.isArray(c.sources)?"老師指定":"依研究領域自動選";
  if(S.rounds&&(S.dbs||[]).length)return `<div class="sm mute" style="margin-top:14px">這次查了：${S.dbs.map(esc).join("、")}${c&&Array.isArray(c.sources)?"（加查的資料庫由老師指定）":""}</div>`;
  return `<div class="sm mute" style="margin-top:14px">這次查了：OpenAlex（跨領域）${ks.map(k=>"、"+esc(RFSRC.SOURCES[k].name)+"（"+esc(RFSRC.SOURCES[k].field)+"）").join("")}${ks.length?"・"+by:""}</div>`};
 // 例證的中文說明：模型整理的摘要（zh）優先，其次是模型判讀時寫的一句主要發現
@@ -2309,15 +2372,20 @@ function savedHTML(){const sv=S.saved||[];if(!sv.length)return"";
 // 證據版本列：有兩個以上版本時才出現。目前版本用深色按鈕；其他版本的按鈕滑過會顯示當時的關鍵字與搜尋時間
 // 「v2 相較 v1 的差別」：多找到幾篇文獻、關鍵字／畫布／研究問題改了什麼、支持與證據力的變化。比較對象預設是最早的版本，可以改選別的版本。
 // evNewSet：正在看的這一版比對象多出來的文獻 id，證據清單的標題旁會標「相較 vN 新增」。evBase 只存在本機，不會同步給組員。
-let evBase=null,evNewSet=null,evNewBase=0,evDiffOpen=false;
-function evDiffHTML(cur){evNewSet=null;if(!window.RFAGENT||!RFAGENT.diffVersions)return"";
- const all=[...(S.evVers||[]).filter(x=>x.n!==cur),{n:cur,ev:S.ev,kw:S.kw,rq:S.rq,cv:S.cv,rounds:S.rounds}].sort((a,b)=>a.n-b.n),first=all[0].n;
- if(cur===first)return `<div class="sm mute" style="margin-top:6px">最早的版本；其他版本會跟它比較。</div>`;
- const bn=evBase&&evBase!==cur&&all.some(x=>x.n===evBase)?evBase:first,base=all.find(x=>x.n===bn),me=all.find(x=>x.n===cur);
- const d=RFAGENT.diffVersions(base,me,lvOf),q=s=>`「${esc(String(s).slice(0,24))}」`,li=x=>`<li>${x}</li>`,names=a=>a.map(q).join("");
- const picks=all.filter(x=>x.n!==cur).map(x=>`<button data-a="evbase" data-k="${x.n}" class="${x.n===bn?"pri":""}" style="font-size:11px;padding:1px 8px">v${x.n}</button>`).join(" ");
- if(!d.searched)return `<div class="sm mute" style="margin-top:6px">v${cur} 還沒搜尋，搜尋完會列出跟 v${bn} 的差別。</div>`;
- evNewSet=new Set(d.added.map(e=>e.id));evNewBase=bn;
+let evBase=null,evNewSet=null,evNewBase=0,evDrawer=false,evOpenCard=0;
+// 證據版本比較：回傳 {all（各版本，含正在看的）, cur, first（最早的版本號）, bn（比較對象）, d（diffVersions 的結果；正在看的就是比較對象時為 null）}。
+// 比較對象 evBase 預設是最早的版本，可以在抽屜裡改選；只存在本機，不同步給組員。
+function evCmp(cur){
+ const all=[...(S.evVers||[]).filter(x=>x.n!==cur),{n:cur,ev:S.ev,kw:S.kw,rq:S.rq,cv:S.cv,rounds:S.rounds,evBy:S.evBy}].sort((a,b)=>a.n-b.n),first=all[0].n;
+ const bn=evBase&&evBase!==cur&&all.some(x=>x.n===evBase)?evBase:first;
+ const base=all.find(x=>x.n===bn),me=all.find(x=>x.n===cur);
+ return{all,cur,first,bn,base,me,d:cur!==bn&&window.RFAGENT&&RFAGENT.diffVersions?RFAGENT.diffVersions(base,me,lvOf):null}}
+// 一行摘要：「v3 相較 v1：多找到 8 篇・關鍵字 +3／−3」
+const evLine=(d,cur,bn)=>d?(d.searched?`v${cur} 相較 v${bn}：${d.added.length?`多找到 ${d.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${d.kwAdded.length||d.kwRemoved.length?`+${d.kwAdded.length}／−${d.kwRemoved.length}`:"沒變"}`:`v${cur} 還沒搜尋，搜尋完會列出跟 v${bn} 的差別`):"";
+// 差別的細節（抽屜裡展開）：多找到幾篇、關鍵字／畫布／研究問題改了什麼、證據結構、新找到的篇名
+function evDiffBody(c){const d=c.d;if(!d||!d.searched)return"";
+ const q=s=>`「${esc(String(s).slice(0,24))}」`,li=x=>`<li>${x}</li>`,names=a=>a.map(q).join(""),bn=c.bn,me=c.me;
+ const picks=c.all.filter(x=>x.n!==c.cur).map(x=>`<button data-a="evbase" data-k="${x.n}" class="${x.n===bn?"pri":""}" style="font-size:11px;padding:1px 8px">v${x.n}</button>`).join(" ");
  const rows=[
   li(d.added.length?`<b>多找到 ${d.added.length} 篇文獻</b>（共 ${d.cur.total} 篇，v${bn} 是 ${d.base.total} 篇；兩版都有 ${d.kept} 篇${d.dropped.length?`；v${bn} 有、這版沒找到 ${d.dropped.length} 篇`:""}）`:`<b>沒有多找到新文獻</b>（共 ${d.cur.total} 篇，v${bn} 是 ${d.base.total} 篇${d.dropped.length?`；v${bn} 有、這版沒找到 ${d.dropped.length} 篇`:""}）`),
   li(`<b>關鍵字</b>：${d.kwAdded.length||d.kwRemoved.length?(d.kwAdded.length?"新增 "+names(d.kwAdded):"")+(d.kwAdded.length&&d.kwRemoved.length?"；":"")+(d.kwRemoved.length?"移除 "+names(d.kwRemoved):""):"沒有調整"}`),
@@ -2326,16 +2394,42 @@ function evDiffHTML(cur){evNewSet=null;if(!window.RFAGENT||!RFAGENT.diffVersions
   li(`<b>證據結構</b>：支持 ${d.base.s}→${d.cur.s}、反向 ${d.base.c}→${d.cur.c}、立場待確認 ${d.base.u}→${d.cur.u}、證據力高 ${d.base.high}→${d.cur.high}`),
  ].join("");
  const nw=d.added.slice(0,5).map(e=>li(esc(String(e.t).slice(0,60))+"（"+esc(e.y)+"）")).join("");
- // 預設收合成一行（側邊欄很窄，展開的內容有十幾行，會把證據清單擠到畫面下面）；展開狀態記在 evDiffOpen，重畫時不會縮回去
- const sum=`v${cur} 相較 v${bn}：${d.added.length?`多找到 ${d.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${d.kwAdded.length||d.kwRemoved.length?`+${d.kwAdded.length}／−${d.kwRemoved.length}`:"沒變"}`;
- return `<details data-evdiff class="sm" style="margin-top:6px"${evDiffOpen?" open":""}><summary style="cursor:pointer"><b>${esc(sum)}</b> <span class="mute">（${evDiffOpen?"收合":"展開看細節"}）</span></summary>`
-  +`<div style="margin-top:6px"><span class="mute">比較對象：</span>${picks}</div><ul style="margin:4px 0 0 18px;padding:0">${rows}</ul>`+(nw?`<div class="mute" style="margin-top:6px">新找到的文獻${d.added.length>5?"（只列前 5 篇）":""}：</div><ul style="margin:2px 0 0 18px;padding:0">${nw}</ul>`:"")+`</details>`}
-function evVerBar(){const cur=S.evVer||1,vs=(S.evVers||[]).filter(x=>x.n!==cur).map(x=>({n:x.n,c:(x.ev||[]).length,r:x.rounds||0,tip:`${(x.kw||[]).slice(0,4).join("、")||"（無關鍵字）"}・${new Date(x.at).toLocaleString("zh-TW",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})} 保存`}))
-  .concat({n:cur,c:S.ev.length,r:S.rounds,cur:1}).sort((a,b)=>a.n-b.n);
- if(vs.length<2)return"";
- return `<div class="box sm" style="margin-bottom:10px"><b>證據版本</b><span class="mute">（重新分析會另開新版本）</span>`
-  +`<div class="acts" style="margin-top:6px;flex-wrap:wrap">${vs.map(v=>`<button data-a="evver" data-k="${v.n}" class="${v.cur?"pri":""}" ${v.cur?'aria-current="true"':`title="${esc(v.tip)}"`} ${canEdit()?"":"disabled"} style="font-size:12px;padding:2px 9px">證據 v${v.n}（${v.c} 篇）</button>`).join("")}</div>`
-  +`<div class="sm mute" style="margin-top:6px" title="切換版本時，搜尋與證據確認都是針對正在看的這一版">正在看 v${cur}・已搜尋 ${S.rounds} 輪・關鍵字 ${esc((S.kw||[]).slice(0,3).join("、")||"—")}${(S.kw||[]).length>3?"…":""}</div>${evDiffHTML(cur)}</div>`}
+ return `<div class="sm"><div style="margin-top:12px"><b>v${c.cur} 相較 v${bn} 的差別</b></div><div style="margin-top:4px"><span class="mute">比較對象：</span>${picks}</div><ul style="margin:6px 0 0 18px;padding:0">${rows}</ul>`
+  +(nw?`<div class="mute" style="margin-top:6px">新找到的文獻${d.added.length>5?"（只列前 5 篇）":""}：</div><ul style="margin:2px 0 0 18px;padding:0">${nw}</ul>`:"")+`</div>`}
+// 證據頁最上面的一列：「≡ 證據 v3（14 篇）」＋一行差別摘要。點下去從右側欄左邊滑出版本抽屜（evDrawerRender）。有兩個以上版本才出現。
+// 順便記下這一版比對象多出來的文獻 id（evNewSet），證據清單的標題旁會標「相較 vN 新增」。
+function evVerBar(){const cur=S.evVer||1,c=evCmp(cur);evNewSet=null;if(c.all.length<2)return"";
+ if(c.d&&c.d.searched){evNewSet=new Set(c.d.added.map(e=>e.id));evNewBase=c.bn}
+ const sum=c.d?evLine(c.d,cur,c.bn):"最早的版本，其他版本會跟它比較";
+ const tabs=c.all.map(v=>{const on=v.n===cur;return `<button class="evtab${on?" on":""}" data-a="evver" data-k="${v.n}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"} title="證據 v${v.n}（${(v.ev||[]).length} 篇）">v${v.n}</button>`}).join("");
+ return `<div class="evh"><div class="evtabs"><b>證據版本</b>${tabs}<button class="evtog" data-a="evdrawer" aria-expanded="${evDrawer}" aria-label="${evDrawer?"收起":"展開"}證據版本列表" title="${evDrawer?"收起":"展開"}證據版本列表">≡</button></div><div class="sm mute" style="margin-top:6px"><b>v${cur}</b>（${S.ev.length} 篇）${esc(sum)}</div>${evPending()?evPendHTML():""}</div>`}
+// 每個版本的「誰按了搜尋」：v1 是第一次按下分析的人，之後每次「重新分析」開出的新版本記下按的人（S.evBy，舊資料沒有就顯示未記錄）
+// 進行中的提示與「放棄這一版」按鈕（證據頁的版本列與抽屜裡正在看的卡片都會出現）
+const evPendHTML=()=>`<div class="sm" style="margin-top:6px"><span class="tag ai">進行中</span> ${esc(evPendingBy())} 正在重新分析，證據 v${S.evVer||1} 還沒搜尋完。搜尋完成前其他版本無法切換。${canEdit()?' <button data-a="evdrop" style="font-size:12px;padding:2px 10px">放棄這一版</button>':""}</div>`;
+const evWho=v=>{const b=v.evBy;if(!b)return'<span class="mute">開始搜尋的人：未記錄</span>';const d=new Date(b.at||0),t=b.at?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
+ return `${U[b.u]?av(b.u,18):""} <span>${esc(b.n||uname(b.u))}${t?" 於 "+t:""} 開始搜尋</span>`};
+// 版本列表（右側抽屜）：每版一張卡片，點下去切換到那一版並往下展開（與其他版本的比較、關鍵字、研究問題、證據結構）；點正在看的那張可收合
+function evRowsHTML(c,cur){
+ const baseObj=c.all.find(x=>x.n===(evBase&&c.all.some(y=>y.n===evBase)?evBase:c.first));
+ return c.all.map(v=>{const on=v.n===cur,open=on&&evOpenCard===v.n,n=(v.ev||[]).length,kws=(v.kw||[]).slice(0,3).join("、")||"—";
+  const dv=v.n===baseObj.n?null:RFAGENT.diffVersions(baseObj,v,lvOf);
+  const line=v.n===baseObj.n?"比較基準":dv.searched?`${dv.added.length?`多找到 ${dv.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${dv.kwAdded.length||dv.kwRemoved.length?`+${dv.kwAdded.length}／−${dv.kwRemoved.length}`:"沒變"}`:"還沒搜尋";
+    const more=open?`<div class="evmore">${on&&evPending()?evPendHTML():""}${evDiffBody(c)||'<div class="sm mute" style="margin-top:10px">這是比較基準，其他版本會跟它比較。要看別版的差別，點那一版的卡片。</div>'}</div>`:"";
+  return `<div class="evrow${on?" on":""}"><button class="evhd" data-a="${on?"evtoggle":"evver"}" data-k="${v.n}" aria-expanded="${open}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"}><span aria-hidden="true">${open?"▾":"▸"}</span><span style="display:block;min-width:0;flex:1"><b>證據 v${v.n}</b>（${n} 篇）${on?' <span class="tag ai">正在看</span>':""}<span class="sm mute" style="display:block">搜尋 ${v.rounds||0} 輪・關鍵字 ${esc(kws)}${(v.kw||[]).length>3?"…":""}</span><span class="sm" style="display:block">${esc(line)}</span><span class="sm evwho">${evWho(v)}</span></span></button>${more}</div>`}).join("")+(canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>')}
+// 右側抽屜：貼著右側欄右緣，往左蓋住一部分證據頁（不會超出右側欄）；用證據頁上的「≡」或抽屜標題列的「≡」、Esc 收合
+function evDrawerRender(){const el=$("#evd");if(!el)return;
+ if(!el.dataset.b){el.dataset.b="1";el.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&!b.disabled)act(b.dataset.a,b.dataset.k)})}
+ const cur=S.evVer||1,c=evCmp(cur);
+ if(pane!=="ev"||c.all.length<2){evDrawer=false;el.classList.remove("on");el.innerHTML="";return}
+ const was=el.classList.contains("on");
+ el.innerHTML=`<div class="evdh" role="dialog" aria-label="證據版本"><b>證據版本</b><span class="sm mute" style="flex:1">重新分析會另開新版本</span><button class="evtog" data-a="evdrawer" aria-label="收起證據版本列表" title="收起">≡</button></div><div class="evdb">${evRowsHTML(c,cur)}</div>`;
+ if(evDrawer){if(!was)void el.offsetWidth;el.classList.add("on")}else el.classList.remove("on")}
+addEventListener("keydown",e=>{if(e.key==="Escape"&&evDrawer){evDrawer=false;renderPane()}});
+// 點抽屜外面也收合：用 pointerdown（按下的當下）判斷，在抽屜裡面拖曳選字、放開在外面不會誤關；「≡」按鈕自己會開關，這裡不處理，避免剛關又被打開。
+// 只收起不重畫（被點的按鈕還要照常作用，例如切換版本頁籤），下一次重畫時 evDrawerRender 會依 evDrawer 畫成收合。
+document.addEventListener("pointerdown",e=>{if(!evDrawer)return;const el=$("#evd");if(!el||el.contains(e.target)||e.target.closest&&e.target.closest(".evtog"))return;
+ evDrawer=false;el.classList.remove("on");document.querySelectorAll(".evh .evtog").forEach(b=>{b.setAttribute("aria-expanded","false");b.setAttribute("aria-label","展開證據版本列表");b.title="展開證據版本列表"})},true);
+
 function evHTML(){evNewSet=null;return evVerBar()+savedHTML()+evHTML0()}
 function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)e.k="u"}); // 舊資料：立場待確認以前被放進反向，顯示時改回待確認
  if(!S.ev.length)return `<h3>Evidence Map</h3><p class="sm mute">確認研究問題並完成搜尋後，證據會出現在這裡。沒有可驗證來源的資料不會被標記為證據。</p>`;
@@ -2343,7 +2437,7 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
  // 「加入畫布」時可以選這筆證據要支撐哪個主張：預設選主張論證模式正在論證的那個，或證據上記錄的相關論點，否則第一個
  const claimOpts=contentObjs().filter(o=>o.tag==="claim"),guessClaim=e=>(claimOpts.find(o=>objLabel(o)===(S.claim||"").slice(0,24))||claimOpts.find(o=>e.c&&(o.text||o.aiRead)===e.c)||claimOpts[0]||{}).id;
  const src=e=>/^https:\/\//.test(e.url||"")?`<p><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">開啟原始來源</a>${e.au?"　"+esc(e.au):""}${e.vn?"．"+esc(e.vn):""}</p>`:"";
- const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}${evNewSet&&evNewSet.has(e.id)?` <span class="tag ai">相較 v${evNewBase} 新增</span>`:""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}${(()=>{const kp=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp,unk=x=>!x||x==="摘要未說明",real=x=>x&&!/^摘要(沒有|未)(說明|寫出)/.test(x);
+ const item=(e,i)=>`<details class="ev ${e.k==="c"?"cn":""} ${e.v?"":"un"}" data-ei="${i}"><summary><b>${esc(e.t)}</b>（${esc(e.y)}）<span class="tag">${LIVE()?esc(e.src||"OpenAlex"):"示範"}</span>${e.lang==="zh"?' <span class="tag">中文文獻</span>':""}${e.assigned?' <span class="tag ai">老師指定閱讀</span>':""}${e.rel?` <span class="tag">相關度${esc(e.rel)}</span>`:""}${e.ai?` <span class="tag ai">${esc(e.ai.replace(/（.*$/,""))} 判讀</span>`:""}${e.mix?' <span class="tag">有條件成立</span>':""}${e.unc?' <span class="tag">立場待確認</span>':""}${isSaved(e)?' <span class="tag ai">已收藏</span>':""}${evNewSet&&evNewSet.has(e.id)?` <span class="tag ai">相較 v${evNewBase} 新增</span>`:""}</summary>${src(e)}<div data-kp="${esc(e.id)}">${kpHTML(e)}</div>${e.web?`<p class="sm mute">這筆是 Agent 用網路搜尋在${esc(e.src||"華藝或國家圖書館")}找到的；摘要取自搜尋結果的片段，請點「開啟原始來源」對照原文後，再按「驗證來源」。</p>`:""}${(()=>{const kp=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp):e.kp,unk=x=>!x||x==="摘要未說明",real=x=>x&&!/^摘要(沒有|未)(說明|寫出)/.test(x);
  const who=(unk(e.p)||unk(e.m))&&kp&&real(kp.method)?`<p>對象與方法（依摘要整理）：${esc(kp.method)}</p>`:`<p>研究對象：${esc(e.p)}　方法：${esc(e.m)}</p>`;
  const lv=lvOf(e),dk=e.lv==="不明"?lvKp(e):null;
  return who+(e.lv?`<p>證據力：${esc(lv)}${lv==="不明"?"（摘要看不出研究方法，請讀原文判斷）":"（依研究方法「"+esc(dk?dk.m+"」，取自 AI 整理的對象與方法":e.m+"」")+"判定：回顧與實驗高，追蹤、問卷與統計比較中，訪談低）"}</p>`:"")})()}<p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc((()=>{const kl=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp).limits:"";return /^尚未判讀/.test(e.l||"")&&kl&&!/^摘要(沒有|未)(說明|寫出)/.test(kl)?kl+"（依摘要整理）":e.l})())}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||(MODE()==="claim"&&e.k==="s"&&S.claim?S.claim:"尚未指定（加入畫布時在右邊選要支撐的主張）"))}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
@@ -2361,6 +2455,10 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
 
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
+ // 證據版本抽屜的開關與比較對象只是畫面，不存檔，唯讀的人也能用（切換版本 evver 才需要編輯權限）
+ if(a==="evdrawer"){evDrawer=!evDrawer;if(evDrawer)evOpenCard=S.evVer||1;renderPane();return}
+ if(a==="evtoggle"){evOpenCard=evOpenCard===+k?0:+k;renderPane();return}
+ if(a==="evbase"){evBase=+k;renderPane();return}
  if(busy)return;
  // live 模式：需要 AI 的動作交給後端（權限也由後端判斷並留下歷程），其餘純流程動作沿用下面的本機邏輯
  if(LIVE()&&LIVE_ACTS.has(a)){if(!canEdit()){alert("你的角色為唯讀，無法執行 Agent。");return}actLive(a,w);return}
@@ -2370,11 +2468,17 @@ function act(a,k){const w=U[ME].n,L=p.LV;
   // 已經搜尋過又重新分析：目前這份證據存成一個版本，另開新版本從第 1 輪重新搜尋。
   // 以前輪數沒歸零，下一次搜尋接著第 6 輪（放寬年份、擴大範圍），而且輪數大於 0 時 AI 規劃關鍵字的結果會被丟掉，新畫布內容沒有進搜尋。
   if(S.rounds||S.ev.length){const old=S.evVer||1,n=evNew();log(w,`重新分析：證據 v${old} 已保存，開始證據 v${n}，會從第 1 輪用新的畫布內容重新搜尋。`)}
-  const ids=(a==="re"||!sel.size?p.objs:p.objs.filter(o=>sel.has(o.id))).filter(o=>o.type!=="link");S.rd=ids.map(o=>o.id);S.snap=null;ids.forEach((o,i)=>{o.read=true;if(o.type==="stroke"&&!o.aiRead&&!o.hwSub)o.aiRead="（未能辨識，請手動輸入）"});S.ver=p.ver;S.step=1;S.tok+=3200;log(w,"選取研究區域並要求 Agent 分析。");log("Agent",`讀取 Canvas Version ${p.ver}（${ids.length} 個物件）。`,"ai")}
- if(a==="evver"){if(evSwitch(+k)){evBase=null;log(w,`切換到證據 v${k}。`)}}
- if(a==="evbase")evBase=+k; // 只影響這個人看到的比較對象，不存檔
+  if(!S.evBy)S.evBy={u:ME,n:w,at:Date.now()}; // 這一版是誰按下分析／重新分析開始搜尋的
+  S.reanal=!!(S.rq&&S.rq!=="（尚未填寫）"); // 已經有研究問題：確認讀取後直接回到確認策略，不重新聚焦
+  const ids=(a==="re"||!sel.size?p.objs:p.objs.filter(o=>sel.has(o.id))).filter(o=>o.type!=="link");S.rd=ids.map(o=>o.id);S.snap=null;ids.forEach((o,i)=>{o.read=true;if(o.type==="stroke"&&!o.aiRead&&!o.hwSub)o.aiRead="（未能辨識，請手動輸入）"});S.ver=p.ver;S.step=1;S.tok+=3200;log(w,"選取研究區域並要求 Agent 分析。");log("Agent",`讀取 畫布版本 ${p.ver}（${ids.length} 個物件）。`,"ai")}
+ if(a==="readimg"){const o=getO(k);if(o&&o.url){setStat("AI 讀取圖片內容中…");fetch(o.url).then(r=>r.blob()).then(b=>readImgAI(o,new File([b],o.name||"image",{type:b.type||"image/png"}))).then(()=>renderPane()).catch(e=>{console.warn(e);setStat("讀不到這張圖片，請自己補充說明")})}return}
+ if(a==="evdrop"){if(!evPending())return;const prev=Math.max(...S.evVers.map(x=>x.n));
+  if(!confirm(`放棄證據 v${S.evVer||1}（還沒搜尋）並回到 v${prev}？\n這一版的分析進度會丟掉，其他組員正在做的話也會一起中斷。`))return;
+  if(evSwitch(prev)){evBase=null;evOpenCard=prev;log(w,`放棄還沒搜尋的證據版本，回到證據 v${prev}。`)}}
+ else if(a==="evver"&&+k!==(S.evVer||1)&&evPending()){alert(`${evPendingBy()} 正在重新分析（證據 v${S.evVer||1} 還沒搜尋完），現在切換會把他的畫面換掉。\n請等搜尋完成，或按「放棄這一版」。`);return}
+ else if(a==="evver"){if(evSwitch(+k)){evBase=null;log(w,`切換到證據 v${k}。`);evOpenCard=+k}} // 切換後抽屜維持開著，並展開那一版的內容
  if(a==="fix"){log(w,"標示 AI 讀取內容需修正；修改畫布後可重新分析。");S.step=0;S.ver=null}
- if(a==="ok1"){S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});S.step=2;S.tok+=900;log(w,"確認 AI 的讀取結果。");lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}）。`);log("Agent","判斷 Research Question 過於廣泛。","ai")}
+ if(a==="ok1"){S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"||o.type==="img"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,o.type==="img"?"修正 AI 對圖片內容的讀取結果。":"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});S.step=2;S.tok+=900;log(w,"確認 AI 的讀取結果。");lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}）。`);log("Agent","判斷 Research Question 過於廣泛。","ai")}
  if(a==="ask"){S.step=3;S.tok+=900;log("Agent","提出 3 個引導式聚焦問題。","ai")}
  if(a==="rq"||a==="myrq"){const sc=S.scope;S.rq=a==="myrq"?($("#myrq").value.trim()||"（尚未填寫）"):`${sc.who}在${sc.ctx}情境中使用生成式 AI，對${sc.out}有何影響？同時有哪些限制（如認知依賴）？`;S.kw=["generative AI","student learning",sc.who==="大學生"?"university students":"students","cognitive offloading","critical thinking","AI dependency"];S.step=4;S.tok+=1800;log(a==="rq"?"Agent":w,a==="rq"?"產生 Research Question 與關鍵字草案。":"自行撰寫 Research Question；Agent 產生關鍵字草案。",a==="rq"?"ai":"user")}
  if(a==="kwx")S.kw.splice(+k,1);
@@ -2480,7 +2584,7 @@ async function tocv(k){const e=String(k)[0]==="s"?S.saved[+String(k).slice(1)]:S
  setStat("已加入畫布");renderProj();renderPane()}
 /* live 模式的 Agent 動作：交給資料層（src/db.mjs → agent-local.mjs：規則式判斷＋OpenAlex）。等待期間 busy 有值，側欄按鈕全部鎖住；
    失敗（含被 AI Harness 拒絕）時把後端的說明顯示給使用者，流程停在原本的步驟，不會退回內建範例假裝成功。 */
-const LIVE_ACTS=new Set(["ok1","rq","myrq","round","counter","sum","outline","report"]);
+const LIVE_ACTS=new Set(["ok1","refocus","rq","myrq","round","counter","sum","outline","report"]);
 // 還缺什麼（給 Agent 反思與畫面說明用）
 function evGap(){const sup=S.ev.filter(e=>e.k==="s"),c=S.ev.filter(e=>e.k==="c").length;
  return MODE()==="claim"?`支持主張的證據 ${sup.length} 筆（至少要 3 筆）${sup.some(e=>lvOf(e)==="高")?"":"，還沒有回顧或實驗研究"}`:`反向／限制證據 ${c} 筆（至少要 3 筆）`}
@@ -2503,12 +2607,20 @@ const broadKw=o=>{if(!S.broad)return o;const n=Math.max(Math.min(2,o.coreCount),
 async function actLive(a,w){
  const items=()=>{const base=rdItems().map(o=>({type:o.type,text:o.text,tag:o.tag}));const extra=marked("inRQ").filter(x=>!base.some(b=>b.text===x.text));return[...base,...extra]};
  let label,job;
+ const scopeJob=async()=>{const r=await RFDB.analyzeScope(p.fid,items());
+   Object.assign(S,{topic:r.topic,q0:r.draftQuestion,tooBroad:r.tooBroad,scopeReasons:r.reasons,scopeBy:r.by||"",qs3:r.tooBroad?r.clarifyingQuestions.filter(q=>q.options.length>=2):[],scope:Object.fromEntries(Object.entries(S.scope||{}).filter(([k])=>r.tooBroad&&r.clarifyingQuestions.some(q=>q.key===k))),scopeKept:Object.keys(S.scope||{}).length>0,step:2})};
  if(a==="ok1"){
-  S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});
-  log(w,"確認 AI 的讀取結果。");lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}，共 ${S.snap.length} 項）。`);
-  label="判斷研究範圍中…";
-  job=async()=>{const r=await RFDB.analyzeScope(p.fid,items());
-   Object.assign(S,{topic:r.topic,q0:r.draftQuestion,tooBroad:r.tooBroad,scopeReasons:r.reasons,scopeBy:r.by||"",qs3:r.tooBroad?r.clarifyingQuestions.filter(q=>q.options.length>=2):[],scope:{},step:2})}}
+  S.rd.map(getO).filter(Boolean).forEach(o=>{if(o.type==="stroke"||o.type==="img"){const v=$("#rd"+o.id);if(v&&v.value!==o.aiRead)log(w,o.type==="img"?"修正 AI 對圖片內容的讀取結果。":"修正 AI 對手寫內容的讀取結果。");if(v)o.aiRead=v.value}o.conf=true});
+  log(w,"確認 AI 的讀取結果。");S.cvPrev=(S.cv||[]).slice();lockSnap();log(w,`鎖定這次分析的畫布內容（v${p.ver}，共 ${S.snap.length} 項）。`);
+  // 重新分析新增內容（已經有研究問題）：不重新聚焦，直接回到「確認策略」，關鍵字依新內容重新規劃；
+  // AI 另外說明這次新增了什麼、建議要不要重新聚焦，由小組決定（Fanny 11/10：不要每次新增內容就改研究方向）
+  if(S.reanal&&S.rq){const prev=new Set(S.cvPrev||[]),added=S.cv.filter(t=>!prev.has(t));S.reanal=false;S.addNote=null;S.step=4;
+   log("Agent",`沿用原本的研究問題與聚焦，依新增內容重新規劃關鍵字${added.length?"（新增 "+added.length+" 項）":""}。`,"ai");
+   addTopicKw(items().filter(x=>x.tag!=="question").map(x=>x.text).join("。"));
+   if(AI()&&added.length){const proj=p;RFAI.reviewAdditions({question:S.rq,added}).then(r=>{if(p!==proj)return;S.addNote=r;log("Agent",`新增內容：${r.summary}　建議：${r.suggest==="refocus"?"考慮重新聚焦題目":"沿用原本的研究問題"}（${r.reason}）`,"ai");saveS();if(pane==="agent")renderPane()}).catch(e=>console.warn("[ResearchFlow] 新增內容說明失敗：",e?.message||e))}
+   saveS();renderPane();return}
+  label="判斷研究範圍中…";job=scopeJob}
+ if(a==="refocus"){S.addNote=null;log(w,"依 AI 建議重新聚焦題目。");label="判斷研究範圍中…";job=scopeJob}
  if(a==="rq"||a==="myrq"){
   const own=a==="myrq"?$("#myrq").value.trim():"";
   if(a==="myrq"&&!own){alert("請先輸入你們的 Research Question。");return}
@@ -2530,7 +2642,7 @@ async function actLive(a,w){
   // 自己檢討原因、調整關鍵字，接著搜下一輪，不用學生一輪一輪按。用完預算（預設 3 輪）就停下來，等小組決定要不要擴大範圍。
   job=async()=>{for(;;){const n=S.rounds;busy=roundLabel(n);renderPane();
    // sources：老師勾選或依領域自動挑的加查資料庫（srcOf）；sourcesLocked：老師有勾選時只查老師勾的，不再依學科自動加查
-   const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p),sourcesLocked:Array.isArray(courseOfP(p)?.sources)});
+   const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p),sourcesLocked:Array.isArray(courseOfP(p)?.sources),readings:n===0?readingsOf(p):[]});
    S.qs.push(r.queries);S.rounds++;S.dbs=[...new Set([...(S.dbs||[]),...(r.dbNames||[])])];S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.filter(e=>e.k==="c").length,nu=r.evidence.filter(e=>e.k==="u").length,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
    const off=((r.dbNames||[]).length?`本輪查詢的資料庫：${r.dbNames.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
