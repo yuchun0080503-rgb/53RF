@@ -793,14 +793,36 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
 
 // ---------------- 證據摘要（Level 3）----------------
 
-export function summarizeEvidence(evidence) {
-  const ev = Array.isArray(evidence) ? evidence : [];
-  const sup = ev.filter((e) => e.k === 's'), con = ev.filter((e) => e.k === 'c');
-  const titles = (list) => list.slice(0, 3).map((e) => `《${e.t}》（${e.y}）`).join('、') || '尚無';
-  return (
-    `目前共 ${ev.length} 筆資料：支持方向 ${sup.length} 筆（${titles(sup)}）；反向／限制方向 ${con.length} 筆（${titles(con)}）。` +
-    `其中 ${ev.filter((e) => !e.v).length} 筆來源待驗證、${ev.filter((e) => e.auto).length} 筆的分類尚未經小組確認。結論請由小組自行判斷。`
-  );
+/**
+ * 證據摘要：用白話分段寫——一句話總結、每篇證據說了什麼（一句）、還要注意的事。
+ * 只整理資料庫裡的書目與摘要重點，不下結論（結論由小組自己判斷）。
+ * @param {object[]} evidence
+ * @param {{mode?:'procon'|'claim', claim?:string, rq?:string}} [opt]
+ * @returns {string} 多行純文字（畫面用換行顯示）
+ */
+export function summarizeEvidence(evidence, { mode = 'procon', claim = '', rq = '' } = {}) {
+  const ev = (Array.isArray(evidence) ? evidence : []).filter((e) => e && e.t);
+  const sup = ev.filter((e) => e.k === 's'), con = ev.filter((e) => e.k === 'c'), unk = ev.filter((e) => e.k !== 's' && e.k !== 'c');
+  const who = (e) => `${String(e.au || '').split(/[,，、;；]/)[0].trim() || '《' + String(e.t).slice(0, 20) + (String(e.t).length > 20 ? '…' : '') + '》'}（${e.y || '年份不明'}）`;
+  const line = (e) => { const pt = firstPoint(e); return `・${who(e)}：${pt ? pt.replace(/\s+/g, ' ').slice(0, 80) + (pt.length > 80 ? '…' : '') : '摘要沒有寫出結果，請看原文。'}`; };
+  const topic = claim ? `「${String(claim).slice(0, 40)}」` : rq ? `「${String(rq).slice(0, 40)}」` : '這個主題';
+  const conName = mode === 'claim' ? '限制／反面' : '反向';
+  let lean;
+  if (!ev.length) lean = '還沒有找到證據。';
+  else if (sup.length && !con.length) lean = `目前的 ${sup.length} 篇都支持${topic}，還沒有找到${conName}的研究${mode === 'claim' ? '（報告時記得說明限制）' : '，正反並陳還缺一邊'}。`;
+  else if (!sup.length) lean = `目前找到的 ${con.length} 篇都是${conName}觀點，還沒有支持${topic}的研究。`;
+  else lean = sup.length >= con.length * 2 ? `大多數證據（${sup.length} 篇）支持${topic}，另有 ${con.length} 篇提出${conName}觀點。` : `支持（${sup.length} 篇）和${conName}（${con.length} 篇）的證據都有，看法並不一致。`;
+  const out = ['【一句話】' + lean];
+  if (sup.length) out.push('', `【支持的證據說了什麼】（${sup.length} 篇）`, ...sup.slice(0, 5).map(line), ...(sup.length > 5 ? [`・…另有 ${sup.length - 5} 篇`] : []));
+  if (con.length) out.push('', `【${conName}的證據說了什麼】（${con.length} 篇）`, ...con.slice(0, 5).map(line), ...(con.length > 5 ? [`・…另有 ${con.length - 5} 篇`] : []));
+  const warn = [];
+  const nv = ev.filter((e) => !e.v).length, na = ev.filter((e) => e.auto).length;
+  if (nv) warn.push(`${nv} 篇沒有 DOI，來源待驗證，引用前請確認出處`);
+  if (na) warn.push(`${na} 篇的支持／反向是 Agent 自動判斷，請組員看過後確認`);
+  if (unk.length) warn.push(`${unk.length} 篇立場待確認（摘要沒寫結果），沒有算進上面`);
+  if (warn.length) out.push('', '【還要注意】', ...warn.map((w) => '・' + w));
+  out.push('', '結論請由小組自行判斷。');
+  return out.join('\n');
 }
 
 // ---------------- 投影片大綱（Level 3）----------------

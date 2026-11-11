@@ -17,7 +17,7 @@ import { getStorage, ref as sRef, uploadBytes, getDownloadURL, listAll, deleteOb
 
 import { firebaseConfig } from './firebase-config.js';
 import { checkAgentCall } from './harness.mjs';
-import { makeCode, normalizeCode, looksLikeCode, codeStatus, endOfDayTW, semesterEnd } from './course.mjs';
+import { makeCode, normalizeCode, looksLikeCode, codeStatus, endOfDayTW, semesterEnd, stripTeacherReq, teacherReqOf } from './course.mjs';
 import * as agent from './agent-local.mjs';
 import { normalizeWork } from './searchLogic.mjs';
 import * as llm from './llm.mjs';
@@ -180,9 +180,9 @@ export async function slideOutline(projectId, { topic, question, claim, points, 
   return { slides, refs, by, at: Date.now() };
 }
 
-export async function summarizeEvidence(projectId, { evidence }) {
+export async function summarizeEvidence(projectId, { evidence, mode, claim, rq }) {
   const uid = await guard(projectId, 'summarizeEvidence');
-  const summary = agent.summarizeEvidence(evidence);
+  const summary = agent.summarizeEvidence(evidence, { mode, claim, rq });
   await agentLog(projectId, uid, '產生證據摘要（Level 3）。');
   return { summary };
 }
@@ -315,7 +315,8 @@ export async function createProject({ name, course, teacherReq, dueDate, field, 
   const ref = await addDoc(collection(db, 'projects'), {
     name: name || '未命名研究',
     course: c ? c.course.name : course || '',
-    teacherReq: teacherReq || (a ? a.req : c ? c.course.teacherReq : '') || '',
+    // 有課程時老師的要求一律即時從課程讀（老師改了學生馬上看到）；這裡只存小組自己補充的要求
+    teacherReq: c ? stripTeacherReq(teacherReq, teacherReqOf(c.course, assignmentId)) : teacherReq || '',
     dueDate: dueDate || (a ? a.due : c ? c.course.dueDate : '') || null,
     field: field || '',
     ownerUid: uid,

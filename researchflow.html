@@ -288,7 +288,13 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 .rhnote{margin:8px 0 0;font-size:13px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--warn) 12%,transparent)}
 .rhtop{margin:10px 0 4px;padding:8px 12px;border-left:3px solid var(--ac);background:color-mix(in srgb,var(--ac) 6%,transparent);border-radius:0 10px 10px 0;font-size:14px}.rhtop ol{margin:4px 0 0;padding-left:20px}
 .rhit{padding:10px 0;border-top:1px dashed var(--line)}.rhit-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}.rhit-h .dot{margin-right:0}.rhit ul{margin:4px 0 0;padding-left:18px;font-size:14px;line-height:1.55}
+.evsum{white-space:pre-line;line-height:1.7}
 .rhtrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.rhtrow .acts{margin:0}
+.rhmin{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:99px}.rhmin .lnk{font-size:17px;line-height:1;padding:2px 8px}.rhmin .lnk:disabled{opacity:.3}.rhmin b{min-width:44px;text-align:center}
+.rhgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:14px;margin-top:16px}
+.rhpane{border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}.rhpane-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}.rhpane-h h3{margin:0;font-size:16px}
+.rhdl-i+.rhdl-i{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}.rhdl-i ul{margin:6px 0 0;padding-left:20px}.rhdl-i li{font-size:14px;line-height:1.7}
+.rhex{margin-top:14px;padding:14px 16px;border-radius:14px;background:var(--soft)}.rhx-i{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px;padding:6px 0}.rhx-i>span:nth-child(2){flex:1 1 200px}
 .rhdl{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:12px;margin-top:10px}.rhdl .rhcard{margin-top:0;padding:14px 18px}.rhdl ul{margin:8px 0 0;padding-left:20px}.rhdl li{font-size:14.5px;line-height:1.75}.rhdl-t{margin:18px 0 0;font-size:15px}.rhdl-h{display:flex;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:1px dashed var(--line)}.rhdl li+li{margin-top:8px}
 .rhev summary{display:inline-block;cursor:pointer;list-style:none;font-size:12.5px;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:1px 10px}.rhev summary::-webkit-details-marker{display:none}.rhev[open] summary{color:var(--fg);border-color:var(--fg)}.rhev ul{margin:6px 0 0}.rhck{display:flex;gap:6px;align-items:flex-start;font-size:14px;cursor:pointer}.rhck input{margin:3px 0 0;width:auto}
 .rhcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:10px}
@@ -404,7 +410,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-25";
+window.RF_VER = "2026.11.11-27";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -603,6 +609,12 @@ let unsubMe=null,myUser={seen:{},snooze:{},sid:"",sidAt:0,loaded:false},todoOpen
 // 學號：老師端每門課的名冊 {courseId: {uid: {sid, sidAt, name}}}；學生端記下這次登入已經同步過名冊的課程
 const rosterOf={},rosterUnsub={},rosterSynced={},sidAsked={};let tSearch="";
 const courseOfP=q=>q&&q.courseId?(courses.find(c=>c.id===q.courseId)||courseCache[q.courseId]||null):null;
+// 要求：有課程的研究，老師的要求即時從課程／作業讀（老師改了學生馬上看到，學生不能刪改）；研究本身（q.req）只放小組補充的要求
+const tReqOf=q=>q&&q.courseId&&window.RFCOURSE?RFCOURSE.teacherReqOf(courseOfP(q),q.assignmentId):"";
+const sReqOf=q=>{if(!q)return "";if(!q.courseId||!window.RFCOURSE)return q.req||"";const c=courseOfP(q);let t=RFCOURSE.stripTeacherReq(q.req,tReqOf(q));
+ // 舊研究建立時把當時的老師要求整段複製進來：和課程或任一作業的要求相同的部分也拿掉
+ for(const r of [c&&c.teacherReq,...asgOf(c).map(a=>a.req)])t=RFCOURSE.stripTeacherReq(t,r);return t};
+const reqOf=q=>window.RFCOURSE?RFCOURSE.fullReq(tReqOf(q),sReqOf(q)):(q&&q.req)||"";
 // 這份研究搜尋時要加查的領域資料庫：老師有勾就照老師的，沒有就依研究領域、課程名稱自動挑
 const srcOf=q=>window.RFSRC?RFSRC.pickSources({teacher:courseOfP(q)?.sources,field:q.field,course:q.course,name:q.name}):[];
 const ZH_LINKS={airiti:"華藝線上圖書館",ndltd:"臺灣博碩士論文",scholar:"Google 學術"};
@@ -773,7 +785,7 @@ function attachLiveProjects(){
    const q=projects.find(x=>x.fid===d.id)||mkP({fid:d.id,ver:0,objs:[]});
    // 老師回饋：學生的研究清單與畫布上方都會顯示，所以清單載入時就訂閱
    // 課程設定即時訂閱（老師改了評分配比、指定閱讀，學生不用重新整理）；舊版資料層沒有 subscribeCourse 時讀一次
-   if(d.courseId&&!courseCache[d.courseId]){courseCache[d.courseId]={id:d.courseId};const got=c=>{if(c){courseCache[d.courseId]=c;todoTick();if(p&&p.courseId===d.courseId&&!$("#v-ws").classList.contains("hide"))fbChip()}};
+   if(d.courseId&&!courseCache[d.courseId]){courseCache[d.courseId]={id:d.courseId};const got=c=>{if(c){courseCache[d.courseId]=c;todoTick();if(p&&p.courseId===d.courseId&&!$("#v-ws").classList.contains("hide"))fbChip();if(rehQ&&rehQ.courseId===d.courseId)renderReh()}};
     if(RFDB.subscribeCourse)RFDB.subscribeCourse(d.courseId,got,err=>{console.warn("[ResearchFlow] 讀取課程設定失敗：",err);delete courseCache[d.courseId]});
     else if(RFDB.getCourse)RFDB.getCourse(d.courseId).then(got).catch(()=>{delete courseCache[d.courseId]})}
    if(!q._unsubFb&&RFDB.subscribeFeedback)q._unsubFb=RFDB.subscribeFeedback(d.id,rows=>{q.fb=rows;renderProj();todoTick();if(p===q&&!$("#v-ws").classList.contains("hide"))fbChip()},err=>console.error("[ResearchFlow] 讀取老師回饋失敗：",err));
@@ -791,7 +803,11 @@ function attachLiveProjects(){
 function gapText(q){const s=q.S,c=s.ev.filter(e=>e.k==="c").length;if(q.LV<2)return "此作業未開放 Agent 建議";
  return s.step===0?"Agent 尚未分析，建議先在畫布討論後執行分析":s.step<5?"Agent 等待小組確認研究範圍與問題":!enoughOf(q)?(modeOf(q)==="claim"?"Agent 發現：主張的證據還不夠":"Agent 發現：反向證據不足"):"Agent 發現：證據已補強，尚待報告架構"}
 /* 建立專案後（或舊專案還沒選過時）跳出的小視窗：Agent 依報告名稱與老師要求給建議，由 Owner 決定預設的查證模式 */
-function chooseMode(q,done){const d=$("#pd"),text=[q.name,q.req,q.field,q.course].join(" ");
+// 剛選好的模式先記在這裡：線上模式建立研究後，研究清單的即時資料可能還沒帶回 searchMode，打開研究時就不會再問一次
+const MODE_PICK={};
+function chooseMode(q,done){const d=$("#pd"),text=[q.name,reqOf(q),q.field,q.course].join(" ");
+ if(d.open&&d.dataset.kind==="mode")return; // 已經在問了，不要再跳一次
+ d.dataset.kind="mode";
  const sug=window.RFAGENT?RFAGENT.suggestMode(text):{mode:"claim",reason:"多數報告是在說明或論證一個主題，針對主張逐一查證比較實用。"};
  d.innerHTML=`<h2>選擇預設的查證模式</h2><p class="sm mute" style="margin:6px 0 0">Agent 搜尋證據時會照這個模式進行。之後可以在「研究檔案」更改，每次開始查證前的確認頁也會再提示一次。</p>
  <p class="advice">${I("spark")}<span class="mute">Agent 的建議：</span>這份報告比較適合「${MODE_N[sug.mode]}」。${esc(sug.reason)}</p>
@@ -803,7 +819,7 @@ function chooseMode(q,done){const d=$("#pd"),text=[q.name,q.req,q.field,q.course
    try{await RFDB.updateProjectSettings(q.fid,{searchMode:m});traceLive(q.fid,U[ME].n,"將預設查證模式設為「"+MODE_N[m]+"」。","user")}
    catch(err){alert("儲存查證模式失敗："+(err?.message||err));d.querySelectorAll("[data-m]").forEach(x=>x.disabled=false);return}}
   else if(q.trace)q.trace.push({t:nowT(),w:U[ME].n,x:"將預設查證模式設為「"+MODE_N[m]+"」。",k:"user"});
-  q.mode=m;d.oncancel=null;d.close();renderProj();if(p===q&&!$("#v-ws").classList.contains("hide")){openWsUI();renderPane()}done&&done()});
+  q.mode=m;if(q.fid)MODE_PICK[q.fid]=m;d.oncancel=null;d.dataset.kind="";d.close();renderProj();if(p===q&&!$("#v-ws").classList.contains("hide")){openWsUI();renderPane()}done&&done()});
  d.showModal()}
 function renderProj(){todoTick();rehHome();const mine=q=>(LIVE()||ROLE==="s")&&roleIn(q)==="Owner";
  $("#cnt").textContent=`${projects.length} 個進行中的研究`+(projects.some(mine)?"．自己建立的研究可以按「刪除」或向左滑刪除":"");
@@ -911,7 +927,7 @@ $("#c2").onclick=async()=>{
  const ms=[{u:ME,role:"Owner",duty:"統整研究問題"}];
  if(fc)ms.push({u:fc.course.teacherUid in U?fc.course.teacherUid:"T",role:"Teacher",duty:""});
  invitees.forEach((inv,i)=>{const k="P"+(++uid);U[k]={n:inv.email.split("@")[0],c:CO[3+i%2],email:inv.email,id:"待加入",pending:true};ms.push({u:k,role:"Editor",duty:inv.duty})});
- const q=mkP({name:$("#f1").value||"未命名研究",course:$("#f2").value,req:$("#f3").value,due:$("#f4").value,field:$("#f5").value,members:ms,ver:1,objs:[],
+ const q=mkP({name:$("#f1").value||"未命名研究",course:$("#f2").value,req:fc&&window.RFCOURSE?RFCOURSE.stripTeacherReq($("#f3").value,RFCOURSE.teacherReqOf(fc.course,fa?.id)):$("#f3").value,due:$("#f4").value,field:$("#f5").value,members:ms,ver:1,objs:[],
   ...(fc?{courseId:fc.course.id,LV:+fc.course.defaultAiLevel}:{}),...(fa?{assignmentId:fa.id,assignmentTitle:fa.title}:{}),...(grp?{groupName:grp.slot?"第 "+grp.slot+" 組":grp.name,groupSlot:grp.slot||0}:{})});
  q.trace.push({t:nowT(),w:U[ME].n,x:fc?"用課程代碼建立研究專案（課程：「"+fc.course.name+"」）。":"建立研究專案並產生邀請連結。",k:"user"});resetCourseForm();projects.push(q);renderProj();chooseMode(q,()=>openWs(projects.indexOf(q)))};
 
@@ -920,7 +936,7 @@ function openPD(i){const q=projects[i],d=$("#pd"),own=(LIVE()||ROLE==="s")&&q.me
  const mem=q.members.map((m,j)=>`<div class="mrow">${av(m.u,28)}<div class="sm"><b>${esc(U[m.u].n)}</b>${U[m.u].pending?' <span class="tag">已邀請</span>':""}</div><select data-mr="${j}" ${m.role==="Teacher"?"disabled":dis}>${(m.role==="Teacher"?["Teacher"]:["Owner","Editor","Viewer"]).map(r=>`<option ${r===m.role?"selected":""}>${r}</option>`).join("")}</select><input data-md="${j}" value="${esc(m.duty)}" placeholder="負責內容" ${dis}><button data-mx="${j}" aria-label="移除成員" ${m.role==="Owner"||m.role==="Teacher"||!own?"disabled":""}>${I("trash")}</button></div>`).join("");
  d.innerHTML=`<h2>研究檔案</h2>${own?"":'<p class="sm mute">只有 Owner 可以編輯；你目前為唯讀。</p>'}
  <label>報告／研究名稱</label><input id="d1" value="${esc(q.name)}" ${dis}>${q.courseId?`<label>課程</label><input id="d2" value="${esc(q.course)}" disabled><div class="sm mute" style="margin-top:4px">已用課程代碼加入課程${(q.members.find(m=>m.role==="Teacher")&&U[q.members.find(m=>m.role==="Teacher").u])?"（老師："+esc(U[q.members.find(m=>m.role==="Teacher").u].n)+"）":""}，課程名稱由老師設定。</div>${asgOf(courseOfP(q)).length?`<label>作業</label><select id="dasg" ${dis}><option value="">還沒選</option>${asgOf(courseOfP(q)).map(a=>`<option value="${esc(a.id)}" ${a.id===q.assignmentId?"selected":""}>${esc(a.title)}${a.due?"（截止 "+esc(a.due)+"）":""}</option>`).join("")}</select>`:""}`
-  :`<label>課程名稱</label><input id="d2" value="${esc(q.course)}" ${dis}>${own?`<div style="display:flex;gap:8px;margin-top:8px"><input id="dj" placeholder="有老師給的課程代碼？輸入後加入課程" autocomplete="off" style="text-transform:uppercase"><button id="djb">加入課程</button></div><div id="djs" class="cstat"></div>`:""}`}<label>老師要求</label><input id="d3" value="${esc(q.req)}" ${dis}>
+  :`<label>課程名稱</label><input id="d2" value="${esc(q.course)}" ${dis}>${own?`<div style="display:flex;gap:8px;margin-top:8px"><input id="dj" placeholder="有老師給的課程代碼？輸入後加入課程" autocomplete="off" style="text-transform:uppercase"><button id="djb">加入課程</button></div><div id="djs" class="cstat"></div>`:""}`}${q.courseId?`<label>老師要求</label><div class="box sm" style="margin:0">${tReqOf(q)?esc(tReqOf(q)):'<span class="mute">老師沒有寫要求</span>'}<div class="mute" style="margin-top:4px">由老師在課程設定，老師修改後會自動更新；學生不能刪改，可以在下面補充。</div></div><label for="d3">小組補充要求</label><input id="d3" value="${esc(sReqOf(q))}" placeholder="選填：小組自己想加的要求" ${dis}>`:`<label for="d3">老師要求</label><input id="d3" value="${esc(q.req)}" ${dis}>`}
  <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:0"><div><label>截止日期</label><input id="d4" type="date" value="${q.due}" ${dis}></div><div><label>研究領域</label><input id="d5" value="${esc(q.field)}" ${dis}></div></div>
  <h3 style="margin:20px 0 4px">組員與權限</h3><div class="sm mute">Owner：管理專案、邀請與移除成員；Editor：編輯畫布、執行 Agent；Viewer：僅查看。</div>${mem}
  ${own?`<div class="mrow" style="grid-template-columns:1fr 110px auto"><input id="ne" placeholder="新組員 Email"><select id="nr"><option>Editor</option><option>Viewer</option>${LIVE()?"<option>Teacher</option>":""}</select><button id="na">${I("plus")}邀請</button></div>`:""}
@@ -1012,6 +1028,7 @@ function openWs(i){p=projects[i];S=p.S;sel.clear();tool="sel";editing={};linkFro
  if(!p.H){p.H=[JSON.stringify(p.objs)];p.hi=0}
  $$(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.p==="agent"));show("ws");openWsUI();resize();if(!p.v)p.v={x:cv.getBoundingClientRect().width*.62,y:cv.getBoundingClientRect().height*.4,z:1};
  attachLiveObjects(p);attachLiveState(p);attachLivePins(p);closePin();draw();renderPane();setStat("已連線，等待操作");
+ if(!p.mode&&p.fid&&MODE_PICK[p.fid])p.mode=MODE_PICK[p.fid];
  if(!p.mode&&roleIn(p)==="Owner")chooseMode(p)}
 function detachLive(proj){if(!proj)return;["_unsubObjs","_unsubState","_unsubTrace","_unsubTasks","_unsubFb","_unsubPins","_unsubNudges"].forEach(k=>{if(proj[k]){proj[k]();proj[k]=null}})}
 // 離開畫布只停止畫布同步；研究狀態、歷程、分工、留言、提醒繼續訂閱（主頁的待辦列表要用）
@@ -1242,7 +1259,8 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
  audioHit="";if(tool==="sel"||tool==="hand"){const o=hit(q);if(o&&o.type==="audio")audioHit=o.id} // 點錄音卡片：放開時（沒有拖動）播放／暫停
  linkHit="";if(tool==="sel"){const o=hit(q);if(o&&o.type==="text"&&o.url&&inLink(o,q))linkHit=o.url} // 點在證據卡的來源連結上：放開時（沒有拖動）開新分頁
  if(tool==="hand"||e.button===1||space||(e.pointerType==="touch"&&fingerPans())){dm="pan";return}
- if(!canEdit())return;
+ // 唯讀（老師、Viewer）：不能書寫，手指和觸控筆按著拖曳都是移動畫布（兩指照樣縮放）；點連結、錄音照常
+ if(!canEdit()){dm="pan";return}
  if(e.pointerType==="pen"){ // 橡皮擦端／橡皮擦鍵：按著時當橡皮擦；側鍵：依設定
   if((e.buttons&32)||e.button===5){dm="era";holdEra=true;erased=0;eraseAt(q);return}
   if((e.buttons&2)||e.button===2){const a=PEN.side();if(a==="era"){dm="era";holdEra=true;erased=0;eraseAt(q)}else if(a==="undo")penDo("undo");return}}
@@ -1648,7 +1666,7 @@ function body(){const s=S.step,sc=S.scope;
  ${S.rounds===1&&!balanced&&!S.skip?`<div class="box warn sm"><b>Evidence Imbalance</b><br>支持證據 ${sp} 筆，反向證據 ${c} 筆。請選擇下一步：<div class="acts"><button class="pri" data-a="round">重新規劃並搜尋</button><button data-a="board">加入討論板</button><button data-a="kwedit">修改搜尋方向</button><button data-a="skip">暫時略過</button></div></div>`:""}
  ${balanced?`<div class="box sm" style="border-color:var(--ok)"><b>${I("check")}證據已足夠</b><div class="mute" style="margin-top:4px">支持 ${sp} 筆．反向／限制 ${c} 筆${uv?`，其中 ${uv} 筆來源待驗證`:""}</div></div>`:""}
  <div class="acts">${!balanced&&(S.rounds!==1||S.skip)&&S.rounds<capOf()?`<button class="pri" data-a="round">${!LIVE()?"執行第 "+(S.rounds+1)+" 輪搜尋":S.rounds?"繼續自動搜尋（第 "+(S.rounds+1)+" 輪起）":"開始搜尋"}</button>`:""}${!balanced&&S.rounds>=capOf()?gate4():""}${balanced&&uv?`<button class="pri" data-a="gotoev">前往證據頁驗證來源</button>`:""}${balanced&&!uv?`<button class="pri" data-a="finishsearch">${I("check")}確認完成，進入整理階段</button>`:""}<button data-a="reset" title="清除全部證據版本、搜尋紀錄與關鍵字，從頭開始（收藏的例證保留）">重新開始分析（清除全部證據）</button></div>`}
- return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
+ return `<h3>${I("check")} 證據蒐集已完成</h3><p class="sm mute">${S.stopped?"小組在證據未達門檻時決定停止搜尋（"+esc(evGap())+"）。整理時請註明證據的不足。":"支持與反向證據已足夠，來源皆已驗證。"}可以切換到「研究狀態」或「進度檢核」確認整體進度，或回到畫布整理論點與結論。</p>${S.sum?`<div class="box sm evsum">${esc(S.sum)}</div>`:""}<div class="acts">${p.LV>=3?`<button class="pri" data-a="sum">${I("spark")}產生證據摘要</button>`:""}<button data-a="reopen">重新開啟搜尋</button></div>`}
 /* 主張論證模式的搜尋頁：只呈現「支持這個主張的證據夠不夠扎實」。不主動提供反面例證——
    先列出主張的潛在問題（看主張的寫法與證據的組成），再問小組要不要另外找反面例證當參考。 */
 function claimStep5(){const sup=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),high=sup.filter(e=>lvOf(e)==="高").length,uv=S.ev.filter(e=>!e.v).length,ok=enoughOf(p),held=(S.held||[]).length;
@@ -1696,16 +1714,21 @@ function health(){const s=S.step,mk=()=>{const h=[];return[h,(t,ok,mid,tx,more)=
  if(MODE()==="claim"){st2("證據力高的研究",S.ev.some(e=>e.k==="s"&&lvOf(e)==="高"),S.ev.length>0,"");st2("主張的潛在問題",S.wantCounter!==null&&S.wantCounter!==undefined,S.rounds>0,S.wantCounter===true?"已檢視，並參考反面例證":S.wantCounter===false?"已檢視":S.rounds?"待檢視":"")}
  else st2("反向證據",cn>=3,cn>0,cn>=3?"":cn?"證據不足":"");
  st2("來源驗證",S.ev.length&&vf===S.ev.length,vf>0||S.ev.length>0,S.ev.length?`已驗證 ${vf}／${S.ev.length}`:"");
- // 補充資料：畫布上每個主張都要連到至少一張證據卡
- const claims=contentObjs().filter(o=>o.tag==="claim"),lack=unsupportedClaims();
- st3("補充資料",claims.length>0&&!lack.length,claims.length>lack.length,!claims.length?"畫布上還沒有標為「主張」的內容":lack.length?`${lack.length}／${claims.length} 個主張還沒有證據`:`${claims.length} 個主張都有證據`,
-  lack.length?`<div class="sm mute">還沒有連到證據卡的主張：${lack.slice(0,4).map(o=>"「"+esc(objLabel(o))+"」").join("")}${lack.length>4?"…":""}<br>到「證據」頁按「加入畫布」並選擇要支撐的主張，或用連線工具把主張連到證據卡。</div>`:"");
- // 報告架構：研究問題／假設／證據／討論四個部分在畫布上都要有內容
- const have=st=>contentObjs().some(o=>o.stage===st),miss=CORE_STAGES.filter(st=>!have(st)),todo=contentObjs().filter(o=>!o.stage&&SUGGEST_STAGE[o.tag]);
+ // 整理與結論（放寬）：不用拉線、不用手動標研究階段，Agent 的進度、證據、畫布標籤或報告連結任一處有就算
+ // 補充資料：證據搜尋已足夠，或畫布上已有證據卡，或每個主張都連到證據卡，任一項即可
+ const claims=contentObjs().filter(o=>o.tag==="claim"),lack=unsupportedClaims(),evCards=p.objs.filter(o=>o.tag==="evidence").length;
+ const supOk=enoughOf(p)||evCards>0||(claims.length>0&&!lack.length);
+ st3("補充資料",supOk,S.ev.length>0||claims.length>0,supOk?(enoughOf(p)?"證據搜尋已足夠":evCards?`畫布上有 ${evCards} 張證據卡`:`${claims.length} 個主張都有證據`):S.ev.length?"證據還不夠":"還沒有證據",
+  supOk?"":`<div class="sm mute">完成以下任一項就會亮綠燈：證據搜尋達到門檻、在「證據」頁把一篇文獻「加入畫布」，或把主張連到證據卡。</div>`);
+ // 報告架構：研究問題／假設（主張）／證據／討論四個部分，從研究階段、物件標籤或 Agent 的進度自動判斷
+ const tagOf=st=>Object.keys(SUGGEST_STAGE).filter(k=>SUGGEST_STAGE[k]===st);
+ const auto={研究問題:!!S.rq||s>=5,假設:!!S.claim||contentObjs().length>0,證據:S.ev.some(e=>e.k==="s"),討論:S.ev.some(e=>e.k==="c")||!!p.reportUrl};
+ const have=st=>auto[st]||contentObjs().some(o=>o.stage===st||tagOf(st).includes(o.tag)),miss=CORE_STAGES.filter(st=>!have(st));
  st3("報告架構",!miss.length,miss.length<CORE_STAGES.length,miss.length?`缺：${miss.join("、")}`:"四個部分都有內容",
-  (miss.length?`<div class="sm mute">用「選取」工具點畫布上的內容，在出現的「研究階段」選單標出它屬於報告的哪個部分。</div>`:"")
-  +(todo.length&&canEdit()?`<div class="acts" style="margin-top:6px"><button data-a="stages" style="font-size:12.5px;padding:3px 10px">依標籤自動標記 ${todo.length} 項（主張→假設、待驗證問題→研究問題、證據→證據、反向觀點→討論）</button></div>`:""));
- st3("結論",have("結論"),false,have("結論")?"已撰寫":"尚未撰寫（由小組自行判斷）",have("結論")?"":`<div class="sm mute">把小組的結論寫在畫布上，並把「研究階段」標為「結論」。</div>`);
+  miss.length?`<div class="sm mute">${miss.map(st=>({研究問題:"確認研究問題（Agent 頁）",假設:"在畫布寫下你們的主張",證據:"搜尋並確認至少一篇支持證據",討論:"找到限制／反向證據，或貼上小組報告連結"})[st]).join("；")}。</div>`:"");
+ // 結論：畫布上有寫「結論」的內容（或研究階段標為結論），或已經貼上小組報告連結（結論在報告裡）
+ const conc=contentObjs().some(o=>o.stage==="結論"||/結論/.test(o.type==="text"?o.text||"":o.aiRead||""));
+ st3("結論",conc||!!p.reportUrl,false,conc?"已撰寫":p.reportUrl?"寫在小組報告裡":"尚未撰寫（由小組自行判斷）",conc||p.reportUrl?"":`<div class="sm mute">在畫布寫下以「結論」開頭的文字，或貼上小組報告連結即可。</div>`);
  return[["準備階段",prep],["證據蒐集",evi],["整理與結論",fin]]}
 const stageOf=()=>["畫布討論","畫布讀取確認","範圍聚焦","範圍聚焦","搜尋準備","證據補強","整理階段"][S.step];
 function next(){const c=S.ev.filter(e=>e.k==="c").length;return S.step<1?"在畫布討論後，選取範圍並分析目前研究方向。":S.step<5?"回答 Agent 的確認與聚焦問題。":!enoughOf(p)?(MODE()==="claim"?"繼續替這個主張找證據：還需要更多支持的研究，或證據力更高的研究（回顧、實驗）。":"補充與目前研究問題直接相關的反向研究。"):S.ev.some(e=>!e.v)?"驗證尚未確認的來源。":"整理報告架構，並由小組形成結論。"}
@@ -1869,12 +1892,12 @@ function talkOf(q){const c=courseOfP(q),a=asgOf(c).find(x=>x.id===q.assignmentId
 // 額外要求：老師的（老師回饋裡標成排演要求的）＋學生自己輸入的
 function rehExtra(q){return [...(q.fb||[]).filter(f=>f.kind==="rehearsal").map(f=>({by:"teacher",text:f.text,name:f.by||"老師",at:f.at})),...((q.R||{}).extra||[]).map(e=>({by:"student",text:e.text,name:uname(e.uid),at:e.at,uid:e.uid}))]}
 // 報告時間：最近一則要求裡有「N 分鐘」就照它，否則照老師設定，再沒有就 10 分鐘
-function rehMin(q){const ex=rehExtra(q).slice().sort((a,b)=>(b.at||0)-(a.at||0)).find(e=>/(\d{1,2})\s*分鐘/.test(e.text));return ex?+ex.text.match(/(\d{1,2})\s*分鐘/)[1]:talkOf(q).min||RFREH.DEFAULT_MIN}
+function rehMin(q,base){if(!base&&q.R&&+q.R.min)return +q.R.min;const ex=rehExtra(q).slice().sort((a,b)=>(b.at||0)-(a.at||0)).find(e=>/(\d{1,2})\s*分鐘/.test(e.text));return ex?+ex.text.match(/(\d{1,2})\s*分鐘/)[1]:talkOf(q).min||RFREH.DEFAULT_MIN}
 function rehRoles(q){return RFREH.rolesOf(q.tasks||[],studsOf(q))}
 function rehFlow(q){const r=rehRoles(q);return RFREH.planFlow({talkMin:rehMin(q),rubric:(rubricOfP(q)||{}).items||[],speakers:r.speakers,mode:modeOf(q)})}
 function rehInput(q,flow){const st=q.S||{},ev=window.RFAGENT?RFAGENT.outlineEvidence(st.ev||[]):[];
  return {question:st.rq||"",claim:st.claim||"",talkMin:flow.total,segments:flow.segments.map(x=>({id:x.id,title:x.title,min:x.min,speaker:uname(x.speaker)})),
-  evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:q.req||"",extra:rehExtra(q).map(e=>({by:e.by,text:e.text})),people:studsOf(q).length,goal:(q.R||{}).goal||"",
+  evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:reqOf(q),extra:rehExtra(q).map(e=>({by:e.by,text:e.text})),people:studsOf(q).length,goal:(q.R||{}).goal||"",
   // 讀過的簡報文字（簡報檢查時存的）：講者提示卡用來對應頁碼
   slides:((q.R||{}).deck||{}).slides||[],deckKind:((q.R||{}).deck||{}).kind||"slides"}}
 // 互動：網頁先用規則判斷目的與候選形式，一起送給 Agent 參考
@@ -1884,7 +1907,7 @@ function rehHome(){const box=$("#boxR"),sel=$("#rhp");if(!box||!sel)return;const
  box.classList.toggle("hide",ROLE==="t"||!mine.length);const keep=sel.value;
  sel.innerHTML=mine.map(q=>`<option value="${esc(pidOf(q))}">${esc((q.groupName?q.groupName+"・":"")+q.name)}</option>`).join("");if(keep&&mine.some(q=>pidOf(q)===keep))sel.value=keep}
 $("#rhgo").onclick=()=>{const q=projects.find(x=>pidOf(x)===$("#rhp").value);if(q)openReh(q)};
-function openReh(q){rehQ=q;p=q;S=q.S;attachLiveState(q);show("reh");renderReh();scrollTo({top:0})}
+function openReh(q){rehQ=q;p=q;q._autoDeck=null;q._deckErr="";S=q.S;attachLiveState(q);show("reh");renderReh();scrollTo({top:0})}
 function rehStop(){clearInterval(rehT.timer);rehT.timer=0;if(rehT.start){rehT.acc+=Date.now()-rehT.start;rehT.start=0}}
 function saveR(q){const j=JSON.stringify(q.R||{});q._rj=j;if(LIVE()&&q.fid&&RFDB.saveRehearsal)RFDB.saveRehearsal(q.fid,j,ME).catch(err=>{console.error(err);alert("排演室的內容沒有存成功："+(err?.message||err))})}
 const RH_N={rehearsalFlow:"講者提示卡與台下提問",rehearsalOutline:"講者提示卡（含要講的重點）與台下提問",rehearsalInteraction:"互動建議",deckCheck:"簡報對照評分配比"};
@@ -1900,7 +1923,8 @@ async function rehGen(q,action){const flow=rehFlow(q),base=rehInput(q,flow),inp=
  finally{rehBusy="";renderReh()}}
 function rehTrace(q,x){if(LIVE()&&q.fid)traceLive(q.fid,"Agent",x,"ai");else (q.trace=q.trace||[]).push({t:nowT(),w:"Agent",x,k:"ai",at:Date.now()})}
 // 簡報對照評分配比：src＝"google"（伺服器讀公開的 Google 簡報／文件）或 File（.pptx／.pdf，在瀏覽器裡讀出文字）
-async function rehDeck(q,src){const flow=rehFlow(q),base=rehInput(q,flow);rehBusy="deckCheck";renderReh();
+// auto＝打開排演室時自動檢查（有 Google 簡報／文件連結、還沒檢查過這個連結）：失敗時不跳視窗，原因顯示在這一區
+async function rehDeck(q,src,auto){const flow=rehFlow(q),base=rehInput(q,flow);rehBusy="deckCheck";q._deckErr="";renderReh();
  try{let deck=null;
   if(src instanceof File){const isPdf=/\.pdf$/i.test(src.name);if(!isPdf&&!/\.pptx$/i.test(src.name))throw new Error("請上傳 .pptx 或 .pdf 檔（Canva：分享 → 下載 → PDF 或 PowerPoint；PowerPoint：檔案 → 下載副本）。");
    const buf=await src.arrayBuffer(),slides=isPdf?await RFPPTX.slidesFromPdf(buf):await RFPPTX.slidesFromPptx(buf);deck={src:"pptx",name:src.name.slice(0,80),kind:"slides",slides,at:Date.now(),url:q.reportUrl||""}}
@@ -1911,8 +1935,8 @@ async function rehDeck(q,src){const flow=rehFlow(q),base=rehInput(q,flow);rehBus
   else{if(!deck)throw new Error("展示模式不能自動讀 Google 簡報，請用「上傳簡報檔」試試看。");data=RFREH.ruleDeckCheck(inp);by="規則式比對（沒有使用 AI，只看關鍵字）";rehTrace(q,`排演室：Agent 建議（${RH_N.deckCheck}；${by}）。`)}
   if(data._deck){deck={src:"google",name:rptLabel(q),kind:data._deck.kind,slides:data._deck.slides,at:Date.now(),url:q.reportUrl||""};delete data._deck}
   if(!deck)throw new Error("沒有讀到簡報內容，請再試一次或改用上傳簡報檔。");
-  q.R={...(q.R||{}),deck,check:{data,by,at:Date.now()}};saveR(q);log(U[ME].n,`在排演室檢查簡報（${deck.src==="google"?"Google 連結":"上傳 "+deck.name}，${deck.slides.length} ${deck.kind==="doc"?"段":"頁"}）。`)}
- catch(err){alert(err?.message||err)}
+  q.R={...(q.R||{}),deck,check:{data,by,at:Date.now()}};saveR(q);log(auto?"Agent":U[ME].n,`${auto?"打開排演室時自動":"在排演室"}檢查簡報（${deck.src==="google"?"Google 連結":"上傳 "+deck.name}，${deck.slides.length} ${deck.kind==="doc"?"段":"頁"}）。`)}
+ catch(err){if(auto)q._deckErr=String(err?.message||err);else alert(err?.message||err)}
  finally{rehBusy="";renderReh()}}
 function rehMarkSeen(q){const ids=(q.tasks||[]).filter(t=>t.type==="present"&&t.assignee===ME).map(t=>t.id);if(!ids.length||!q.reportUrl)return;
  if(LIVE()&&q.fid)RFDB.markDeckSeen(q.fid,ids,q.reportUrl).catch(err=>alert("沒有記錄成功："+(err?.message||err)));
@@ -1949,7 +1973,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
   :isG?`<button class="${chk?"":"pri"}" data-rdk="google" ${rehBusy?"disabled":""}>${I("search")}${chk?"重新檢查":"檢查簡報"}</button>`
   :`<button class="${chk?"":"pri"}" data-rdk="file" ${rehBusy?"disabled":""}>${I("file")}${chk?"上傳新版再檢查":"上傳簡報"}</button>`;
  const deckAlt=!edit||L<2||rehBusy?"":[isG?`<button class="lnk" data-rdk="file">改用上傳檔案</button>`:"",deck&&deck.src==="pptx"&&!isG?`<button class="lnk" data-rdk="again">用同一份檔案重新檢查</button>`:""].filter(Boolean).join("");
- const deckHint=isG?"按「檢查簡報」由系統讀你們的 Google 檔案（要先在 Google「共用」設成知道連結的任何人可檢視）。"
+ const deckHint=isG?"有 Google 簡報／文件連結時，打開排演室會自動讓 Agent 讀取並對照評分配比（要先在 Google「共用」設成知道連結的任何人可檢視）；簡報改過可以按「重新檢查」。"
   :q.reportUrl?`${esc(rptLabel(q))} 的連結無法直接讀取：請下載後上傳（Canva：分享 → 下載）。檔案只在你的瀏覽器裡讀出文字，不會上傳保存。`
   :"還沒有設定小組報告連結：可以先上傳簡報檔檢查，或到研究檔案貼上 Google 簡報連結。";
  const itemRow=x=>{const [n,c]=ST_N[x.status]||ST_N.unknown;return `<div class="rhit"><div class="rhit-h"><i class="dot ${c}"></i><b>${esc(x.name)}</b><span class="pill">${x.pct}%</span><span class="sm st-${c}">${n}</span>${x.pages.length?`<span class="sm mute">${pgT(x.pages,deck&&deck.kind)}</span>`:""}</div>
@@ -1961,14 +1985,7 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
    ${chk.data.items.map(itemRow).join("")}
    ${(chk.data.stage||[]).length?`<p class="sm mute" style="margin:10px 0 0">${esc(chk.data.stage.map(x=>x.name+" "+x.pct+"%").join("、"))} 屬於上台表現，不從簡報判斷，請看下方「計時與上台表現」。</p>`:""}`
   :`<p class="sm mute" style="margin:0">依老師的評分配比逐項看簡報：哪些已經呈現、在哪幾${unit||"頁"}、還缺什麼。只給建議，不打分數、不改寫投影片。</p>`}
-  <p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}${edit&&L>=2?`<br>上傳檔案支援 .pptx、.pdf`:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
- // ---- 計時與上台表現 ----
- const dl=plan&&(plan.data.delivery||[]).length?plan.data.delivery:stage.map(r=>({name:r.name,pct:r.pct,tips:RFREH.stageTips(r)}));
- const timeSec=`<section class="tcard"><div class="tch"><h2>計時與上台表現</h2><span class="sm mute" id="rhnow"></span></div>
-  <div class="rhtrow"><div class="rhtimer" id="rhclock">00:00</div><div class="acts"><button class="pri" id="rhts">${rehT.start?"暫停":rehT.acc?"繼續":"開始"}</button><button class="lnk" id="rhtr">重設</button></div></div>
-  ${dl.length?`<h3 class="rhdl-t">上台表現怎麼做</h3><p class="sm mute" style="margin:2px 0 0">老師的評分配比有和上台表現有關的項目，下面是排演時可以照著練的具體建議${plan&&(plan.data.delivery||[]).length?"（Agent 依你們的內容寫的）":"（產生講者提示卡後，會換成依你們內容寫的建議）"}。</p>
-   <div class="rhdl">${dl.map(x=>`<div class="rhcard"><div class="rhdl-h"><b>${esc(x.name)}</b><span class="sm mute">占評分 ${x.pct}%</span></div><ul>${x.tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`).join("")}</div>`
-   :`<p class="sm mute" style="margin:8px 0 0">老師的評分配比沒有上台表現類的項目；排演時照段落時間練習即可。</p>`}</section>`;
+  ${q._deckErr?`<p class="cstat bad" style="margin:10px 0 0">自動讀取簡報失敗：${esc(q._deckErr)}</p>`:""}<p class="sm mute rhsub">${deckHint}${deckAlt?" "+deckAlt:""}${edit&&L>=2?`<br>上傳檔案支援 .pptx、.pdf`:""}</p><input type="file" id="rhfile" accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></section>`;
  // ---- 講者提示卡 ----
  const cardHTML=x=>{const c=card(x.id),pts=c.points||[],kn=c.know||[],rf=[...new Set(pts.flatMap(p=>p.refs||[]))];
   return `<div class="rhc" data-seg="${x.id}"><div class="rhc-h"><b>${esc(x.title)}</b><span>${x.min} 分</span><span>${x.speaker?esc(uname(x.speaker)):'<span class="mute">未指派講者</span>'}</span>${(c.pages||[]).length?`<span class="mute">${pgT(c.pages,deck&&deck.kind)}</span>`:""}</div>
@@ -1983,27 +2000,38 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
   ${handoff?`<p class="sm rhnote" style="background:var(--soft)">講者和做內容的人不同：上台前請 ${esc((roles.researchers.length?roles.researchers:roles.makers).map(uname).join("、"))} 照這些卡片和講者交接${roles.designers.length?`；簡報檔的問題找 ${esc(roles.designers.map(uname).join("、"))}`:""}。</p>`:""}
   <div class="rhcs">${flow.segments.map(cardHTML).join("")}</div>
   ${plan&&(plan.data.tips||[]).length?`<p class="sm mute" style="margin:10px 0 0">排演提醒：${esc(plan.data.tips.join("；"))}</p>`:""}</section>`;
- // ---- 問答練習 ----
- const di=rehDraw.i>=0&&qa[rehDraw.i]?qa[rehDraw.i]:null;
- const qaSec=!plan?"":`<section class="tcard"><div class="tch"><h2>問答練習</h2><span class="acts"><button class="pri" id="rhdraw" ${qa.length?"":"disabled"}>${di?"換一題":"抽一題"}</button></span></div>
-  ${di?`<div class="rhdraw"><div class="rhdraw-h"><span class="pill">${esc(RFREH.QA_STYLES[di.style]||"提問")}</span><span class="sm mute">${"★".repeat(di.level||2)}${"☆".repeat(3-(di.level||2))}</span><span class="sm mute">建議回答：${di.who?esc(uname(di.who)):"—"}</span><b class="rhdt" id="rhdt"></b></div>
+ // ---- 計時與排演練習：計時（可直接調報告時間）、問答練習、上台表現、額外要求合在一起 ----
+ const dl=plan&&(plan.data.delivery||[]).length?plan.data.delivery:stage.map(r=>({name:r.name,pct:r.pct,tips:RFREH.stageTips(r)}));
+ const di=rehDraw.i>=0&&qa[rehDraw.i]?qa[rehDraw.i]:null,canQA=rd.ok&&L>=2,baseMin=rehMin(q,true),tq=tReqOf(q);
+ const minCtl=`<div class="rhmin" role="group" aria-label="報告時間"><span class="sm mute">報告時間</span>${edit?`<button class="lnk" data-rmin="-1" aria-label="少 1 分鐘" ${flow.total<=3?"disabled":""}>−</button>`:""}<b>${flow.total} 分</b>${edit?`<button class="lnk" data-rmin="1" aria-label="多 1 分鐘" ${flow.total>=60?"disabled":""}>＋</button>`:""}${R.min&&R.min!==baseMin&&edit?`<button class="lnk" data-rmin="0" title="恢復成${talkOf(q).min?"老師設定":"預設"}的 ${baseMin} 分鐘">恢復 ${baseMin} 分</button>`:""}</div>`;
+ const qaBox=!canQA?"":`<div class="rhpane"><div class="rhpane-h"><h3>問答練習</h3>${plan?`<button class="${di?"":"pri"}" id="rhdraw" ${qa.length?"":"disabled"}>${di?"換一題":"抽一題"}</button>`:""}</div>
+  ${!plan?`<p class="sm mute" style="margin:0">先在上面「講者提示卡」按「產生提示卡」，Agent 會一起出台下可能問的題目。</p>`
+  :di?`<div class="rhdraw"><div class="rhdraw-h"><span class="pill">${esc(RFREH.QA_STYLES[di.style]||"提問")}</span><span class="sm mute">${"★".repeat(di.level||2)}${"☆".repeat(3-(di.level||2))}</span><span class="sm mute">建議回答：${di.who?esc(uname(di.who)):"—"}</span><b class="rhdt" id="rhdt"></b></div>
    <div class="rhdraw-q">${esc(di.q)}</div>${rehDraw.show?`<div class="sm">回答方向：${esc(di.hint||"—")}${refsT(di.refs).length?`<span class="mute">（${esc(refsT(di.refs).join("、"))}）</span>`:""}</div>`:`<button class="lnk" id="rhhint">看回答方向</button>`}</div>`
    :`<p class="sm mute" style="margin:0">台下可能會怎麼問？按「抽一題」隨機出題、30 秒內回答，再看回答方向。</p>`}
-  <details class="rhqs"><summary class="sm">全部 ${qa.length} 題</summary>${qa.map(x=>`<div class="rhq"><span class="pill">${esc(RFREH.QA_STYLES[x.style]||"提問")}</span><span>${esc(x.q)}<span class="sm mute">　${"★".repeat(x.level||2)}・${x.who?esc(uname(x.who)):"—"}</span></span></div>`).join("")}</details></section>`;
+  ${plan&&qa.length?`<details class="rhqs"><summary class="sm">全部 ${qa.length} 題</summary>${qa.map(x=>`<div class="rhq"><span class="pill">${esc(RFREH.QA_STYLES[x.style]||"提問")}</span><span>${esc(x.q)}<span class="sm mute">　${"★".repeat(x.level||2)}・${x.who?esc(uname(x.who)):"—"}</span></span></div>`).join("")}</details>`:""}</div>`;
+ const dlBox=`<div class="rhpane"><div class="rhpane-h"><h3>上台表現怎麼做</h3></div>
+  ${dl.length?`<p class="sm mute" style="margin:0 0 4px">老師的評分配比裡和上台有關的項目${plan&&(plan.data.delivery||[]).length?"（Agent 依你們的內容寫的）":""}：</p>${dl.map(x=>`<div class="rhdl-i"><div class="rhdl-h"><b>${esc(x.name)}</b><span class="sm mute">占評分 ${x.pct}%</span></div><ul>${x.tips.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`).join("")}`
+  :`<p class="sm mute" style="margin:0">老師的評分配比沒有上台表現類的項目；照段落時間練習即可。</p>`}</div>`;
+ const exBox=L<2?"":`<div class="rhex"><div class="rhpane-h"><h3>額外要求</h3><span class="sm mute">Agent 產生建議時會照這些要求；寫「N 分鐘」也會改報告時間</span></div>
+  ${tq?`<div class="rhx-i"><span class="tag blk">老師要求</span><span>${esc(tq)}</span><span class="sm mute">課程設定・自動同步</span></div>`:""}
+  ${ex.map(e=>`<div class="rhx-i">${e.by==="teacher"?'<span class="tag blk">老師要求</span>':'<span class="tag">小組</span>'}<span>${esc(e.text)}</span><span class="sm mute">${esc(e.name)}・${esc(fmtAt(e.at))}</span>${e.by==="student"&&e.uid===ME?`<button class="lnk" data-rx="${e.at}">刪除</button>`:""}</div>`).join("")}
+  ${!tq&&!ex.length?`<p class="sm mute" style="margin:0">還沒有要求。</p>`:""}
+  ${edit?`<div class="acts" style="margin-top:8px"><input id="rhx" maxlength="200" placeholder="小組想加的要求，例如：提高台下互動" style="flex:1;margin:0"><button id="rhxs">加入</button></div>`:""}
+  ${tq||ex.some(e=>e.by==="teacher")?`<p class="sm mute rhsub">老師的要求不能刪除；小組可以另外加要求。</p>`:""}</div>`;
+ const timeSec=`<section class="tcard"><div class="tch"><h2>計時與上台表現</h2><span class="sm mute" id="rhnow"></span></div>
+  <div class="rhtrow"><div class="rhtimer" id="rhclock">00:00</div><div class="acts"><button class="pri" id="rhts">${rehT.start?"暫停":rehT.acc?"繼續":"開始"}</button><button id="rhtr">重設</button></div>${minCtl}</div>
+  <div class="rhgrid">${qaBox}${dlBox}</div>${exBox}</section>`;
  el.innerHTML=`<div class="thead" style="margin-top:8px"><button id="rhback">${I("back")}返回</button><h1 style="font-size:26px">排演室・${esc(q.name)}</h1></div>
   <p class="sm mute" style="margin:0">報告 ${flow.total} 分鐘${talkOf(q).date?"・上台日 "+esc(talkOf(q).date):""}。Agent 依你們自己的研究、簡報、分工與老師要求給建議，不寫逐字稿、不寫結論。</p>
   <div class="rhroles">${roles.speakers.length?`<span><b>講者</b> ${esc(roles.speakers.map(uname).join("、"))}</span>`:""}${side.length?`<span><b>排演時</b> ${side.map(x=>esc(uname(x.u))+" "+x.role).join("・")}</span>`:roles.speakers.length?`<span class="mute">每個人都上台：輪流計時、扮演台下提問者</span>`:""}</div>
   <section class="tcard"><div class="tch"><h2>準備度</h2><span class="tag ${rd.ok?"":"blk"}">${rd.ok?"可以開始排演":"還不能排演"}</span></div>
-   ${rd.missing.map(missRow).join("")||`<p class="sm mute" style="margin:0">內容已準備好（${rd.via.map(v=>({step:"研究已整理完成",report:"已設定小組報告連結",evidence:"證據搜尋完畢"})[v]).join("、")}），也有指派講者。</p>`}
+   ${rd.missing.map(missRow).join("")||`<p class="sm mute" style="margin:0">內容已準備好（${rd.via.map(v=>({step:"研究已整理完成",report:"已設定小組報告連結",evidence:"證據搜尋完畢"})[v]).join("、")}）。${roles.speakers.length?"":"還沒有指派講者也可以先練：大家輪流講，之後在「分工」指派「上台報告」，提示卡會標上講者。"}</p>`}
    ${rd.speakers.length?`<p class="sm mute" style="margin:8px 0 0">講者看過簡報：${rd.speakers.map(x=>esc(uname(x.u))+(x.seen?" ✓":" 還沒")).join("・")}${iSpeak&&q.reportUrl?`　<button class="lnk" id="rhopen">開啟簡報</button>${iSeen?"":`<button class="lnk" id="rhseen">我看過了</button>`}`:""}</p>`:""}</section>
   ${deckSec}
+  ${!rd.ok||L<2?"":cardSec}
   ${timeSec}
   ${!rd.ok?"":L<2?`<section class="tcard"><p class="sm mute" style="margin:0">老師把這份研究的 AI 權限設為 Level ${L}，排演室只提供準備度檢查與計時。</p></section>`:`
-  ${cardSec}
-  ${qaSec}
-  <section class="tcard"><div class="tch"><h2>額外要求</h2><span class="sm mute">Agent 會照這些要求調整；有「N 分鐘」時報告時間跟著改</span></div>
-   ${ex.length?ex.map(e=>`<div class="box sm">${e.by==="teacher"?'<span class="tag blk">老師要求</span> ':""}${esc(e.text)}<span class="mute">・${esc(e.name)}・${esc(fmtAt(e.at))}</span>${e.by==="student"&&e.uid===ME?` <button class="lnk" data-rx="${e.at}">刪除</button>`:""}</div>`).join(""):`<p class="sm mute" style="margin:0">還沒有要求。</p>`}
-   ${edit?`<div class="acts" style="margin-top:8px"><input id="rhx" maxlength="200" placeholder="例如：提高台下互動、縮短到 10 分鐘" style="flex:1;margin:0"><button id="rhxs">加入</button></div>`:""}</section>
   <section class="tcard"><div class="tch"><h2>互動建議</h2><span class="acts">${genBtn("rehearsalInteraction",2,"互動建議")}</span></div>
    <div class="rhcard" style="margin-top:0"><label for="rhgoal" style="margin:0">這次報告的互動目的</label>
     <select id="rhgoal" style="margin-top:6px" ${edit?"":"disabled"}><option value="">自動判斷（目前判斷：${esc(RFREH.GOALS[g0.goal])}）</option>${Object.entries(RFREH.GOALS).map(([k,n])=>`<option value="${k}" ${R.goal===k?"selected":""}>${esc(n)}</option>`).join("")}</select>
@@ -2023,6 +2051,8 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const sn=$("#rhseen");if(sn)sn.onclick=()=>rehMarkSeen(q);
  $("#rhts").onclick=()=>{if(rehT.start)rehStop();else{rehT.start=Date.now();rehT.timer=setInterval(rehTick,500)}renderReh()};
  $("#rhtr").onclick=()=>{rehStop();rehT.acc=0;renderReh()};
+ // 報告時間：直接在計時旁邊加減（存在排演室，全組共用）；改時間會一起重設計時
+ el.querySelectorAll("[data-rmin]").forEach(b=>b.onclick=()=>{const d=+b.dataset.rmin,n=d?Math.max(3,Math.min(60,flow.total+d)):0;q.R={...(q.R||{}),min:n};if(!n)delete q.R.min;rehStop();rehT.acc=0;saveR(q);renderReh()});
  if(rehT.start&&!rehT.timer)rehT.timer=setInterval(rehTick,500);
  el.querySelectorAll("[data-rgen]").forEach(b=>b.onclick=()=>rehGen(q,b.dataset.rgen));
  const fi=$("#rhfile");if(fi)fi.onchange=()=>{const f=fi.files&&fi.files[0];fi.value="";if(f)rehDeck(q,f)};
@@ -2030,14 +2060,16 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
  const dr=$("#rhdraw");if(dr)dr.onclick=()=>{let i=Math.floor(Math.random()*qa.length);if(qa.length>1&&i===rehDraw.i)i=(i+1)%qa.length;clearInterval(rehDraw.timer);rehDraw={i,end:Date.now()+30e3,show:false,timer:0};renderReh()};
  const hh=$("#rhhint");if(hh)hh.onclick=()=>{rehDraw.show=true;renderReh()};
  if($("#rhdt")){rehDrawTick();if(!rehDraw.timer)rehDraw.timer=setInterval(rehDrawTick,250)}
- const xs=$("#rhxs");if(xs){const add=()=>{const t=$("#rhx").value.trim();if(!t)return;q.R={...(q.R||{}),extra:[...((q.R||{}).extra||[]),{text:t.slice(0,200),uid:ME,at:Date.now()}].slice(-10)};saveR(q);log(U[ME].n,"在排演室加入要求：「"+t.slice(0,200)+"」。");renderReh()};xs.onclick=add;$("#rhx").onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)add()}}
+ const xs=$("#rhxs");if(xs){const add=()=>{const t=$("#rhx").value.trim();if(!t)return;q.R={...(q.R||{}),extra:[...((q.R||{}).extra||[]),{text:t.slice(0,200),uid:ME,at:Date.now()}].slice(-10)};if(/\d{1,2}\s*分鐘/.test(t))delete q.R.min;saveR(q);log(U[ME].n,"在排演室加入要求：「"+t.slice(0,200)+"」。");renderReh()};xs.onclick=add;$("#rhx").onkeydown=e=>{if(e.key==="Enter"&&!e.isComposing)add()}}
  el.querySelectorAll("[data-rx]").forEach(b=>b.onclick=()=>{q.R={...(q.R||{}),extra:((q.R||{}).extra||[]).filter(e=>String(e.at)!==b.dataset.rx)};saveR(q);renderReh()});
  const gs=$("#rhgoal");if(gs)gs.onchange=()=>{q.R={...(q.R||{}),goal:gs.value};saveR(q);log(U[ME].n,"在排演室把互動目的設為「"+(RFREH.GOALS[gs.value]||"自動判斷")+"」。");renderReh()};
  const cp=$("#rhcp");if(cp)cp.onclick=()=>{const t=(R.inter.data.quiz||[]).map((x,i)=>`${i+1}. ${x.q}\n`+x.options.map((o,k)=>`  ${(x.correct||[]).includes(k+1)?"（正確）":""}${o}`).join("\n")).join("\n\n");try{navigator.clipboard.writeText(t);cp.textContent="已複製"}catch(e){alert(t)}};
  const kh=$("#rhkh");if(kh)kh.onclick=()=>{const {sheet,count,dropped}=RFREH.kahootSheet(R.inter.data.quiz,"ResearchFlow 排演室："+q.name);if(!count){alert("沒有可以匯出的題目。");return}
   const b=new Blob([RFXLSX.buildXlsx(sheet)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),a=document.createElement("a");
   a.href=URL.createObjectURL(b);a.download=(q.name.replace(/[\\/:*?"<>|]/g,"_")||"排演室")+"-Kahoot.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);if(dropped)alert(`已匯出 ${count} 題；${dropped} 題格式不符 Kahoot 規定（例如少於 2 個選項），沒有匯出。`)};
- rehTick()}
+ rehTick();
+ // 有 Google 簡報／文件連結、還沒檢查過這個連結（或連結換了）：自動讀取並對照評分配比。每個連結每次開啟只試一次，失敗就等使用者按按鈕
+ if(isG&&edit&&L>=2&&LIVE()&&!rehBusy&&!(chk&&deck&&deck.url===q.reportUrl)&&q._autoDeck!==q.reportUrl){q._autoDeck=q.reportUrl;setTimeout(()=>{if(rehQ===q&&!rehBusy)rehDeck(q,"google",true)},0)}}
 
 /* ---------------- 評分配比（T1；驗證與版本在 src/rubric.mjs） ---------------- */
 // 這份研究適用的評分配比（作業的或課程的）；沒有就是 null
@@ -2207,7 +2239,7 @@ function renderTeach(){const el=$("#v-teach"),all=teachList();
   main=`<main class="tmain"><div class="mute">${esc(q.course||"未填課程")}${q.assignmentTitle?"・"+esc(q.assignmentTitle):""}・${gl(q)}・截止 ${q.due||"未設定"}</div>
    <div class="thead"><h1>${esc(q.name)}</h1><button id="topen">${I("ext")}開啟畫布（唯讀）</button></div>
    <div class="tchips">${q.members.filter(m=>m.role!=="Teacher"&&U[m.u]).map(m=>{const sid=sidOf(q,m.u);return `<span style="color:${U[m.u].c};background:color-mix(in srgb,${U[m.u].c} 11%,var(--bg))">${esc(U[m.u].n)}・${sid?"學號 "+esc(sid):courseOfP(q)?.requireSid?"未填學號":m.role}${m.duty?"・"+esc(m.duty):""}</span>`}).join("")}<span class="tag m-${modeOf(q)}">${MODE_N[modeOf(q)]}</span></div>
-   ${q.req?`<p class="sm mute" style="margin:10px 0 0">老師要求：${esc(q.req)}</p>`:""}
+   ${tReqOf(q)||sReqOf(q)?`<p class="sm mute" style="margin:10px 0 0">${tReqOf(q)?"老師要求："+esc(tReqOf(q)):""}${tReqOf(q)&&sReqOf(q)?"<br>":""}${sReqOf(q)?"小組補充："+esc(sReqOf(q)):""}</p>`:""}
    <section class="tcard"><h2>研究進度</h2><p class="sm mute">與學生端「進度檢核」相同：每一項依實際完成的事實判定，不使用百分比。</p>
     <div class="tprog">${cells.map(h=>`<div class="s-${h[1]}"><b>${h[0]}</b><span>${h[2]}</span></div>`).join("")}</div></section>
    <section class="tcard" id="tsec-report"><div class="tch"><h2>小組報告</h2><span class="sm mute">${q.gradedAt?"已於 "+esc(fmtAt(q.gradedAt))+" 標記已批改":q.reportUrl?"還沒有標記已批改":""}</span></div>
@@ -2290,7 +2322,7 @@ function renderPane(){const el=$("#pane");if(S&&(S.max||0)<S.step)S.max=S.step;p
  if(pane==="hl"){const H=t=>`<h3>${t}</h3>`;
   el.innerHTML=`<div class="stage"><span class="sb">${I("pulse")}</span><div><b>${stageOf()}</b><div class="sm mute" style="margin-top:2px">${p.LV>=2?next():"此作業尚未開放建議"}</div></div></div>`
    +health().map(([t,list])=>H(t)+list.map(h=>`<div class="hl"><span>${h[0]}</span><span><span class="st"><i class="dot ${h[1]}"></i>${h[2]}</span>${h[3]}</span></div>`).join("")).join("")
-   +`<p class="note">每一項都依實際完成的事實判定，不使用進度百分比。「整理與結論」看的是畫布上的整理結果；系統讀不到你們放在 Google 文件、Canva 等地方的報告本身，也不評斷內容寫得好不好。</p>`}
+   +`<p class="note">每一項都依實際完成的事實判定，不使用進度百分比。「整理與結論」看畫布、證據與小組報告連結，任一處有就算；系統讀不到你們放在 Google 文件、Canva 等地方的報告本身，也不評斷內容寫得好不好。</p>`}
  if(pane==="st"){const sc=S.scope,cn=S.ev.filter(e=>e.k==="c").length,su=S.ev.filter(e=>e.k==="s").length,un=p.objs.filter(o=>o.type!=="link"&&!o.conf&&o.type==="stroke").length;
   const F=(l,v)=>`<div class="hl"><span>${l}</span><span>${Array.isArray(v)?v.map(x=>`<div>${esc(x)}</div>`).join(""):esc(v)}</span></div>`,H=t=>`<h3>${t}</h3>`;
   el.innerHTML=H("研究主題")+F("研究領域",p.field||"尚未填寫")+F("主題",LIVE()?(S.topic||"尚未分析"):'生成式 AI 與大學生學習')
@@ -2491,9 +2523,9 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
   ${S.ev.some(e=>e.k==="u")?`<h3>立場待確認（不計入論證強度）</h3><p class="sm mute" style="margin-top:-2px">這些文獻跟主張有關，但摘要沒有寫出研究結果、只看得出部分相關，或（網路搜尋找到的中文文獻）沒有取得摘要，AI 判斷不出是否支持。請打開原文閱讀，確認支持主張後按「讀過了，列為支持」。</p>${li("u")}`:""}
   ${zhMore()}
   ${S.wantCounter===true?`<h3>反面例證（參考用）</h3><p class="sm mute" style="margin-top:-2px">這是應你們的要求另外找的，用來預想別人可能怎麼反駁，不計入論證強度。</p>${li("c")}`:""}
-  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm evsum">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
  return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${cn.length/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　限制／反向 ${cn.length}</span></div><h3>支持證據</h3>${li("s")}<h3>限制／反向證據</h3>${li("c")}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
- <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
+ <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm evsum">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
 
 /* Agent 行為（AI Harness 權限與人工確認） */
 function act(a,k){const w=U[ME].n,L=p.LV;
@@ -2576,7 +2608,7 @@ function act(a,k){const w=U[ME].n,L=p.LV;
  if(a==="gotoev"){pane="ev";log(w,"前往證據頁確認待驗證來源。");renderProj();renderPane();return}
  if(a==="finishsearch"){S.step=6;S.tok+=600;log(w,"確認證據已足夠，結束搜尋階段。");log("Agent","證據蒐集階段完成。","ai")}
  if(a==="reopen"){S.step=5;log(w,"重新開啟搜尋，可以再補充證據。")}
- if(a==="sum"){S.sum=`目前共 ${S.ev.length} 筆資料：支持 ${S.ev.filter(e=>e.k==="s").length} 筆、限制 ${S.ev.filter(e=>e.k==="c").length} 筆；${S.ev.filter(e=>!e.v).length} 筆來源待驗證。結論請由小組自行判斷。`;log("Agent","產生證據摘要（Level 3）。","ai")}
+ if(a==="sum"){S.sum=window.RFAGENT?RFAGENT.summarizeEvidence(S.ev,{mode:MODE(),claim:S.claim||"",rq:S.rq||""}):`目前共 ${S.ev.length} 筆資料。結論請由小組自行判斷。`;log("Agent","產生證據摘要（Level 3）。","ai")}
  // 示範模式（沒連 Firebase）：投影片大綱用規則式整理
  if(a==="outline"&&window.RFAGENT){const it=RFAGENT.outlineEvidence(S.ev);if(!it.length){alert("還沒有可以引用的證據（支持或限制）。");return}
   const o=RFAGENT.ruleOutline({topic:p.name,question:S.rq,claim:S.claim,points:rdItems().map(x=>x.text).filter(Boolean),items:it});S.outline={...o,refs:RFAGENT.outlineRefs(it,o.slides),by:"規則式整理",at:Date.now()};log("Agent","產生投影片大綱（示範：規則式整理）。","ai")}
@@ -2705,7 +2737,7 @@ async function actLive(a,w){
    S.ev.push(...add.map(e=>({...e,k:"c",ref:true})));S.held=[];S.wantCounter=true}}
  if(a==="sum"){
   label="整理證據摘要中…";
-  job=async()=>{S.sum=(await RFDB.summarizeEvidence(p.fid,{rq:S.rq,evidence:S.ev})).summary}}
+  job=async()=>{S.sum=(await RFDB.summarizeEvidence(p.fid,{rq:S.rq,claim:S.claim||"",mode:MODE(),evidence:S.ev})).summary}}
  if(a==="outline"){
   label="整理投影片大綱中…（約 20 秒）";
   job=async()=>{if(!RFDB.slideOutline)throw new Error("網站版本太舊，請重新整理頁面");S.outline=await RFDB.slideOutline(p.fid,{topic:p.name,question:S.rq,claim:S.claim,points:rdItems().map(o=>o.text).filter(Boolean),evidence:S.ev})}}

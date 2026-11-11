@@ -61,3 +61,16 @@ test('reportTypeOf：從網址判斷小組報告的類型', async () => {
   assert.equal(reportLabel('Canva', 'https://example.com'), '報告');
   assert.equal(reportLabel('Notion', ''), 'Notion');
 });
+
+import { stripTeacherReq, teacherReqOf, fullReq } from './course.mjs';
+test('老師要求即時從課程／作業讀；研究只存小組補充（建立時表單帶入的老師要求會拿掉）', () => {
+  const c = { teacherReq: '需含正反證據', assignments: [{ id: 'a1', req: '10 分鐘簡報' }, { id: 'a2', req: '' }] };
+  assert.equal(teacherReqOf(c, 'a1'), '10 分鐘簡報');
+  assert.equal(teacherReqOf(c, 'a2'), '需含正反證據'); // 作業沒寫就用課程的
+  assert.equal(teacherReqOf(null, 'a1'), '');
+  assert.equal(stripTeacherReq('需含正反證據', '需含正反證據'), '');
+  assert.equal(stripTeacherReq('需含正反證據；加一頁影片', '需含正反證據'), '加一頁影片');
+  assert.equal(stripTeacherReq('自己的要求', '需含正反證據'), '自己的要求');
+  assert.equal(fullReq('老師的', '小組的'), '老師的；小組的');
+  assert.equal(fullReq('', '小組的'), '小組的');
+});
