@@ -141,11 +141,13 @@ export async function scopeFocus({ topic, items = [] }, fetchImpl) {
  * 依白板內容和小組對聚焦問題的回答，寫出一句可以拿去查文獻的研究問題。
  * @returns {Promise<string>}
  */
+// 圖片的讀取結果前面有「（圖片：檔名）（AI 讀圖，請對照原圖）」，以前每項只取 80 字，圖片內容幾乎都被切掉，
+// 模型回「白板內容被截斷，無法寫出研究問題」（11/11 圖片測試研究實際發生）。改成拿掉前綴、每項取 200 字。
 export async function draftQuestion({ topic, items = [], answers = [], must = [] }, fetchImpl) {
   const out = await chatJSON({
     action: 'proposeQuestion',
     system: '你是協助大學生做研究報告的研究助理。根據題目、白板內容與小組選定的聚焦方向，寫出一句具體、可以拿去搜尋學術文獻的研究問題（繁體中文，40 字以內）。只寫一個問句，核心只放一個原因與一個結果，而且以白板上學生最主要的那個問題（通常是第一句）為準，不要換成其他概念（例如白板問「輪班會讓身體變差」，結果就是身體健康，不是職業倦怠）；白板上其他補充的概念（可能的機制、比較的條件、副作用或另一個結果）不要寫進研究問題、也不要用「在其中扮演什麼角色」另外加一句，關鍵字那一步會另外處理；研究對象與情境只寫白板或聚焦方向有提到的，沒有提到就不要自己加上特定族群（例如大學生）。用「如何」「有什麼關聯」「差異為何」這類開放的問法，不要用「會不會」「是否」「嗎」寫成是非題，也不要預設答案。',
-    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(it.text, 80)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
+    user: `題目：${clip(topic, 120) || '（未填）'}\n白板內容：${items.map((it) => clip(String(it.text || '').replace(/^（圖片：[^）]*）(（AI 讀圖，請對照原圖）)?/, '圖片內容：'), 200)).filter(Boolean).slice(0, 10).join('；')}\n小組選定的聚焦方向：${answers.map((a) => `${clip(a.question, 30)} → ${clip(a.answer, 40)}`).join('；') || '（無）'}${must.length ? `\n小組指定研究問題一定要涵蓋：${must.map((m) => clip(m, 60)).join('；')}` : ''}`,
     schema: { type: 'object', required: ['question'], properties: { question: str } },
     maxTokens: 200,
   }, fetchImpl);
