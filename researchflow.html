@@ -384,7 +384,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-7";
+window.RF_VER = "2026.11.11-8";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -2291,15 +2291,13 @@ function evVerBar(){const cur=S.evVer||1,c=evCmp(cur);evNewSet=null;if(c.all.len
 // 每個版本的「誰按了搜尋」：v1 是第一次按下分析的人，之後每次「重新分析」開出的新版本記下按的人（S.evBy，舊資料沒有就顯示未記錄）
 const evWho=v=>{const b=v.evBy;if(!b)return'<span class="mute">開始搜尋的人：未記錄</span>';const d=new Date(b.at||0),t=b.at?`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`:"";
  return `${U[b.u]?av(b.u,18):""} <span>${esc(b.n||uname(b.u))}${t?" 於 "+t:""} 開始搜尋</span>`};
-const evCount=ev=>{const a=ev||[];return{s:a.filter(e=>e.k==="s").length,c:a.filter(e=>e.k==="c").length,u:a.filter(e=>e.k!=="s"&&e.k!=="c").length,high:a.filter(e=>lvOf(e)==="高").length}};
 // 版本列表（右側抽屜）：每版一張卡片，點下去切換到那一版並往下展開（與其他版本的比較、關鍵字、研究問題、證據結構）；點正在看的那張可收合
 function evRowsHTML(c,cur){
  const baseObj=c.all.find(x=>x.n===(evBase&&c.all.some(y=>y.n===evBase)?evBase:c.first));
  return c.all.map(v=>{const on=v.n===cur,open=on&&evOpenCard===v.n,n=(v.ev||[]).length,kws=(v.kw||[]).slice(0,3).join("、")||"—";
   const dv=v.n===baseObj.n?null:RFAGENT.diffVersions(baseObj,v,lvOf);
   const line=v.n===baseObj.n?"比較基準":dv.searched?`${dv.added.length?`多找到 ${dv.added.length} 篇`:"沒有多找到新文獻"}・關鍵字 ${dv.kwAdded.length||dv.kwRemoved.length?`+${dv.kwAdded.length}／−${dv.kwRemoved.length}`:"沒變"}`:"還沒搜尋";
-  const k=evCount(v.ev);
-  const more=open?`<div class="evmore">${evDiffBody(c)}<div class="sm" style="margin-top:10px"><b>關鍵字</b>：${(v.kw||[]).length?(v.kw||[]).map(x=>esc(x)).join("、"):"—"}</div><div class="sm" style="margin-top:4px"><b>研究問題</b>：${esc(String(v.rq||"—").slice(0,120))}</div><div class="sm" style="margin-top:4px"><b>證據結構</b>：支持 ${k.s}、反向 ${k.c}、立場待確認 ${k.u}、證據力高 ${k.high}</div></div>`:"";
+    const more=open?`<div class="evmore">${evDiffBody(c)||'<div class="sm mute" style="margin-top:10px">這是比較基準，其他版本會跟它比較。要看別版的差別，點那一版的卡片。</div>'}</div>`:"";
   return `<div class="evrow${on?" on":""}"><button class="evhd" data-a="${on?"evtoggle":"evver"}" data-k="${v.n}" aria-expanded="${open}" ${on?'aria-current="true"':""} ${canEdit()||on?"":"disabled"}><span aria-hidden="true">${open?"▾":"▸"}</span><span style="display:block;min-width:0;flex:1"><b>證據 v${v.n}</b>（${n} 篇）${on?' <span class="tag ai">正在看</span>':""}<span class="sm mute" style="display:block">搜尋 ${v.rounds||0} 輪・關鍵字 ${esc(kws)}${(v.kw||[]).length>3?"…":""}</span><span class="sm" style="display:block">${esc(line)}</span><span class="sm evwho">${evWho(v)}</span></span></button>${more}</div>`}).join("")+(canEdit()?"":'<div class="sm mute" style="margin-top:8px">唯讀：可以看差別，不能切換版本。</div>')}
 // 右側抽屜：貼著右側欄右緣，往左蓋住一部分證據頁（不會超出右側欄）；用證據頁上的「≡」或抽屜標題列的「≡」、Esc 收合
 function evDrawerRender(){const el=$("#evd");if(!el)return;
