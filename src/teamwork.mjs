@@ -16,11 +16,13 @@ export const TASK_TYPES = [
 export const typeOf = (id) => TASK_TYPES.find((t) => t.id === id) || TASK_TYPES[TASK_TYPES.length - 1];
 
 // 畫布上算一「項」的東西，以及它歸在哪一類。手寫是一筆一筆存的，同一段字的後續筆畫（hwSub）不重複計算。
-const KINDS = ['claim', 'counter', 'evidence', 'question', 'text', 'hand', 'link'];
-export const KIND_NAMES = { claim: '論點', counter: '反向觀點', evidence: '證據', question: '待驗證問題', text: '其他文字', hand: '手寫／圖示', link: '關係連線' };
+const KINDS = ['claim', 'counter', 'evidence', 'question', 'text', 'hand', 'img', 'audio', 'link'];
+export const KIND_NAMES = { claim: '論點', counter: '反向觀點', evidence: '證據', question: '待驗證問題', text: '其他文字', hand: '手寫／圖示', img: '圖片', audio: '錄音', link: '關係連線' };
 function kindOf(o) {
   if (!o) return null;
   if (o.type === 'link') return 'link';
+  if (o.type === 'img') return 'img';
+  if (o.type === 'audio') return 'audio';
   if (o.type === 'stroke') return o.hwSub ? null : 'hand';
   if (o.type === 'text') return ['claim', 'counter', 'evidence', 'question'].includes(o.tag) ? o.tag : 'text';
   return null;
