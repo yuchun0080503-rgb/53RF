@@ -384,7 +384,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-13";
+window.RF_VER = "2026.11.11-14";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -1468,6 +1468,18 @@ async function pinDelete(){const pn=(p.pins||[]).find(x=>x.id===pinOpen);if(!pn)
  try{if(LIVE()&&p.fid)await RFDB.deletePin(p.fid,pn.id);else p.pins=p.pins.filter(x=>x!==pn);closePin();pinTab();if(pane==="pins")renderPane()}
  catch(err){alert("刪除失敗："+(err?.message||err))}}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#ws").classList.contains("full")&&!document.fullscreenElement&&!document.querySelector("dialog[open]")&&document.activeElement.tagName!=="INPUT")setFull(false)});
+// 點彈窗外面的灰色背景＝按 Esc：走同一條路（送出 cancel 事件，沒被擋下才關閉），所以確認視窗當成「取消」、必須選擇的視窗（查證模式）會照原本的 oncancel 擋住。
+// 有輸入欄位的彈窗（研究檔案、個人檔案、評分配比等）：沒改過東西就直接關；已經改了內容（目前的值跟一打開時不同）會先問「放棄變更並關閉？」，避免填到一半不小心丟掉。
+// 按下與放開都要在背景上才算，在輸入框拖曳選字、放開在彈窗外不會誤關。
+let dlgDownOut=false;
+const dlgOutside=(d,e)=>{const r=d.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom};
+document.addEventListener("pointerdown",e=>{dlgDownOut=e.target instanceof HTMLDialogElement&&e.target.open&&dlgOutside(e.target,e)});
+const dlgDirty=d=>[...d.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]):not([readonly]),textarea,select')].some(x=>x.tagName==="SELECT"?x.selectedIndex!==Math.max(0,[...x.options].findIndex(o=>o.defaultSelected)):/^(checkbox|radio)$/.test(x.type)?x.checked!==x.defaultChecked:x.value!==x.defaultValue);
+let dlgAsking=false;
+document.addEventListener("click",async e=>{const d=e.target;if(!(d instanceof HTMLDialogElement)||!d.open||dlgAsking)return;
+ const was=dlgDownOut;dlgDownOut=false;if(!was||!dlgOutside(d,e))return;
+ if(d.id!=="ask"&&dlgDirty(d)){dlgAsking=true;const ok=await ask("這個視窗有還沒儲存的變更，要放棄並關閉嗎？","放棄並關閉","繼續編輯");dlgAsking=false;if(!ok||!d.open)return}
+ const ev=new Event("cancel",{cancelable:true});d.dispatchEvent(ev);if(!ev.defaultPrevented)d.close()});
 $$(".tools [data-t]").forEach(b=>b.onclick=()=>{tool=b.dataset.t;linkFrom=null;$$(".tools [data-t]").forEach(x=>x.classList.toggle("on",x===b));cv.style.cursor=tool==="sel"?"default":tool==="hand"?"grab":"crosshair";draw()});
 function openEd(o,q){const i=document.createElement("textarea"),z=p.v.z;i.className="ti";i.rows=1;i.value=o?o.text:"";i.style.left=(q[0]*z+p.v.x)+"px";i.style.top=(q[1]*z+p.v.y-16)+"px";
  if(o&&(o.ml||o.text.includes("\n")))i.style.width=Math.max(220,(tlay(o).w+14)*z)+"px";
