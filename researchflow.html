@@ -384,7 +384,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.11-11";
+window.RF_VER = "2026.11.11-12";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -2330,6 +2330,8 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
  const lv=lvOf(e),dk=e.lv==="不明"?lvKp(e):null;
  return who+(e.lv?`<p>證據力：${esc(lv)}${lv==="不明"?"（摘要看不出研究方法，請讀原文判斷）":"（依研究方法「"+esc(dk?dk.m+"」，取自 AI 整理的對象與方法":e.m+"」")+"判定：回顧與實驗高，追蹤、問卷與統計比較中，訪談低）"}</p>`:"")})()}<p>${e.ai?"主要發現（"+esc(e.ai)+" 依摘要整理，請對照原文）":LIVE()?"摘要節錄":"主要發現"}：${esc(e.f)}</p>${e.ai&&e.fo?`<p class="sm mute">摘要原文節錄：${esc(e.fo)}</p>`:""}<p>研究限制：${esc((()=>{const kl=e.kp&&window.RFAI&&RFAI.fixLeakedFields?RFAI.fixLeakedFields(e.kp).limits:"";return /^尚未判讀/.test(e.l||"")&&kl&&!/^摘要(沒有|未)(說明|寫出)/.test(kl)?kl+"（依摘要整理）":e.l})())}</p><p>${e.k==="c"?"相關":"支持"} Claim：${esc(e.c||(MODE()==="claim"&&e.k==="s"&&S.claim?S.claim:"尚未指定（加入畫布時在右邊選要支撐的主張）"))}</p><p>搜尋關鍵字：${esc(e.q)}</p><p>範圍比對：${esc(e.sc)}　${esc(e.d)}證據${e.u?"　探索性搜尋結果":""}</p><p><i class="dot ${e.v?"g":"y"}"></i>${e.v?"來源已驗證":"來源待驗證，暫不列為研究證據"}</p>${e.auto?`<p><i class="dot y"></i>支持／反向為依摘要用語的初步分類，請閱讀原文後確認或改列</p>`:""}<div class="acts" style="margin-top:6px">${e.auto&&canEdit()?`<button data-a="confirmk" data-k="${i}" style="font-size:12px;padding:2px 9px">確認分類</button>`:""}${LIVE()&&canEdit()?(MODE()==="claim"&&e.k==="s"?`<button data-a="drop" data-k="${i}" style="font-size:12px;padding:2px 9px">不支持這個主張，移除</button>`:(e.k==="u"?`<button data-a="tos" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為支持</button><button data-a="toc" data-k="${i}" style="font-size:12px;padding:2px 9px">讀過了，列為反向／限制</button>`:`<button data-a="flip" data-k="${i}" style="font-size:12px;padding:2px 9px">改列為${e.k==="c"?"支持":"反向／限制"}</button>`)):""}${e.v?"":`<button data-a="verify" data-k="${i}" style="font-size:12px;padding:2px 9px">驗證來源</button>`}${canEdit()&&claimOpts.length?`<select data-ec="${i}" aria-label="這筆證據要支撐哪個主張" style="font-size:12px;padding:2px 6px;max-width:190px"><option value="">不連到主張</option>${claimOpts.map(o=>`<option value="${esc(o.id)}" ${o.id===guessClaim(e)?"selected":""}>支撐：${esc(objLabel(o))}</option>`).join("")}</select>`:""}<button data-a="save" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>${isSaved(e)?"取消收藏":"收藏"}</button><button data-a="tocv" data-k="${i}" style="font-size:12px;padding:2px 9px" ${canEdit()?"":"disabled"}>加入畫布</button></div></details>`;
  const li=k=>S.ev.map((e,i)=>e.k===k?item(e,i):"").join("")||`<p class="sm mute">尚無資料</p>`;
+ // A2：「有條件成立」（AI 判為部分支持）在反向／限制裡獨立列出，不跟真正的反向混在一起
+ const lf=f=>S.ev.map((e,i)=>f(e)?item(e,i):"").join("")||`<p class="sm mute">尚無資料</p>`,mx=cn.filter(e=>e.mix).length,ct=cn.length-mx;
  // 主張論證模式：只列支持主張的證據，依證據力分層；反面例證只有小組要求過才出現在最下面
  if(MODE()==="claim"){const sup=S.ev.map((e,i)=>[e,i]).filter(x=>x[0].k==="s"),grp=f=>sup.filter(x=>f(lvOf(x[0]))).map(x=>item(x[0],x[1])).join("")||`<p class="sm mute">尚無資料</p>`;
   return `<h3>主張的論證證據</h3><div class="box sm mode-claim"><b>${esc(S.claim||S.rq)}</b><div class="mute" style="margin-top:3px">主張論證模式：只列出支持這個主張的證據，依證據力由高到低排列。共 ${sup.length} 筆。</div></div>
@@ -2338,7 +2340,7 @@ function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)
   ${zhMore()}
   ${S.wantCounter===true?`<h3>反面例證（參考用）</h3><p class="sm mute" style="margin-top:-2px">這是應你們的要求另外找的，用來預想別人可能怎麼反駁，不計入論證強度。</p>${li("c")}`:""}
   <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 等公開學術資料庫，以及網路搜尋找到的華藝、臺灣博碩士論文網文獻。"+evNote("證據力與「是否支持主張」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
- return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${cn.length/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　限制／反向 ${cn.length}</span></div><h3>支持證據</h3>${li("s")}<h3>限制／反向證據</h3>${li("c")}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
+ return `<h3>正反例證</h3><div class="box sm mode-procon"><b>${esc(S.rq||"研究問題")}</b><div class="bar"><i style="width:${sp.length/tot*100}%;background:var(--ok)"></i><i style="width:${mx/tot*100}%;background:#e8a33d"></i><i style="width:${ct/tot*100}%;background:#e2662b"></i></div><span class="mute">支持 ${sp.length}　有條件成立 ${mx}　反向 ${ct}</span></div><h3>支持證據</h3>${li("s")}<h3>有條件成立（只在部分對象或情境成立，算限制）</h3>${lf(e=>e.k==="c"&&e.mix)}<h3>反向證據</h3>${lf(e=>e.k==="c"&&!e.mix)}${S.ev.some(e=>e.k==="u")?`<h3>立場待確認</h3><p class="sm mute" style="margin-top:-2px">這些文獻的摘要只寫了研究目的或方法、沒寫結果，AI 判斷不出支持還是反向。請打開原文看結果，再按下面的按鈕歸類。</p>${li("u")}`:""}${zhMore()}
  <div class="acts"><button data-a="sum">產生證據摘要（Level 3）</button></div>${S.sum?`<div class="box sm">${esc(S.sum)}</div>`:""}<p class="note">${LIVE()?"文獻書目與摘要來自 OpenAlex 公開學術資料庫。"+evNote("「支持／反向」"):"示範資料：此原型未連接真實學術資料庫，文獻不代表真實研究。"}</p>`}
 
 /* Agent 行為（AI Harness 權限與人工確認） */
@@ -2536,7 +2538,7 @@ async function actLive(a,w){
    const off=((r.dbNames||[]).length?`本輪查詢的資料庫：${r.dbNames.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");
    if(MODE()==="claim"){S.msg=`本輪找到 ${ns} 篇支持主張的文獻（請到「證據」頁確認）。`+(nu?`另有 ${nu} 篇立場待確認（摘要沒寫結果或沒有摘要），列在「證據」頁，請讀原文判斷。`:"")+off+(enoughOf(p)?"論證的證據已達門檻。":"證據還不夠：支持主張的證據至少要 3 筆，而且其中要有回顧或實驗研究。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"");}else{
-   S.msg=(r.scanned?`本輪找到 ${r.scanned} 篇切題的新文獻，初步分類為支持 ${ns} 篇、反向／限制 ${nc} 篇${nu?`、立場待確認 ${nu} 篇（摘要沒寫結果）`:""}（請到「證據」頁確認分類）。`:"本輪沒有找到同時提到所有主題詞的新文獻。可以按「修改搜尋方向」減少主題詞，或換一個說法。")+off+(c<3?"反向證據仍不足（Evidence Imbalance）。":"反向證據已達 3 篇。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"")}
+   S.msg=(r.scanned?`本輪找到 ${r.scanned} 篇切題的新文獻，初步分類為支持 ${ns} 篇、反向／限制 ${nc} 篇${nu?`、立場待確認 ${nu} 篇（摘要沒寫結果）`:""}（請到「證據」頁確認分類）。`:"本輪沒有找到同時提到所有主題詞的新文獻。可以按「修改搜尋方向」減少主題詞，或換一個說法。")+off+(c<3?(c===0&&S.rounds>=capOf()&&S.ev.filter(e=>e.k==="s").length>=3?"已查 "+S.rounds+" 輪，沒有找到反向或有條件成立的研究：這個主張的文獻可能一面倒。報告可以寫「目前文獻一致支持」，並說明查了哪些資料庫與關鍵字。":"反向證據仍不足（Evidence Imbalance）。"):"反向證據已達 3 篇。")+(uv?`其中 ${uv} 篇沒有 DOI，標記為來源待驗證。`:"")}
    if(enoughOf(p)||S.rounds>=capOf()||S.manual)break;
    busy=`第 ${S.rounds} 輪證據還不夠，Agent 正在檢討原因並調整關鍵字…`;renderPane();
    await reflectRound(r);saveS()}}}

@@ -206,7 +206,9 @@ for (const c of cases) {
       });
     }
     row.sup = evidence.filter((e) => e.k === 's').length; row.con = evidence.filter((e) => e.k === 'c').length; row.unc = evidence.filter((e) => e.k === 'u').length; row.total = evidence.length;
-    row.success = row.sup >= 1 && row.con >= 1 && row.total >= 3;
+    // A2（11/11）：反向含「有條件成立」；3 輪後找不到任何反向、但支持 ≥ 3 篇，視為正確回報「文獻一面倒」也算完成
+    row.mix = evidence.filter((e) => e.mix).length; row.oneSided = row.con === 0 && row.sup >= 3 && row.rounds >= MAX_ROUNDS;
+    row.success = (row.sup >= 1 && row.con >= 1 && row.total >= 3) || row.oneSided;
     row.needHuman = !row.success; // 3 輪用完還不夠：依設計交給小組決定（例外的人工介入）
     const rel = evidence.map((e) => (c.refTerms || []).some((t) => hit(e.t, t) || hit(e._ab || e.f, t)));
     row.autoRel = evidence.length ? rel.filter(Boolean).length / evidence.length : 0;
