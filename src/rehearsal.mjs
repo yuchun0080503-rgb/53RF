@@ -54,7 +54,7 @@ export function readiness({ step = 0, reportUrl = '', ev = [], tasks = [], membe
     const need = m === 'claim' ? `支持證據 ${s}／${REQ.support} 篇` : `支持證據 ${s}／${REQ.support} 篇、反向證據 ${c}／${REQ.counter} 篇`;
     missing.push({ key: 'content', text: `內容還沒準備好：設定小組報告連結（簡報完成），或把證據搜尋完畢（${need}），完成其中一項即可`, tab: reportUrl ? 'agent' : 'settings' });
   }
-  if (!r.speakers.length) missing.push({ key: 'speaker', text: '還沒有人被指派「上台報告」', tab: 'team' });
+  // 講者不是硬性要求：沒有指派時大家一起練，提示卡的講者欄顯示「未指派」
   return { ok: !missing.length, missing, speakers: r.speakers.map((u) => ({ u, seen: deckSeen(tasks, u, reportUrl) })), counts: { s, c }, via, mode: m };
 }
 

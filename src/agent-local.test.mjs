@@ -78,11 +78,16 @@ test('searchEvidence：整理 OpenAlex 回應、排除已有的文獻；全部�
   await assert.rejects(searchEvidence({ queries: [], kind: 's' }, ok), /關鍵字/);
 });
 
-test('summarizeEvidence：只報數量與標題，並提醒結論由小組判斷', () => {
-  const s = summarizeEvidence([{ k: 's', t: 'A', y: 2024, v: true, auto: true }, { k: 'c', t: 'B', y: 2023, v: false }]);
-  assert.match(s, /支持方向 1 筆/);
-  assert.match(s, /1 筆來源待驗證/);
+test('summarizeEvidence：分段白話（一句話、每篇說了什麼、要注意的事），並提醒結論由小組判斷', () => {
+  const s = summarizeEvidence([{ k: 's', t: 'A', au: 'Gerlich, M.', y: 2024, v: true, auto: true, kp: { takeaway: '常用 AI 的人批判思考分數較低。' } }, { k: 'c', t: 'B', y: 2023, v: false }], { claim: '過度依賴AI' });
+  assert.match(s, /【一句話】支持（1 篇）和反向（1 篇）的證據都有/);
+  assert.match(s, /・Gerlich（2024）：常用 AI 的人批判思考分數較低。/);
+  assert.match(s, /・《B》（2023）：摘要沒有寫出結果/);
+  assert.match(s, /1 篇沒有 DOI/);
+  assert.match(s, /1 篇的支持／反向是 Agent 自動判斷/);
   assert.match(s, /結論請由小組自行判斷/);
+  assert.match(summarizeEvidence([{ k: 's', t: 'A', y: 2024, v: true }], { mode: 'claim', claim: 'X' }), /都支持「X」，還沒有找到限制／反面的研究（報告時記得說明限制）/);
+  assert.match(summarizeEvidence([]), /還沒有找到證據/);
 });
 
 import { suggestMode, claimQuestion, evidenceLevel, claimIssues, fetchAbstractByDoi } from './agent-local.mjs';

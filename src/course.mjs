@@ -100,3 +100,23 @@ export function reportLabel(type, url) {
   const t = reportTypeOf(url) || type || '';
   return !t || t === '其他' ? '報告' : t;
 }
+
+// ---------------- 老師要求與小組補充要求 ----------------
+// 有課程的研究：老師的要求即時從課程（或作業）讀，研究本身只存小組補充的要求，學生不能刪改老師的要求。
+// 把學生欄位裡和老師要求重複的部分拿掉（建立研究時表單會先帶入老師的要求）
+export function stripTeacherReq(text, tReq) {
+  const t = String(text || '').trim(), r = String(tReq || '').trim();
+  if (!r) return t;
+  if (t === r) return '';
+  return t.startsWith(r) ? t.slice(r.length).replace(/^[\s;；,，、。]+/, '').trim() : t;
+}
+/** 這份研究適用的老師要求：作業有寫就用作業的，否則用課程的 */
+export function teacherReqOf(course, assignmentId) {
+  if (!course) return '';
+  const a = (Array.isArray(course.assignments) ? course.assignments : []).find((x) => x && x.id === assignmentId);
+  return String((a && a.req) || course.teacherReq || '').trim();
+}
+/** 給 Agent 用的完整要求：老師的在前、小組補充的在後 */
+export function fullReq(tReq, sReq) {
+  return [String(tReq || '').trim(), String(sReq || '').trim()].filter(Boolean).join('；');
+}

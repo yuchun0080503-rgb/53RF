@@ -28,12 +28,14 @@ test('deckSeen：講者看過「目前的」報告連結才算；連結換了要
 test('readiness：內容三擇一（整理完成／報告連結／證據搜尋完畢）；講者是否看過簡報只顯示、不擋', () => {
   const none = readiness({ step: 4, reportUrl: '', ev: ev(1, 0), tasks: [], memberIds: ['A'] });
   assert.equal(none.ok, false);
-  assert.deepEqual(none.missing.map((m) => [m.key, m.tab]), [['content', 'settings'], ['speaker', 'team']]);
+  assert.deepEqual(none.missing.map((m) => [m.key, m.tab]), [['content', 'settings']]);
   assert.match(none.missing[0].text, new RegExp(`支持證據 1／${REQ.support} 篇、反向證據 0／${REQ.counter} 篇`));
   const ok = readiness({ step: 6, reportUrl: URL1, ev: ev(2, 1), tasks: [task('A', 'present'), task('B', 'present', { seenUrl: URL1 })], memberIds: ['A', 'B'] });
   assert.equal(ok.ok, true); assert.deepEqual(ok.via, ['step', 'report', 'evidence']);
   assert.deepEqual(ok.speakers, [{ u: 'A', seen: false }, { u: 'B', seen: true }]);
   const sp = [task('A', 'present')];
+  // 沒有指派講者也可以排演（不是硬性要求）
+  assert.equal(readiness({ step: 6, reportUrl: '', ev: [], tasks: [], memberIds: ['A'] }).ok, true);
   // 只有報告連結、研究狀態沒到整理完成、證據也不夠：可以排演
   assert.equal(readiness({ step: 3, reportUrl: URL1, ev: [], tasks: sp, memberIds: ['A'] }).ok, true);
   // 沒有報告連結，但證據搜尋完畢：可以排演
