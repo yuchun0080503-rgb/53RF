@@ -1784,7 +1784,8 @@ function teamAct(k,id,r){const ts=p.tasks=p.tasks||[],t=ts.find(x=>x.id===id),li
  if(k==="qadd"){const [u,ty]=id.split("|"),nm=RFTEAM.typeOf(ty).name;if((p.tasks||[]).some(t=>t.assignee===u&&t.type===ty))return;
   const d={title:nm,type:ty,assignee:u,due:""};log(me,`新增任務「${nm}」，負責人：${uname(u)}。`);
   if(live)RFDB.addTask(p.fid,d,ME).catch(fail);else ts.push({id:"t"+Date.now(),...d,by:ME,done:false,doneBy:"",doneAt:0,at:Date.now()});renderTeam();todoTick();return}
- if(k==="add"){const n=r.querySelector("#tkn"),title=n.value.trim().slice(0,120);if(!title){n.focus();return}
+ if(k==="add"){const n=r.querySelector("#tkn"),tt=r.querySelector("#tkt").value,title=n.value.trim().slice(0,120)||(tt!=="other"?RFTEAM.typeOf(tt).name:""); // 沒打字但選了類型（例如上台報告）：直接用類型名稱當工作名稱
+  if(!title){n.focus();n.placeholder="選「其他」時請先輸入工作內容";return}
   const d={title,type:r.querySelector("#tkt").value,assignee:r.querySelector("#tku").value,due:r.querySelector("#tkd")?.value||""};n.value="";const dd=r.querySelector("#tkd");if(dd)dd.value="";
   log(me,`新增任務「${title}」（${RFTEAM.typeOf(d.type).name}），負責人：${d.assignee?uname(d.assignee):"尚未決定"}${d.due?"，截止 "+d.due:""}。`);
   if(live)RFDB.addTask(p.fid,d,ME).catch(fail);else ts.push({id:"t"+Date.now(),...d,by:ME,done:false,doneBy:"",doneAt:0,at:Date.now()})}
