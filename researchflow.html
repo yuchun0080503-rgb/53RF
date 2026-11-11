@@ -1289,7 +1289,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
  if(e.pointerType==="pen"){ // 橡皮擦端／橡皮擦鍵：按著時當橡皮擦；側鍵：依設定
   if((e.buttons&32)||e.button===5){dm="era";holdEra=true;erased=0;eraseAt(q);return}
   if((e.buttons&2)||e.button===2){const a=PEN.side();if(a==="era"){dm="era";holdEra=true;erased=0;eraseAt(q)}else if(a==="undo")penDo("undo");return}}
- if(tool==="pen")cur=[[q[0],q[1],e.timeStamp]];
+ if(tool==="pen"||(tool==="sel"&&e.pointerType==="pen"))cur=[[q[0],q[1],e.timeStamp]]; // 用觸控筆時，工具停在「選取」也直接寫字（像 GoodNotes）；選取、拖動改用手指或滑鼠
  else if(tool==="txt"){const o=hit(q);if(o&&o.type==="text"&&!o.url)openEd(o,[o.x,o.y]);else openEd(null,q)} // 點在已有的文字上：編輯它；點空白處：新增
  else if(tool==="era"){dm="era";erased=0;eraseAt(q)}
  else if(tool==="link"){const o=hit(q);
