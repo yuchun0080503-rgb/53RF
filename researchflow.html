@@ -1253,7 +1253,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
  try{cv.setPointerCapture(e.pointerId)}catch(err){}const q=toW(e);last=[e.clientX,e.clientY];moved=false;
  pd={t:e.timeStamp,x:e.clientX,y:e.clientY,pen:e.pointerType==="pen",mv:0};
  // 老師留言：點到圖釘就打開對話；選了「留言」工具就在點的地方新增；點別的地方就把開著的留言收起來
- if(tool!=="pen"&&tool!=="era"&&e.button!==1&&!space){const pn=pinAt(q);if(pn){pd=null;openPin(pn.id);return}}
+ if(tool!=="pen"&&tool!=="era"&&e.button!==1&&!space){const pn=pinAt(q);if(pn){pd=null;if(isT()&&pn.uid===ME&&pn.status!=="closed"&&tool!=="pin"){pinDrag={pn,q0:q,mv:false,o:{dx:pn.dx,dy:pn.dy,x:pn.x,y:pn.y}};return}openPin(pn.id);return}} // 老師按住自己的留言可以拖動；沒有拖動就當成點一下、打開對話
  if(tool==="pin"){pd=null;if(isT())newPin(q);return}
  if(pinOpen||pinNew)closePin();
  audioHit="";if(tool==="sel"||tool==="hand"){const o=hit(q);if(o&&o.type==="audio")audioHit=o.id} // 點錄音卡片：放開時（沒有拖動）播放／暫停
@@ -1273,6 +1273,7 @@ cv.onpointerdown=e=>{e.preventDefault();{const r=cv.getBoundingClientRect();eraP
 
  else{const o=hit(q);if(o){if(!sel.has(o.id)){if(!e.shiftKey)sel.clear();grpIds(o).forEach(i=>sel.add(i))}dm="move"}else{if(!e.shiftKey)sel.clear();mq=[...q,...q];dm="mq"}insp();draw()}};
 cv.onpointermove=e=>{if(!p)return;const q=toW(e);
+ if(pinDrag){const g=pinDrag,pn=g.pn;if(!g.mv&&Math.hypot(q[0]-g.q0[0],q[1]-g.q0[1])>5/p.v.z){g.mv=true;closePin()}if(g.mv){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);pn.dx=q[0]-b.x;pn.dy=q[1]-b.y}else{pn.x=q[0];pn.y=q[1]}draw()}return}
  if(tool==="era"||dm==="era"){const r=cv.getBoundingClientRect();eraPos=[e.clientX-r.left,e.clientY-r.top];rdraw()}
  if(e.pointerType==="pen"&&!penSeen){penSeen=true;LS("rf.pen","1");hwLabel()} // 筆懸停在螢幕上方就算偵測到
  if(pd)pd.mv=Math.max(pd.mv,Math.hypot(e.clientX-pd.x,e.clientY-pd.y));
@@ -1288,6 +1289,7 @@ cv.onpointermove=e=>{if(!p)return;const q=toW(e);
  else if(dm==="mq"){mq[2]=q[0];mq[3]=q[1];draw()}
  else if(dm==="link"){linkTo=q;draw()}};
 cv.onpointerup=e=>{ // 事件式同步：完成操作後才傳送
+ if(pinDrag){const g=pinDrag;pinDrag=null;if(e&&e.pointerType==="touch")tp.delete(e.pointerId);if(!g.mv){openPin(g.pn.id);return}pinMoved(g);return}
  if(e&&e.pointerType==="touch"&&eraPos){eraPos=null;rdraw()}
  if(e&&e.pointerType==="touch"){tp.delete(e.pointerId);if(dm==="pinch"){if(tp.size<2){ // 兩指同時輕點一下（很短、幾乎沒移動）→ 復原上一步，跟筆尖雙擊可以並用
    const two=pz&&e.type==="pointerup"&&e.timeStamp-pz.t0<300&&pz.mv<12&&PEN.two()==="undo";dm=null;pz=null;
@@ -1460,6 +1462,10 @@ function attachLivePins(proj){if(!LIVE()||!proj.fid||proj._unsubPins||!RFDB.subs
 // 先看留言原本的位置上有沒有內容，有就當作貼在那個內容上（只用來顯示名稱，位置不動），真的沒有才標「已刪除」
 function pinPos(pn){const o=pn.oid&&getO(pn.oid);if(o){const b=bbox(o);return{x:b.x+pn.dx,y:b.y+pn.dy,o,gone:false}}
  const near=pn.oid?hit([pn.x,pn.y]):null;return{x:pn.x,y:pn.y,o:near||null,gone:!!pn.oid&&!near}}
+let pinDrag=null;
+// 老師拖動自己的留言：貼在內容上的留言改的是相對位置（之後還是跟著那個內容走），貼在空白處的改畫布座標。只改位置，文字不能改（firestore.rules 強制）
+function pinMoved(g){const pn=g.pn;setStat("已移動留言");if(pane==="pins")renderPane();
+ if(LIVE()&&p.fid)RFDB.movePin(p.fid,pn.id,{dx:pn.dx,dy:pn.dy,x:pn.x,y:pn.y}).catch(err=>{console.error("[ResearchFlow] 移動留言失敗：",err);Object.assign(pn,g.o);draw();setStat("移動留言失敗，已放回原位","r")})}
 function pinAt(q){const ps=p.pins||[],r=14/p.v.z;for(let i=ps.length-1;i>=0;i--){const P=pinPos(ps[i]);if(Math.hypot(q[0]-P.x,q[1]-P.y)<=r)return ps[i]}return null}
 function drawPins(){const ps=p.pins||[];if(!ps.length&&!pinNew)return;const z=p.v.z,r=11/z,ok=cssv("--ok"),bad=cssv("--bad");
  ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font=`bold ${11/z}px sans-serif`;
@@ -1471,7 +1477,7 @@ function drawPins(){const ps=p.pins||[];if(!ps.length&&!pinNew)return;const z=p.
 function pinTab(){const el=$("#pinct");if(!el||!p)return;const n=(p.pins||[]).filter(x=>x.status!=="done").length;el.innerHTML=n?` <b class="pinn">${n}</b>`:""}
 const pinWhere=P=>P.o?"「"+esc(objLabel(P.o))+"」":P.gone?"原本的內容（已刪除）":"畫布空白處";
 function pinsHTML(){const ps=p.pins||[],open=ps.filter(x=>x.status!=="done").length;
- if(!ps.length)return `<h3>老師留言</h3><p class="sm mute">${isT()?"選畫布工具列的「留言」，點便利貼、手寫或畫布任何位置，就可以留言給這組。留言貼在內容上時，內容移動，留言會跟著移動。":"老師還沒有在畫布上留言。老師留言後，畫布上會出現紅色圖釘，這裡也會列出來。"}</p>`;
+ if(!ps.length)return `<h3>老師留言</h3><p class="sm mute">${isT()?"選畫布工具列的「留言」，點便利貼、手寫或畫布任何位置，就可以留言給這組。留言貼在內容上時，內容移動，留言會跟著移動；也可以按住自己的留言拖到別的位置。":"老師還沒有在畫布上留言。老師留言後，畫布上會出現紅色圖釘，這裡也會列出來。"}</p>`;
  const row=([pn,i])=>{const P=pinPos(pn);return `<div class="pinrow" data-pin="${esc(pn.id)}" tabindex="0" role="button"><i class="dot ${pn.status==="done"?"g":"r"}"></i><div><b>#${i+1}</b> ${esc(pn.text.slice(0,70))}${pn.text.length>70?"…":""}<div class="sm mute">${esc(pn.by)}．貼在${pinWhere(P)}．${pn.n?pn.n+" 則回覆":"還沒有回覆"}${pn.status==="done"?"．"+(pn.doneBy?esc(pn.doneBy)+" ":"")+"標記已處理"+(pn.closed?"．老師已結案":""):""}</div></div></div>`};
  return `<h3>老師留言</h3><div class="box sm">未處理 <b style="color:var(--bad)">${open}</b>　已處理 <b style="color:var(--ok)">${ps.length-open}</b></div>`
   +ps.map((pn,i)=>[pn,i]).sort((a,b)=>(a[0].status==="done")-(b[0].status==="done")).map(row).join("")

@@ -794,6 +794,10 @@ export async function addPin(projectId, { oid, dx, dy, x, y, text }, who) {
   });
   return r.id;
 }
+// 老師拖動自己的留言：只改位置
+export async function movePin(projectId, pinId, { dx, dy, x, y }) {
+  await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), { dx: Number(dx) || 0, dy: Number(dy) || 0, x: Number(x) || 0, y: Number(y) || 0 });
+}
 export async function replyPin(projectId, pinId, text, who) {
   await addDoc(collection(db, 'projects', projectId, 'pins', pinId, 'msgs'), { uid: auth.currentUser.uid, by: who || '', text: String(text).slice(0, 1000), at: serverTimestamp() });
   await updateDoc(doc(db, 'projects', projectId, 'pins', pinId), { n: increment(1), lastAt: serverTimestamp(), lastBy: who || '' });
