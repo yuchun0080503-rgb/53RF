@@ -827,8 +827,7 @@ function gapText(q){const s=q.S,c=s.ev.filter(e=>e.k==="c").length;if(q.LV<2)ret
 // 剛選好的模式先記在這裡：線上模式建立研究後，研究清單的即時資料可能還沒帶回 searchMode，打開研究時就不會再問一次
 const MODE_PICK={};
 function chooseMode(q,done){const d=$("#pd"),text=[q.name,reqOf(q),q.field,q.course].join(" ");
- if(d.open&&d.dataset.kind==="mode")return; // 已經在問了，不要再跳一次
- d.dataset.kind="mode";
+ if(d.open&&d.querySelector("button.mopt[data-m]"))return; // 已經在問了，不要再跳一次
  const sug=window.RFAGENT?RFAGENT.suggestMode(text):{mode:"claim",reason:"多數報告是在說明或論證一個主題，針對主張逐一查證比較實用。"};
  d.innerHTML=`<h2>選擇預設的查證模式</h2><p class="sm mute" style="margin:6px 0 0">Agent 搜尋證據時會照這個模式進行。之後可以在「檔案設定」更改，每次開始查證前的確認頁也會再提示一次。</p>
  <p class="advice">${I("spark")}<span class="mute">Agent 的建議：</span>這份報告比較適合「${MODE_N[sug.mode]}」。${esc(sug.reason)}</p>
@@ -840,7 +839,7 @@ function chooseMode(q,done){const d=$("#pd"),text=[q.name,reqOf(q),q.field,q.cou
    try{await RFDB.updateProjectSettings(q.fid,{searchMode:m});traceLive(q.fid,U[ME].n,"將預設查證模式設為「"+MODE_N[m]+"」。","user")}
    catch(err){alert("儲存查證模式失敗："+(err?.message||err));d.querySelectorAll("[data-m]").forEach(x=>x.disabled=false);return}}
   else if(q.trace)q.trace.push({t:nowT(),w:U[ME].n,x:"將預設查證模式設為「"+MODE_N[m]+"」。",k:"user"});
-  q.mode=m;if(q.fid)MODE_PICK[q.fid]=m;d.oncancel=null;d.dataset.kind="";d.close();renderProj();if(p===q&&!$("#v-ws").classList.contains("hide")){openWsUI();renderPane()}done&&done()});
+  q.mode=m;if(q.fid)MODE_PICK[q.fid]=m;d.oncancel=null;d.close();renderProj();if(p===q&&!$("#v-ws").classList.contains("hide")){openWsUI();renderPane()}done&&done()});
  d.showModal()}
 function renderProj(){todoTick();rehHome();const mine=q=>(LIVE()||ROLE==="s")&&roleIn(q)==="Owner";
  $("#cnt").textContent=`${projects.length} 個進行中的研究．向左滑可以置頂`+(projects.some(mine)?"；自己建立的研究可以按「刪除」或向左滑刪除":"");
