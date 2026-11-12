@@ -84,15 +84,20 @@ export function normalizeWork(w, query) {
 // 多條查詢的結果合併：同一篇只留第一次出現的，並排除前幾輪已經在 Evidence Map 裡的文獻。
 // 同一篇論文從不同資料庫找到時 id 不一樣（OpenAlex 是 W 開頭、Crossref 是 DOI），所以 DOI 也要比對（不分大小寫）
 const doiKey = (d) => (typeof d === 'string' && /doi\.org\//i.test(d) ? 'doi:' + d.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase() : '');
+// 標題比對用的鍵：全形轉半形、不分大小寫、只留英數字與中日文（同一篇從不同資料庫找到時，DOI 可能一個有一個沒有，標題一樣）
+export function titleKey(t) {
+  const k = String(t || '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff]/g, '');
+  return k.length >= 8 ? 't:' + k : '';
+}
 export function dedupeWorks(works, excludeIds = []) {
   const ex = Array.isArray(excludeIds) ? excludeIds : [];
   const seen = new Set([...ex, ...ex.map(doiKey).filter(Boolean)]);
   const out = [];
   for (const w of works) {
     if (!w) continue;
-    const d = doiKey(w.doi) || doiKey(w.id);
-    if (seen.has(w.id) || (d && seen.has(d))) continue;
-    seen.add(w.id); if (d) seen.add(d);
+    const d = doiKey(w.doi) || doiKey(w.id), t = titleKey(w.title);
+    if (seen.has(w.id) || (d && seen.has(d)) || (t && seen.has(t))) continue;
+    seen.add(w.id); if (d) seen.add(d); if (t) seen.add(t);
     out.push(w);
   }
   return out;

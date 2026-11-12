@@ -7,7 +7,7 @@
 //   - 證據分類：依摘要裡的正向／負向用語做「初步分類」，一律標示為待小組確認，學生可以改列
 // 純邏輯都在這個檔案，可以用 node:test 驗證；唯一的網路呼叫是 searchEvidence 裡的 fetch。
 
-import { clampQueries, openAlexUrl, openAlexInit, normalizeWork, dedupeWorks, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
+import { clampQueries, openAlexUrl, openAlexInit, normalizeWork, dedupeWorks, titleKey, crossrefUrl, normalizeCrossref, sourceUrl, normalizeSource, SOURCES } from './searchLogic.mjs';
 import { routeFor, jstageTerms, jstageUrl, normalizeJstage, normalizeZhWeb, ZHSEARCH_ENDPOINT } from './sources.mjs';
 // 給畫面用（證據頁的中文資料庫連結）：挑關鍵字、組華藝搜尋網址
 export { localTerms, airitiUrl } from './sources.mjs';
@@ -759,7 +759,7 @@ export async function searchEvidence({ queries, kind, keywords, core, scope, exc
     return place && text.includes(place) && topic.length >= 2 && w.title.includes(topic.slice(0, 2)) ? 1 : -1;
   };
   // 同一篇論文有時會以不同編號出現兩次（預印本與正式版、不同資料庫），標題或 DOI 一樣的只留一篇
-  const byTitle = (list) => { const seen = new Set(); return list.filter((w) => { const t = 't:' + w.title.toLowerCase().replace(/[^a-z0-9぀-ヿ一-鿿]/g, ''), d = w.doi ? 'd:' + w.doi.toLowerCase() : ''; if (seen.has(t) || (d && seen.has(d))) return false; seen.add(t); if (d) seen.add(d); return true; }); };
+  const byTitle = (list) => { const seen = new Set(); return list.filter((w) => { const t = titleKey(w.title) || 'id:' + w.id, d = w.doi ? 'd:' + w.doi.toLowerCase() : ''; if (seen.has(t) || (d && seen.has(d))) return false; seen.add(t); if (d) seen.add(d); return true; }); };
   // 被撤稿的論文不要
   const pool = (lang) => byTitle(dedupeWorks(settled.flatMap((s, i) => (jobs[i].lang === lang ? s.value : [])), excludeIds)).filter((w) => !/\bretracted\b|撤稿/i.test(w.title));
   // 每一輪的第一條查詢最貼近這一輪要找的方向（例如統整性研究、負面結果），它找到的文獻排前面
@@ -889,4 +889,20 @@ export function outlineToText({ topic = '', slides = [], refs = [] }) {
   });
   if (refs.length) lines.push(`第 ${slides.length + 1} 頁　參考文獻`, ...refs);
   return lines.join('\n').trim();
+}
+
+/**
+ * 證據清單去重（同一次蒐證裡，不同輪或不同資料庫找到的同一篇）：id、DOI 網址或標題相同就只留第一筆。
+ * @param {object[]} have 已經在清單裡的
+ * @param {object[]} add 這一輪新找到的
+ * @returns {object[]} add 裡真正新的
+ */
+export function newEvidence(have, add) {
+  const keyOf = (e) => [e && e.id, e && e.url, e && /doi\.org\//i.test(e.url || '') ? 'doi:' + String(e.url).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').toLowerCase() : '', titleKey(e && e.t)].filter(Boolean);
+  const seen = new Set((have || []).flatMap(keyOf));
+  return (add || []).filter((e) => { const ks = keyOf(e); if (ks.some((k) => seen.has(k))) return false; ks.forEach((k) => seen.add(k)); return true; });
+}
+/** 排除清單（給下一輪搜尋用）：id、網址，再加上標題鍵，讓不同資料庫的同一篇也被排除 */
+export function evidenceExcludes(list) {
+  return (list || []).flatMap((e) => [e && e.id, e && e.url, titleKey(e && e.t)]).filter(Boolean);
 }

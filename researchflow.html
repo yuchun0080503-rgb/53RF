@@ -416,7 +416,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.12-2";
+window.RF_VER = "2026.11.12-3";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -498,6 +498,9 @@ const evClone=x=>x===undefined?undefined:JSON.parse(JSON.stringify(x));
 function evStash(){const o={n:S.evVer||1,at:Date.now()};EVF.forEach(k=>{if(S[k]!==undefined)o[k]=evClone(S[k])});S.evVers=(S.evVers||[]).filter(x=>x.n!==o.n).concat(o).sort((a,b)=>a.n-b.n)}
 // 還沒搜尋過的版本（0 篇、0 輪）沒有用處：離開它（切換版本、開新一輪）時直接丟掉，不留在版本列表裡
 const evEmpty=x=>!(x.rounds||(x.ev||[]).length);
+// 排演室用的證據：目前版本有證據就用目前的；正在重新分析（目前版本還沒搜尋）時，用最近一個搜尋過的版本
+function evForReh(q){const st=(q&&q.S)||{};if((st.ev||[]).length)return {ev:st.ev,n:st.evVer||1,cur:true};
+ const last=(st.evVers||[]).filter(x=>(x.ev||[]).length).sort((a,b)=>b.n-a.n)[0];return last?{ev:last.ev,n:last.n,cur:false}:{ev:[],n:0,cur:true}}
 // 「進行中」：正在看的版本還沒搜尋過、而且還有別的版本＝有人按了重新分析、正在確認策略或準備搜尋。這時不讓別人切走（版本是整組共用的，切走會把正在操作的人的畫面換掉），只能等搜尋完或由人按「放棄這一版」
 const evPending=()=>evEmpty(S)&&(S.evVers||[]).length>0;
 const evPendingBy=()=>(S.evBy&&(S.evBy.n||uname(S.evBy.u)))||"有人";
@@ -1952,7 +1955,7 @@ function rehExtra(q){return [...(q.fb||[]).filter(f=>f.kind==="rehearsal").map(f
 function rehMin(q,base){if(!base&&q.R&&+q.R.min)return +q.R.min;const ex=rehExtra(q).slice().sort((a,b)=>(b.at||0)-(a.at||0)).find(e=>/(\d{1,2})\s*分鐘/.test(e.text));return ex?+ex.text.match(/(\d{1,2})\s*分鐘/)[1]:talkOf(q).min||RFREH.DEFAULT_MIN}
 function rehRoles(q){return RFREH.rolesOf(q.tasks||[],studsOf(q))}
 function rehFlow(q){const r=rehRoles(q);return RFREH.planFlow({talkMin:rehMin(q),rubric:(rubricOfP(q)||{}).items||[],speakers:r.speakers,mode:modeOf(q)})}
-function rehInput(q,flow){const st=q.S||{},ev=window.RFAGENT?RFAGENT.outlineEvidence(st.ev||[]):[];
+function rehInput(q,flow){const st=q.S||{},ev=window.RFAGENT?RFAGENT.outlineEvidence(evForReh(q).ev):[];
  return {question:st.rq||"",claim:st.claim||"",talkMin:flow.total,segments:flow.segments.map(x=>({id:x.id,title:x.title,min:x.min,speaker:uname(x.speaker)})),
   evidence:ev.map(e=>({n:e.n,k:e.k,t:e.t,point:e.point||""})),rubric:((rubricOfP(q)||{}).items||[]),teacherReq:reqOf(q),extra:rehExtra(q).map(e=>({by:e.by,text:e.text})),people:studsOf(q).length,goal:(q.R||{}).goal||"",
   // 讀過的簡報文字（簡報檢查時存的）：講者提示卡用來對應頁碼
@@ -2009,7 +2012,7 @@ function rehDrawTick(){const el=$("#rhdt");if(!el){clearInterval(rehDraw.timer);
 const pgT=(ps,kind)=>{if(!ps||!ps.length)return "";const a=ps.slice().sort((x,y)=>x-y),r=[];let st=a[0],pv=a[0];for(const n of a.slice(1).concat([null])){if(n===pv+1){pv=n;continue}r.push(st===pv?st:st+"–"+pv);st=pv=n}return (kind==="doc"?"第 ":"p.")+r.join("、")+(kind==="doc"?" 段":"")};
 const ST_N={ok:["已呈現","g"],weak:["不完整","y"],missing:["找不到","r"],unknown:["未判斷","n"]};
 function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contains("hide")||!window.RFREH)return;
- const ids=studsOf(q),rd=RFREH.readiness({step:(q.S||{}).step||0,reportUrl:q.reportUrl,ev:(q.S||{}).ev||[],tasks:q.tasks||[],memberIds:ids,mode:modeOf(q)}),roles=rehRoles(q),flow=rehFlow(q),R=q.R||{},L=q.LV,edit=canEdit(),ev=window.RFAGENT?RFAGENT.outlineEvidence((q.S||{}).ev||[]):[];
+ const ids=studsOf(q),evr=evForReh(q),rd=RFREH.readiness({step:(q.S||{}).step||0,reportUrl:q.reportUrl,ev:evr.ev,tasks:q.tasks||[],memberIds:ids,mode:modeOf(q)}),roles=rehRoles(q),flow=rehFlow(q),R=q.R||{},L=q.LV,edit=canEdit(),ev=window.RFAGENT?RFAGENT.outlineEvidence(evr.ev):[];
  const evT=n=>{const e=ev.find(x=>x.n===n);return e?`[${n}] ${e.t}`:""},refsT=r=>(r||[]).map(evT).filter(Boolean),agt=x=>`<span class="agt" title="${esc(x.by)}">Agent 建議</span><span class="sm mute"> ${esc(x.by)}・${esc(fmtAt(x.at))}</span>`;
  const iSpeak=roles.speakers.includes(ME),iSeen=RFREH.deckSeen(q.tasks||[],ME,q.reportUrl),plan=R.plan&&R.plan.data&&R.plan.data.segments?R.plan:null,card=id=>plan?(plan.data.segments.find(x=>x.id===id)||{}):{};
  const missRow=m=>`<div class="rhmiss"><i class="dot r"></i><span>${esc(m.text)}</span><button class="lnk" data-rgo="${esc(m.tab)}">前往</button></div>`;
@@ -2084,6 +2087,8 @@ function renderReh(){const q=rehQ,el=$("#v-reh");if(!q||!el||el.classList.contai
   <div class="rhroles">${roles.speakers.length?`<span><b>講者</b> ${esc(roles.speakers.map(uname).join("、"))}</span>`:""}${side.length?`<span><b>排演時</b> ${side.map(x=>esc(uname(x.u))+" "+x.role).join("・")}</span>`:roles.speakers.length?`<span class="mute">每個人都上台：輪流計時、扮演台下提問者</span>`:""}</div>
   <section class="tcard"><div class="tch"><h2>準備度</h2><span class="tag ${rd.ok?"":"blk"}">${rd.ok?"可以開始排演":"還不能排演"}</span></div>
    ${rd.missing.map(missRow).join("")||`<p class="sm mute" style="margin:0">內容已準備好（${rd.via.map(v=>({step:"研究已整理完成",report:"已設定小組報告連結",evidence:"證據搜尋完畢"})[v]).join("、")}）。${roles.speakers.length?"":"還沒有指派講者也可以先練：大家輪流講，之後在「分工」指派「上台報告」，提示卡會標上講者。"}</p>`}
+   ${(()=>{const st=q.S||{},vs=[...(st.evVers||[]).filter(x=>x.n!==(st.evVer||1)&&(x.ev||[]).length),...((st.ev||[]).length?[{n:st.evVer||1,ev:st.ev}]:[])];if(!vs.length)return "";const e=evr.ev,ns=e.filter(x=>x.k==="s").length,nc=e.filter(x=>x.k==="c").length;
+    return `<p class="sm mute" style="margin:8px 0 0">搜證紀錄：已搜尋過 ${vs.length} 個證據版本（${vs.map(x=>"v"+x.n).join("、")}）；排演用證據 v${evr.n}：支持 ${ns} 篇、${modeOf(q)==="claim"?"限制／反面":"反向"} ${nc} 篇${evr.cur?"":`<b>（證據 v${(st.evVer||1)} 正在重新分析，先用上一版）</b>`}。</p>`})()}
    ${rd.speakers.length?`<p class="sm mute" style="margin:8px 0 0">講者看過簡報：${rd.speakers.map(x=>esc(uname(x.u))+(x.seen?" ✓":" 還沒")).join("・")}${iSpeak&&q.reportUrl?`　<button class="lnk" id="rhopen">開啟簡報</button>${iSeen?"":`<button class="lnk" id="rhseen">我看過了</button>`}`:""}</p>`:""}</section>
   ${deckSec}
   ${!rd.ok||L<2?"":cardSec}
@@ -2578,7 +2583,10 @@ document.addEventListener("pointerdown",e=>{if(!evDrawer)return;const el=$("#evd
 
 function evHTML(){evNewSet=null;return evVerBar()+savedHTML()+evHTML0()}
 function evHTML0(){S.ev.forEach(e=>{if(e.unc&&e.auto!==false&&e.k==="c"&&!e.ref)e.k="u"}); // 舊資料：立場待確認以前被放進反向，顯示時改回待確認
- if(!S.ev.length)return `<h3>Evidence Map</h3><p class="sm mute">確認研究問題並完成搜尋後，證據會出現在這裡。沒有可驗證來源的資料不會被標記為證據。</p>`;
+ if(!S.ev.length){const last=(S.evVers||[]).filter(x=>x.n!==(S.evVer||1)&&(x.ev||[]).length).sort((a,b)=>b.n-a.n)[0];
+  // 正在重新分析（新版本還沒搜尋）：直接顯示上一版的證據，不用另外打開版本列表
+  if(last)return `<h3>Evidence Map</h3><p class="sm mute">證據 v${S.evVer||1} 還沒搜尋完，完成後會顯示在這裡。下面先列出上一版 <b>v${last.n}</b> 的 ${last.ev.length} 篇證據：</p>${evPeekHTML(last)}`;
+  return `<h3>Evidence Map</h3><p class="sm mute">確認研究問題並完成搜尋後，證據會出現在這裡。沒有可驗證來源的資料不會被標記為證據。</p>`}
  const sp=S.ev.filter(e=>e.k==="s"),cn=S.ev.filter(e=>e.k==="c"),tot=sp.length+cn.length;
  // 「加入畫布」時可以選這筆證據要支撐哪個主張：預設選主張論證模式正在論證的那個，或證據上記錄的相關論點，否則第一個
  const claimOpts=contentObjs().filter(o=>o.tag==="claim"),guessClaim=e=>(claimOpts.find(o=>objLabel(o)===(S.claim||"").slice(0,24))||claimOpts.find(o=>e.c&&(o.text||o.aiRead)===e.c)||claimOpts[0]||{}).id;
@@ -2785,7 +2793,7 @@ async function actLive(a,w){
  if(a==="round"){
   // 查詢由小組確認過的關鍵字組成：第 1 輪找支持方向，第 2 輪起加上負面／限制用語找反向方向（見 agent-local.mjs 的 buildQueries）
   if(!S.kw.length){alert("請先回到上一步新增至少一個搜尋關鍵字。");return}
-  const known=()=>[...S.ev,...(S.held||[])].flatMap(e=>[e.id,e.url]).filter(Boolean).concat(S.gone||[]); // 連 DOI 網址一起排除：同一篇從不同資料庫找到時 id 不一樣，DOI 一樣
+  const known=()=>(window.RFAGENT&&RFAGENT.evidenceExcludes?RFAGENT.evidenceExcludes([...S.ev,...(S.held||[])]):[...S.ev,...(S.held||[])].flatMap(e=>[e.id,e.url]).filter(Boolean)).concat(S.gone||[]); // 連 DOI 網址一起排除：同一篇從不同資料庫找到時 id 不一樣，DOI 一樣
   const roundLabel=n=>{let l=MODE()==="claim"?`第 ${n+1} 輪：搜尋${ROUND_N[n]||"擴大範圍的補充資料（放寬出版年份）"}中…`:`第 ${n+1} 輪：搜尋學術資料庫中…`;if(AI())l+=`（找到後 ${AIN()} 會逐篇閱讀摘要，約需 1 分鐘）`;return l};
   label=roundLabel(S.rounds);
   // 反思迴圈（第 5 頁流程圖第 4 階段）：每一輪搜尋完，Agent 自己檢查證據缺口；還不夠、而且沒用完輪數預算時，
@@ -2793,7 +2801,9 @@ async function actLive(a,w){
   job=async()=>{for(;;){const n=S.rounds;busy=roundLabel(n);renderPane();
    // sources：老師勾選或依領域自動挑的加查資料庫（srcOf）；sourcesLocked：老師有勾選時只查老師勾的，不再依學科自動加查
    const r=await RFDB.searchEvidence(p.fid,{...broadKw(kwSets()),round:n,excludeIds:known(),mode:MODE(),sources:srcOf(p),sourcesLocked:Array.isArray(courseOfP(p)?.sources),readings:n===0?readingsOf(p):[]});
-   S.qs.push(r.queries);S.rounds++;S.dbs=[...new Set([...(S.dbs||[]),...(r.dbNames||[])])];S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
+   S.qs.push(r.queries);S.rounds++;S.dbs=[...new Set([...(S.dbs||[]),...(r.dbNames||[])])];// 同一次蒐證裡不重複：不同輪、不同資料庫找到的同一篇（id、DOI 或標題相同）只留第一筆
+   if(window.RFAGENT&&RFAGENT.newEvidence){r.evidence=RFAGENT.newEvidence([...S.ev,...(S.held||[])],r.evidence);r.held=RFAGENT.newEvidence([...S.ev,...(S.held||[]),...r.evidence],r.held||[])}
+   S.ev.push(...r.evidence);S.held=(S.held||[]).concat(r.held||[]);setTimeout(zhFill,300);
    const ns=r.evidence.filter(e=>e.k==="s").length,nc=r.evidence.filter(e=>e.k==="c").length,nu=r.evidence.filter(e=>e.k==="u").length,c=S.ev.filter(e=>e.k==="c").length,uv=S.ev.filter(e=>!e.v).length;
    const off=((r.dbNames||[]).length?`本輪查詢的資料庫：${r.dbNames.join("、")}。`:"")+((r.relaxed||[]).length?`同時提到所有主題詞的文獻太少，已放寬「${r.relaxed.join("、")}」這個條件（放寬後找到的標為相關度中）。`:"")+(r.dropped?`另有 ${r.dropped} 篇不夠切題，已排除。`:"")+(r.fallback?"OpenAlex 今天的查詢額度已用完，這一輪改用 Crossref 資料庫（沒有中文文獻）。":"")
     +(r.ai&&r.ai.model?`${r.ai.model} 讀過 ${r.ai.judged} 篇摘要${r.ai.removed?"，排除 "+r.ai.removed+" 篇不切題的":""}，並依研究發現判斷立場；「主要發現」是模型寫的，請對照原文。`:r.ai&&r.ai.error&&window.RFLLM&&RFLLM.status().ok?"模型判讀失敗，這一輪改用規則式分類。":"");
@@ -2806,8 +2816,8 @@ async function actLive(a,w){
   // 小組看完潛在問題後主動要求：另外搜尋反面例證，連同先前保留不顯示的文獻一起列為「參考用」
   log(w,"檢視主張的潛在問題後，要求參考反面例證。");
   label="搜尋反面例證（參考用）中…";
-  job=async()=>{const r=await RFDB.searchEvidence(p.fid,{...kwSets(),round:"counter",excludeIds:[...S.ev.flatMap(e=>[e.id,e.url]).filter(Boolean),...(S.gone||[])],mode:"claim",sources:srcOf(p)});
-   const have=new Set(S.ev.map(e=>e.id)),add=[...(S.held||[]),...r.evidence.filter(e=>e.k==="c")].filter(e=>!have.has(e.id)&&have.add(e.id));
+  job=async()=>{const r=await RFDB.searchEvidence(p.fid,{...kwSets(),round:"counter",excludeIds:[...(window.RFAGENT&&RFAGENT.evidenceExcludes?RFAGENT.evidenceExcludes(S.ev):S.ev.flatMap(e=>[e.id,e.url]).filter(Boolean)),...(S.gone||[])],mode:"claim",sources:srcOf(p)});
+   const cand=[...(S.held||[]),...r.evidence.filter(e=>e.k==="c")],have=new Set(S.ev.map(e=>e.id)),add=window.RFAGENT&&RFAGENT.newEvidence?RFAGENT.newEvidence(S.ev,cand):cand.filter(e=>!have.has(e.id)&&have.add(e.id));
    S.ev.push(...add.map(e=>({...e,k:"c",ref:true})));S.held=[];S.wantCounter=true}}
  if(a==="sum"){
   label="整理證據摘要中…";
