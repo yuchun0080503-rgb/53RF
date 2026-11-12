@@ -19,7 +19,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
 select{width:auto;padding:5px 8px}
 .tip{position:relative;display:inline-flex;vertical-align:-2px;margin-left:6px;color:var(--mute);cursor:help;border-radius:99px;outline-offset:2px}.tip .ic{width:16px;height:16px}.tip:hover,.tip.open{color:var(--ac)}
 .tipb{display:none;position:fixed;z-index:1000;width:max-content;max-width:min(320px,calc(100vw - 48px));background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:10px 14px;box-shadow:0 10px 30px -12px rgba(20,30,60,.35);font-size:13px;font-weight:400;line-height:1.65;text-align:left;white-space:normal;letter-spacing:0}
-.tipb ul{margin:0;padding-left:18px}.tipb li+li{margin-top:4px}.tip.open .tipb{display:block}
+.tipb ul{margin:0;padding-left:18px}.tipb li+li{margin-top:4px}.tip .tipb{display:none!important}#tipf{text-transform:none;font-family:inherit}
 h1,h2,h3{margin:0;font-weight:600}.mute{color:var(--mute)}.sm{font-size:13px}.sp{flex:1}.hide{display:none!important}
 label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
 .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px;flex:none}
@@ -416,7 +416,7 @@ button{transition:background .15s,transform .15s,box-shadow .15s}button:active{t
 // 不存在或連不上，也只是靜靜留在 demo 模式——下面主程式完全不受影響，不會白屏。
 window.RF_MODE = "demo";
 // 手寫與圖示的自動偵測（src/ink.mjs）跟 Firebase 無關，展示模式也能用；載入失敗就退回手動輸入。
-window.RF_VER = "2026.11.12-1";
+window.RF_VER = "2026.11.12-2";
 // 查證模式的建議、主張轉研究問題、中文轉英文關鍵字都是純函式（src/agent-local.mjs），展示模式也用得到。
 // 課程制的小工具（代碼格式、學期結束日、代碼是否有效），展示模式也用得到
 // 課程代碼的 QR code（第三方：qrcode-generator，MIT 授權，放在 src/vendor）
@@ -459,11 +459,18 @@ const I=n=>`<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${PT[n]}</svg
 const TIP=(lines,label)=>`<span class="tip" tabindex="0" role="button" aria-label="${label||"說明"}">${I("info")}<span class="tipb" role="tooltip"><ul>${[].concat(lines).filter(Boolean).map(t=>`<li>${String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c])}</li>`).join("")}</ul></span></span>`;
 const icons=(r=document)=>r.querySelectorAll("i[data-i]").forEach(e=>{e.outerHTML=I(e.dataset.i)});
 // 說明框的位置：放在圖示下方（下面放不下就放上方），左右不超出畫面
-function tipShow(t){document.querySelectorAll(".tip.open").forEach(x=>{if(x!==t)x.classList.remove("open")});t.classList.add("open");const b=t.querySelector(".tipb"),r=t.getBoundingClientRect(),w=b.offsetWidth,h=b.offsetHeight;
- const dg=t.closest("dialog"),bx=dg?dg.getBoundingClientRect():{left:0,right:innerWidth,top:0,bottom:innerHeight}; // 在彈窗裡就不要超出彈窗（會被裁掉）
- let x=Math.min(Math.max(bx.left+12,r.left+r.width/2-w/2),bx.right-12-w),y=r.bottom+8;if(y+h>bx.bottom-8&&r.top-8-h>bx.top+8)y=r.top-8-h;b.style.left=b.style.top="0px";const o=b.getBoundingClientRect(); // 在有動畫的彈窗裡 fixed 會以彈窗為基準：先量出原點再換算
- b.style.left=(x-o.left)+"px";b.style.top=(y-o.top)+"px"}
-const tipHide=t=>t&&t.classList.remove("open");
+// 說明框一律放到最上層顯示（彈窗開著時放進彈窗，否則放在 body），不受所在區塊的裁切、大寫或字距樣式影響。
+// 位置：圖示下方（下面放不下就放上方），左右不超出畫面或彈窗
+let tipCur=null;
+function tipLayer(){let f=document.getElementById("tipf");if(!f){f=document.createElement("div");f.id="tipf";f.className="tipb";f.setAttribute("role","tooltip")}return f}
+function tipShow(t){if(tipCur&&tipCur!==t)tipCur.classList.remove("open");tipCur=t;t.classList.add("open");
+ const f=tipLayer(),dg=t.closest("dialog[open]")||[...document.querySelectorAll("dialog[open]")].pop()||null,host=dg||document.body;
+ if(f.parentNode!==host)host.appendChild(f);f.innerHTML=t.querySelector(".tipb").innerHTML;f.style.display="block";f.style.left=f.style.top="0px";
+ const r=t.getBoundingClientRect(),w=f.offsetWidth,h=f.offsetHeight,o=f.getBoundingClientRect(); // 有動畫的彈窗裡 fixed 會以彈窗為基準：先量出原點再換算
+ const bx=dg?dg.getBoundingClientRect():{left:0,right:innerWidth,top:0,bottom:innerHeight};
+ let x=Math.min(Math.max(bx.left+12,r.left+r.width/2-w/2),bx.right-12-w),y=r.bottom+8;if(y+h>bx.bottom-8&&r.top-8-h>bx.top+8)y=r.top-8-h;
+ f.style.left=(x-o.left)+"px";f.style.top=(y-o.top)+"px"}
+const tipHide=t=>{if(!t)return;t.classList.remove("open");if(tipCur===t){tipCur=null;const f=document.getElementById("tipf");if(f)f.style.display="none"}};
 document.addEventListener("pointerover",e=>{const t=e.target.closest&&e.target.closest(".tip");if(t&&e.pointerType==="mouse")tipShow(t)});
 document.addEventListener("pointerout",e=>{const t=e.target.closest&&e.target.closest(".tip");if(t&&e.pointerType==="mouse"&&!t.contains(e.relatedTarget))tipHide(t)});
 document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest(".tip");if(t){e.preventDefault();e.stopPropagation();t.classList.contains("open")&&e.pointerType!=="mouse"?tipHide(t):tipShow(t);return}document.querySelectorAll(".tip.open").forEach(tipHide)},true);
@@ -471,6 +478,7 @@ document.addEventListener("focusin",e=>{if(e.target.classList&&e.target.classLis
 document.addEventListener("focusout",e=>{if(e.target.classList&&e.target.classList.contains("tip"))tipHide(e.target)});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".tip.open").forEach(tipHide)});
 addEventListener("scroll",()=>document.querySelectorAll(".tip.open").forEach(tipHide),true);
+document.addEventListener("close",()=>tipHide(tipCur),true); // 彈窗關掉時一起收起
 const SPARK=s=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#f5b400"/></linearGradient></defs><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" fill="url(#sg)"/></svg>`;
 const LOGO=`<svg width="38" height="38" viewBox="0 0 44 44" aria-label="ResearchFlow"><defs><linearGradient id="lgb" x1="6" y1="2" x2="34" y2="32" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="var(--ac2)"/><stop offset="1" stop-color="var(--ac)"/></linearGradient></defs>
 <path d="M22 4C12.6 4 5 11 5 19.6c0 5.3 2.9 10 7.3 12.8-.4 2.2-1.5 4.2-3.2 5.8 3-.1 5.9-1.2 8.2-3.1 1.4.3 2.9.5 4.7.5 9.4 0 17-7 17-15.6S31.4 4 22 4z" fill="none" stroke="url(#lgb)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
