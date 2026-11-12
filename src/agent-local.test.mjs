@@ -426,3 +426,16 @@ test('diffVersions：舊版沒有畫布記錄就不比畫布；還沒搜尋的�
   assert.equal(d.rqChanged, false);
   assert.deepEqual([d.kwAdded, d.kwRemoved], [[], []]);
 });
+
+import { newEvidence, evidenceExcludes } from './agent-local.mjs';
+import { dedupeWorks, titleKey } from './searchLogic.mjs';
+test('同一次蒐證不重複：不同資料庫、不同輪找到的同一篇（id 不同、DOI 有無不同，標題相同）只留一筆', () => {
+  const a = { id: 'W1', t: 'Short naps improve subsequent learning in a high school setting', url: 'https://doi.org/10.1/abc' };
+  const b = { id: 'PMC9', t: 'Short Naps Improve Subsequent Learning in a High School Setting.', url: 'https://europepmc.org/x' };
+  const c = { id: 'D2', t: 'Another paper about sleep programs', url: 'https://doaj.org/y' };
+  assert.deepEqual(newEvidence([a], [b, c, { ...c, id: 'D3' }]).map((e) => e.id), ['D2']);
+  assert.ok(evidenceExcludes([a]).includes(titleKey(b.t)));
+  // 下一輪搜尋時，標題相同的也被排除
+  assert.deepEqual(dedupeWorks([{ id: 'X', title: b.t }, { id: 'Y', title: 'Totally different study title' }], evidenceExcludes([a])).map((w) => w.id), ['Y']);
+  assert.equal(titleKey('短'), ''); // 太短的標題不拿來比對
+});
