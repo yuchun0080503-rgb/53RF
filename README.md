@@ -134,7 +134,7 @@ npm run test:rules      # 啟動本機 Firestore 模擬器，用不同身分實�
 |---|---|---|---|
 | Firebase JavaScript SDK | 10.14.1 | 前端連線 Firebase（從 Google 的 gstatic.com 載入） | `src/db.mjs` |
 | qrcode-generator | 1.4.4 | 課程代碼 QR code | `src/vendor/qrcode.mjs` |
-| PDF.js | 3.49.0 | 排演室讀取上傳的 PDF 簡報文字（在使用者的瀏覽器裡讀，不上傳原檔） | `src/vendor/pdfjs/` |
+| PDF.js | 5.7.284 | 排演室讀取上傳的 PDF 簡報文字（在使用者的瀏覽器裡讀，不上傳原檔） | `src/vendor/pdfjs/` |
 | jieba 詞表 | `dict.txt.big` | 中文常用詞與詞頻（只保留 2–4 字詞） | `src/lexicon-zh.txt` |
 
 開發與後端：
