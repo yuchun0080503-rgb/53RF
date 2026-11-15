@@ -213,6 +213,10 @@ test('extractZhTerms：用詞庫做最長詞比對，去掉功能詞與太常見
   assert.deepEqual(extractZhTerms('需要批判思考', rankOf), ['批判思考']); // 手動加入的研究常用詞排在詞表最前面，一定保留
   assert.deepEqual(extractZhTerms('English only', rankOf), []);
   assert.deepEqual(extractZhTerms('手機', () => undefined), []); // 詞庫還沒載入
+  // 論證用語（主張、符合、理論…）不能當主題詞：2026-11-13 試用時「主張」成了唯一主題詞，搜到的全是談斷言的論文
+  const rank2 = { 功能論: 20000, 主張: 3000, 核心家庭: 30000, 符合: 2600, 工業化: 9000, 變遷: 7000, 理論: 1800 };
+  assert.deepEqual(extractZhTerms('功能論主張核心家庭符合工業化的變遷', (w) => rank2[w]), ['功能論', '核心家庭', '工業化', '變遷']);
+  assert.deepEqual(extractZhTerms('這個理論的主張成立', (w) => rank2[w]), []);
 });
 
 test('boolQuery：先保證每一組都有一個詞，剩下的額度才補同義詞，總共最多 5 個運算子', () => {

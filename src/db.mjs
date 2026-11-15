@@ -141,6 +141,9 @@ export async function searchEvidence(projectId, { keywords, keywordsZh, coreCoun
     } catch (err) {
       out.ai.error = String(err?.message || err).slice(0, 120);
       out.evidence = out.evidence.slice(0, 10); out.scanned = out.evidence.length;
+      // 模型判讀失敗時，規則式在主張論證模式下沒有正負線索就預設「支持」——只要標題有關鍵字就被當成支持證據
+      // （2026-11-13 試用：8 篇談「斷言」的哲學論文全被標為支持）。改標「立場待確認」，請小組讀原文判斷。
+      if (mode === 'claim') out.evidence = out.evidence.map((e) => (e.k === 's' && !e.assigned ? { ...e, k: 'u', unc: true, l: '模型判讀失敗，這篇沒有經過 AI 逐篇判讀：立場待確認，請讀原文後由小組判斷' } : e));
     }
   }
   // 摘要留一小段（給之後產生中文摘要用），其餘丟掉，避免研究狀態太大
