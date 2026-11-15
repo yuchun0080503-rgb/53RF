@@ -548,13 +548,17 @@ function addTopicKw(text){if(!window.RFAGENT||!window.RFINK)return;
  S.kwCore=core;S.kw=[...core,...S.kw.filter(k=>!core.includes(k)&&!old.includes(k))];S.kwBy="";terms.forEach(t=>{if(!S.kwEn[t])translateKw(t)});planKw(text)}
 // 有本機模型時：規則式先給出一版（立刻看得到），模型再讀題目＋主張＋畫布內容重新規劃一次，約 20 秒後換上。
 // 內建對照表認得的詞用對照表的英文（人工校對過），模型給的說法併進同義詞；規劃期間學生自己加的關鍵字保留。
-let planBusy=false;
-function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBusy=true;const proj=p,before=S.kw.slice(),re=()=>{if(p===proj&&pane==="agent"&&S.step===4)renderPane()};
+// 有 AI 時，關鍵字以模型規劃的為準，規則式只是等待中的初稿與連不上時的備援：規劃期間「開始搜尋」先停用（見 go）。
+// 以前（10/10 接本機 Qwen 時）有兩個限制，換成 Claude 後沒拿掉：已經搜尋過（S.rounds>0）就丟掉模型的規劃、規劃進行中再改主張直接略過。
+// 2026-11-13 試用：學生搜了 7 輪後改主張，模型的規劃被丟掉，只剩規則式抽的「主張」當主題詞，搜到的全是談斷言的論文。
+// 現在：只採用最新一次的規劃（planTok），搜尋過也照樣換上；45 秒沒回來就當失敗，沿用規則式。
+let planBusy=false,planTok=0;
+function planKw(text){if(!AI()||!String(text||"").trim())return;planBusy=true;const tok=++planTok,proj=p,before=S.kw.slice(),re=()=>{if(p===proj&&pane==="agent"&&S.step===4)renderPane()};
  // 聚焦問題的選擇（對象、情境、要比較的結果）放在最前面：以前只進研究問題的文字，沒有進關鍵字規劃，搜尋就漏了「結果」那一半（例如行人體感溫度）
  const focusNotes=QS().map(q=>S.scope[q[1]]?"聚焦選擇："+S.scope[q[1]]:"").filter(Boolean);
  const notes=[...focusNotes,...rdItems().map(o=>o.text).filter(Boolean)];
  // 規劃完再到 OpenAlex 查證主題詞（看候選說法實際有幾篇論文在用），查不到就用原本的規劃
- RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>RFAI.groundPlan?RFAI.groundPlan(r).catch(()=>r):r).then(r=>{planBusy=false;if(p!==proj||S.step!==4||S.rounds){re();return}
+ Promise.race([RFAI.planSearch({title:p.name,claim:text,notes}).then(r=>RFAI.groundPlan?RFAI.groundPlan(r).catch(()=>r):r),new Promise((_,no)=>setTimeout(()=>no(new Error("超過 45 秒沒有回應")),45000))]).then(r=>{if(tok!==planTok)return;planBusy=false;if(p!==proj||S.step!==4){re();return}
   S.kwEn=S.kwEn||{};S.kwSyn={};
   const ks=r.keywords.map(k=>{const name=k.zh||k.en;let en=k.en,syn=k.synonyms;const known=!k.grounded&&k.zh&&window.RFAGENT&&RFAGENT.keywordPairs(k.zh).find(x=>x.zh===k.zh);
    if(known&&known.en.toLowerCase()!==en){syn=[en,...syn];en=known.en}
@@ -567,7 +571,7 @@ function planKw(text){if(!AI()||planBusy||!String(text||"").trim())return;planBu
   S.kw=[...ks.map(k=>k.name),...mine,...cv];S.kwCore=[...ks.filter(k=>k.core).map(k=>k.name),...mine.filter(k=>(S.kwCore||[]).includes(k))];S.kwWeak=ks.filter(k=>k.weak).map(k=>k.name);S.kwBy=AIN();S.focus=r.focus;if(S.discBy!=="學生")S.disc=r.discipline||"";S.kwV=2;
   aiLog(`${AIN()} 規劃搜尋關鍵字：${ks.map(k=>k.name+(S.kwEn[k.name]?"→"+S.kwEn[k.name]:"")).join("、")}。`);
   (r.grounding||[]).forEach(g=>{const best=g.rows.find(x=>x.t===g.to)||{};aiLog(`Agent 查證主題詞「${g.zh}」：候選說法在論文標題或摘要出現 ${g.rows.map(x=>x.t+(Number.isFinite(x.n)?" "+x.n+" 篇":"（查不到）")).join("、")}；${g.weak?(g.how==="none"?"論文裡的用法跟這個意思都不同":"都太少人用")+"，保留 "+g.from+"，標為用語待確認":(g.to===g.from?"確認使用 ":"改用 ")+g.to+(g.how==="ai"?"（看過論文標題，用法跟意思相符）":"")+(g.anchor&&Number.isFinite(g.pair)?"（與 "+g.anchor+" 同時出現 "+g.pair+" 篇）":"")}。`)});saveS();re()},
- err=>{planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
+ err=>{if(tok!==planTok)return;planBusy=false;console.warn("[ResearchFlow] 模型規劃關鍵字失敗，沿用規則式的結果：",err?.message||err);re()});re()}
 // 舊版產生的關鍵字（沒有 kwV 記號）在回到確認頁時重新整理一次
 function upgradeKw(){if(!LIVE()||!window.RFAGENT||!window.RFINK||(S.kwV||0)>=2||!S.kw.length)return;
  const text=S.claim||rdItems().filter(o=>o.tag!=="question").map(o=>o.text).filter(Boolean).join("。");
@@ -1717,7 +1721,7 @@ function body(){const s=S.step,sc=S.scope;
   const addBox=S.addNote?`<div class="box sm"><b>${I("spark")}這次新增的內容</b><br>${esc(S.addNote.summary)}<p class="mute" style="margin:6px 0 0">AI 建議：${S.addNote.suggest==="refocus"?"新增內容可能改變了研究方向，可以考慮重新聚焦題目":"新增內容仍在原本研究問題的範圍內，可以沿用"}（${esc(S.addNote.reason)}）</p>${canEdit()?`<div class="acts" style="margin-top:6px"><button data-a="refocus">重新聚焦題目</button></div>`:""}</div>`:"";
   return addBox+modeBox+`<h3>Research Question</h3><input id="rqi" value="${esc(S.rq)}"><h3>搜尋關鍵字</h3>${LIVE()?`<p class="sm mute" style="margin:0 0 8px">粗體＝一定會搜的主題詞；虛線框＝不加進搜尋。點一下切換，點英文可修改。</p>`:""}${planBusy?`<p class="sm aiby">${I("spark")}${esc(AIN())} 正在依題目與主張規劃關鍵字（約 20 秒），完成後會自動換上…</p>`:S.kwBy?`<p class="sm aiby">${I("spark")}由 ${esc(S.kwBy)} 規劃${S.focus?"：查證重點是「"+esc(S.focus)+"」":""}</p>`:""}<div class="chips">${S.kw.map((k,i)=>`<span class="kwc ${kwIsCore(k)?"core":(S.kwAspect||[]).includes(k)?"asp":""}"><span class="kwn" data-a="kwcore" data-k="${i}" title="${kwIsCore(k)?"主題詞：結果必須提到。點一下改成範圍詞":(S.kwAspect||[]).includes(k)?"觀點詞：畫布上提到的其他概念，不加進搜尋條件。點一下改成主題詞":"範圍詞：用來縮小範圍。點一下改成主題詞"}">${esc(k)}</span>${hasZh(k)?`<span class="mute">→</span>${kwBusy.has(k)?`<span class="mute">翻譯中…</span>`:`<span class="kwt" data-a="kwen" data-k="${i}" title="點一下修改英文">${esc((S.kwEn||{})[k]||"未翻譯")}</span>`}`:""}<button data-a="kwx" data-k="${i}" aria-label="移除關鍵字 ${esc(k)}" title="移除">×</button></span>`).join("")}</div>
   <div style="display:flex;gap:6px"><input id="kwi" placeholder="新增關鍵字"><button data-a="kwa">${I("plus")}</button></div>
-  <h3>搜尋策略</h3>${discLine()}${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts"><button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button><button data-a="back3">修改範圍</button></div>`}
+  <h3>搜尋策略</h3>${discLine()}${rows.map(r=>`<div class="hl sm"><span>${esc(r[0])}</span><span>${esc(r[0]==="資料來源"?String(r[1]).replace(/（.*）$/,""):r[1])}</span></div>`).join("")}<p class="sm mute">${cm?"Agent 只會搜尋支持這個主張的證據，依序是：直接證據 → 統整性研究（系統性回顧、後設分析）→ 成立條件與機制。不會主動提供反面例證。":"Agent 會以此建立 Supporting Search 與 Counter / Limiting Search，兩邊的證據都會找。"}</p><div class="acts">${planBusy?`<button class="pri" disabled>${AIN()} 正在規劃關鍵字…</button>`:`<button class="pri" data-a="go">${I("search")}以「${MODE_N[m]}」開始搜尋</button>`}<button data-a="back3">修改範圍</button></div>`}
  if(s===5){const c=S.ev.filter(e=>e.k==="c").length,sp=S.ev.filter(e=>e.k==="s").length,uv=S.ev.filter(e=>!e.v).length,balanced=enoughOf(p);
  if(MODE()==="claim")return claimStep5();
  return `<h3>正反例證進度${TIP(["支持與反向的證據都要找","反向證據至少 3 筆才算平衡"])}</h3><div class="box sm mode-procon"><b>正反例證模式</b><div class="bar" style="margin-top:8px"><i style="width:${sp+c?sp/(sp+c)*100:50}%;background:var(--ok)"></i><i style="width:${sp+c?c/(sp+c)*100:50}%;background:#e2662b"></i></div><span class="mute">支持 ${sp} 筆　｜　反向／限制 ${c} 筆</span></div>${S.qs.map((q,i)=>`<div class="box sm"><b>第 ${i+1} 輪查詢</b><div class="mute">${q.map(esc).join("<br>")}</div>${reflOf(i+1)}</div>`).join("")}
@@ -2472,7 +2476,9 @@ async function zhFor(id){const e=()=>[...S.ev,...(S.saved||[])].filter(x=>x.id==
  try{put();let kp=null;
   // 只有 Owner／Editor 能用 AI（後端會擋老師和 Viewer），老師打開證據頁時不要白白送出會被拒絕的請求
   if(AI()&&canEdit())for(let k=0;k<2&&!kp;k++)kp=await RFAI.keyPoints({title:e0.t,abstract:text,claim:kpClaim()}).catch(err=>{console.warn("[ResearchFlow] 模型重點整理失敗：",err?.message||err);return null}); // 寫成別的語言時再試一次
-  if(kp){const by=AIN().replace(/（.*$/,"");e().forEach(x=>{x.kp=kp;x.kpBy=by});saveS()}
+  // 重點整理的「怎麼用」寫明與主張無關時：還沒經過 AI 判讀（auto）、又被規則式標成支持的，改成立場待確認
+  // （2026-11-13 試用：摘要卡已寫「無直接關係，不建議使用」，卻仍列在支持清單）
+  if(kp){const by=AIN().replace(/（.*$/,""),off=/無直接關係|沒有直接關係|幾乎(沒有關聯|無關)|與.{0,20}無關|不建議(用|引用|使用)/.test(String(kp.use||""));e().forEach(x=>{x.kp=kp;x.kpBy=by;if(off&&x.auto!==false&&x.k==="s"&&!x.assigned){x.k="u";x.unc=true;x.l="AI 重點整理判斷這篇與主張無直接關係：立場待確認，請讀原文後由小組判斷"}});saveS()}
   else if(e0.lang!=="zh"&&!(e0.zh&&!zhBad(e0))&&window.RFAGENT&&RFAGENT.toZh){const zh=await RFAGENT.toZh(text);if(zh){e().forEach(x=>{x.zh=zh+"（機器翻譯，僅供參考）"});saveS()}}}
  catch(err){console.warn("[ResearchFlow] 產生重點整理失敗：",err?.message||err)}
  finally{zhBusy.delete(id);put()}}
@@ -2658,6 +2664,7 @@ function act(a,k){const w=U[ME].n,L=p.LV;
   if(window.RFAGENT){const pairs=RFAGENT.keywordPairs(c),ck=pairs.map(x=>x.zh||x.en);S.kwEn=S.kwEn||{};pairs.forEach(x=>{if(x.zh)S.kwEn[x.zh]=x.en});S.kw=[...ck,...S.kw.filter(x=>!ck.includes(x))];addTopicKw(c)} // 主張本身的關鍵字排最前面
   log(w,"選定要查證的主張："+c)}
  if(a==="go"){if(MODE()==="claim"&&!S.claim){alert("主張論證模式需要先選定一個要查證的主張。");return}
+  if(planBusy){alert(AIN()+" 還在依新的主張規劃關鍵字，約 20 秒，完成後再開始搜尋。");return}
   S.rq=$("#rqi")?$("#rqi").value:S.rq;S.mode=MODE();S.step=5;S.msg=S.rounds?S.msg:"尚未搜尋。";
   if(LIVE()&&S.rounds&&S.rounds>=capOf()){S.cap=S.rounds+1;log(w,`修改關鍵字後再搜尋：搜尋預算增加為 ${S.cap} 輪。`)}
   log(w,"確認 Research Question、關鍵字與搜尋策略，以「"+MODE_N[S.mode]+"」開始查證。")}
